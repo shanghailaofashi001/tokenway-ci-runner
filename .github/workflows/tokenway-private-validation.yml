@@ -192,7 +192,8 @@ jobs:
           if gofmt -w controller/task.go controller/video_proxy.go controller/task_artifact_capture.go controller/task_generic_test.go controller/task_artifact_capture_test.go relay/relay_task.go >/tmp/tokenway-gofmt-task.log 2>&1; then
             echo "PASS: task billing and artifact gofmt"
           else
-            echo "FAIL: task billing and artifact gofmt (file/path or syntax issue)"
+            echo "FAIL: task billing and artifact gofmt; sanitized formatter diagnostics:"
+            tail -n 12 /tmp/tokenway-gofmt-task.log | sed -E 's#(/home/runner/[^ ]*)#<runner-path>#g; s#(gh[pousr]_[A-Za-z0-9_]+)#<redacted>#g'
             exit 1
           fi
 
