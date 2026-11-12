@@ -215,7 +215,8 @@ jobs:
           if git apply --recount ../.tokenway-validation/image-creator.patch >/tmp/tokenway-image-creator-patch.log 2>&1; then
             echo "PASS: image creator integration patch"
           else
-            echo "FAIL: image creator integration patch (context mismatch or already-applied change)"
+            echo "FAIL: image creator integration patch; sanitized git apply diagnostics:"
+            tail -n 20 /tmp/tokenway-image-creator-patch.log | sed -E 's#(/home/runner/[^ ]*)#<runner-path>#g; s#(gh[pousr]_[A-Za-z0-9_]+)#<redacted>#g'
             exit 1
           fi
 
