@@ -304,38 +304,38 @@ jobs:
               test -s "$d/vendor/modules.txt"
             done
             mkdir -p source/vendor/github.com/QuantumNous/new-api/relaykit/dto
-            cat > source/vendor/github.com/QuantumNous/new-api/relaykit/dto/token_sum.go <<'GO'
-            package dto
-            func saturatedNonNegativeTokenSum(values ...int) int {
-              maxInt := int(^uint(0) >> 1)
-              total := 0
-              for _, value := range values {
-                value = max(value, 0)
-                if value > maxInt-total { return maxInt }
-                total += value
-              }
-              return total
-            }
-            GO
-            cat > source/vendor/github.com/QuantumNous/new-api/relaykit/dto/notify.go <<'GO'
-            package dto
-            type Notify struct {
-              Type string `json:"type"`
-              Title string `json:"title"`
-              Content string `json:"content"`
-              Values []any `json:"values"`
-            }
-            const ContentValueParam = "{{value}}"
-            const (
-              NotifyTypeQuotaExceed = "quota_exceed"
-              NotifyTypeChannelUpdate = "channel_update"
-              NotifyTypeChannelTest = "channel_test"
-              NotifyTypeArtifactExpiring = "artifact_expiring"
-            )
-            func NewNotify(t string, title string, content string, values []any) Notify {
-              return Notify{Type:t, Title:title, Content:content, Values:values}
-            }
-            GO
+            printf '%s\n' \
+              'package dto' \
+              'func saturatedNonNegativeTokenSum(values ...int) int {' \
+              '  maxInt := int(^uint(0) >> 1)' \
+              '  total := 0' \
+              '  for _, value := range values {' \
+              '    value = max(value, 0)' \
+              '    if value > maxInt-total { return maxInt }' \
+              '    total += value' \
+              '  }' \
+              '  return total' \
+              '}' \
+              > source/vendor/github.com/QuantumNous/new-api/relaykit/dto/token_sum.go
+            printf '%s\n' \
+              'package dto' \
+              'type Notify struct {' \
+              '  Type string `json:"type"`' \
+              '  Title string `json:"title"`' \
+              '  Content string `json:"content"`' \
+              '  Values []any `json:"values"`' \
+              '}' \
+              'const ContentValueParam = "{{value}}"' \
+              'const (' \
+              '  NotifyTypeQuotaExceed = "quota_exceed"' \
+              '  NotifyTypeChannelUpdate = "channel_update"' \
+              '  NotifyTypeChannelTest = "channel_test"' \
+              '  NotifyTypeArtifactExpiring = "artifact_expiring"' \
+              ')' \
+              'func NewNotify(t string, title string, content string, values []any) Notify {' \
+              '  return Notify{Type:t, Title:title, Content:content, Values:values}' \
+              '}' \
+              > source/vendor/github.com/QuantumNous/new-api/relaykit/dto/notify.go
           } >/tmp/tokenway-vendor.log 2>&1
           echo "Go modules restored, verified, and vendored."
 
