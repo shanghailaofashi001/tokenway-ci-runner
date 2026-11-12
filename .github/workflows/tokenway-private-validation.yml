@@ -166,13 +166,13 @@ jobs:
           s = p.read_text()
           start = s.find("func TestTaskArtifactCaptureClaimUsesFreshLeasePerSerialItem(t *testing.T) {")
           if start >= 0:
-              end = s.find("\\nfunc ", start + 1)
+              end = s.find("\nfunc ", start + 1)
               if end < 0:
                   end = len(s)
               region = s[start:end]
               if "openTaskDialectDatabase" not in region:
                   old_line = "require.NoError(t, model.InitDB())"
-                  new_lines = "previousDB := model.DB\\ndatabase, _ := openTaskDialectDatabase(t, &model.Task{})\\nmodel.DB = database\\nt.Cleanup(func() { model.DB = previousDB })"
+                  new_lines = "previousDB := model.DB\ndatabase, _ := openTaskDialectDatabase(t, &model.Task{})\nmodel.DB = database\nt.Cleanup(func() { model.DB = previousDB })"
                   if region.count(old_line) != 1:
                       raise SystemExit("capture test fixture cannot be safely adapted")
                   s = s[:start] + region.replace(old_line, new_lines, 1) + s[end:]
