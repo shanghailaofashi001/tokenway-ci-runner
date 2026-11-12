@@ -323,7 +323,7 @@ jobs:
               status=$?
               echo "FAIL: Go dependency restore/vendor for $d (exit $status). Diagnostics:"
               tail -n 180 "$log" | sed -E \
-                's#(https?://)[^/@ ]+:[^/@ ]+@#\\1<redacted>@#g; s#(gh[pousr]_[A-Za-z0-9_]+)#<redacted>#g; s#(Bearer )[A-Za-z0-9._~-]+#\\1<redacted>#g'
+                's#(https?://)[^/@ ]+:[^/@ ]+@#\1<redacted>@#g; s#(gh[pousr]_[A-Za-z0-9_]+)#<redacted>#g; s#(Bearer )[A-Za-z0-9._~-]+#\1<redacted>#g'
               exit "$status"
             fi
           done
@@ -344,7 +344,7 @@ jobs:
               status=$?
               echo "Offline dependency graph failed: $d (exit $status)"
               echo "Go diagnostic:"
-              sed -E 's#(https?://)[^/@ ]+:[^/@ ]+@#\\1<redacted>@#g; s#(gh[pousr]_[A-Za-z0-9_]+)#<redacted>#g; s#(Bearer )[A-Za-z0-9._~-]+#\\1<redacted>#g' /tmp/tokenway-go-list.err | tail -n 220
+              sed -E 's#(https?://)[^/@ ]+:[^/@ ]+@#\1<redacted>@#g; s#(gh[pousr]_[A-Za-z0-9_]+)#<redacted>#g; s#(Bearer )[A-Za-z0-9._~-]+#\1<redacted>#g' /tmp/tokenway-go-list.err | tail -n 220
               exit "$status"
             fi
           done
