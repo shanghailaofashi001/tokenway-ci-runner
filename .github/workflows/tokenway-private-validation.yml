@@ -1,0 +1,292 @@
+name: TOKENWAY private-source validation
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/tokenway-private-validation.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tokenway-private-validation-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Full frontend, Go, and database validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: tokenway-test
+          MYSQL_DATABASE: tokenway_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -ptokenway-test"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=18
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: tokenway
+          POSTGRES_PASSWORD: tokenway-test
+          POSTGRES_DB: tokenway_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U tokenway -d tokenway_test"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=18
+    env:
+      TEST_MYSQL_DSN: root:tokenway-test@tcp(127.0.0.1:3306)/tokenway_test?charset=utf8mb4&parseTime=True&loc=Local
+      TEST_POSTGRES_DSN: postgres://tokenway:tokenway-test@127.0.0.1:5432/tokenway_test?sslmode=disable
+      TEST_MYSQL_LOG_DSN: root:tokenway-test@tcp(127.0.0.1:3306)/tokenway_test?charset=utf8mb4&parseTime=True&loc=Local
+      TEST_POSTGRES_LOG_DSN: postgres://tokenway:tokenway-test@127.0.0.1:5432/tokenway_test?sslmode=disable
+      TEST_FIXED_MYSQL_DSN: root:tokenway-test@tcp(127.0.0.1:3306)/tokenway_test?charset=utf8mb4&parseTime=True&loc=Local
+      TEST_FIXED_MYSQL_LOG_DSN: root:tokenway-test@tcp(127.0.0.1:3306)/tokenway_test?charset=utf8mb4&parseTime=True&loc=Local
+      TEST_FIXED_POSTGRES_DSN: postgres://tokenway:tokenway-test@127.0.0.1:5432/tokenway_test?sslmode=disable
+      TEST_FIXED_POSTGRES_LOG_DSN: postgres://tokenway:tokenway-test@127.0.0.1:5432/tokenway_test?sslmode=disable
+
+    steps:
+      - name: Checkout public CI configuration
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Checkout pinned private TokenWay source and validation overlays
+        uses: actions/checkout@v4
+        with:
+          repository: shanghailaofashi001/tokenway-v11-dev
+          ref: 34248ba7f04362d6e3fde74ba1b10a4ce3e424c3
+          token: ${{ secrets.TOKENWAY_SOURCE_READ_TOKEN }}
+          path: private
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Checkout pinned upstream New API base
+        uses: actions/checkout@v4
+        with:
+          repository: QuantumNous/new-api
+          ref: 48a6c87f9e7757fdc58e5be9bcb4f8281ad0dfd0
+          path: source
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Restore private validation materials into runner workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -d private/.tokenway-validation
+          test -d private/.tokenway-patches
+          cp -a private/.tokenway-validation .
+          cp -a private/.tokenway-patches .
+          test -s .tokenway-validation/repair-ci-source.py
+          test -s .tokenway-validation/apply-host-artifact-projection.py
+          test -s .tokenway-validation/image-creator.patch
+          test -s .tokenway-patches/p2-legacy-video-download/task-artifacts.patch
+          echo "Private validation inputs restored; source contents are not printed or uploaded."
+
+      - name: Set up Go and Bun
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.10"
+          cache: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.4"
+
+      - name: Restore TokenWay source overlays and missing source archives
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            mkdir -p .tokenway-validation/overlay-extract
+            cat .tokenway-validation/overlay/part-*.txt | base64 -d | gzip -dc | tar -xf - -C .tokenway-validation/overlay-extract
+            cp -a .tokenway-validation/overlay-extract/files/. source/
+            base64 -d .tokenway-validation/missing-source-definitions.tar.gz.base64 | tar -xz -C source
+            base64 -d .tokenway-validation/ratio-validation-source.tar.gz.base64 | tar -xz -C source
+            base64 -d .tokenway-validation/wallet-redemption-subscription-source.tar.gz.base64 | tar -xz -C source
+            cat .tokenway-validation/personal-qr-source.part* | base64 -d | tar -xz -C source
+            cat .tokenway-validation/billing-session.part* | base64 -d | tar -xz -C source
+            test -s source/model/subscription.go
+            test -s source/setting/ratio_setting/pricing_ratio_validation.go
+            test -s source/model/request_billing_journal.go
+            test -s source/model/subscription_usage_ledger.go
+            grep -q 'func ValidatePersistedModelPricingOptions' source/model/model_pricing_config.go
+            grep -q 'func ValidateCheckinQuotaRange' source/setting/operation_setting/checkin_setting.go
+            grep -q 'func CheckGroupGroupRatio' source/setting/ratio_setting/group_ratio.go
+            grep -q 'func ValidateTopupGroupRatioJSON' source/common/topup-ratio.go
+          } >/tmp/tokenway-restore.log 2>&1 || { echo "Private source restoration failed (details withheld to avoid exposing source in public logs)."; exit 1; }
+          echo "Private source restoration passed."
+
+      - name: Apply source projections and integration patches
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            cd source
+            python3 ../.tokenway-validation/repair-ci-source.py
+            python3 ../.tokenway-validation/apply-host-artifact-projection.py
+            python3 - <<'PY'
+            from pathlib import Path
+            p=Path("controller/task_artifact_capture_test.go")
+            s=p.read_text()
+            start=s.find("func TestTaskArtifactCaptureClaimUsesFreshLeasePerSerialItem(t *testing.T) {")
+            if start >= 0:
+                end=s.find("\\nfunc ", start+1)
+                if end < 0: end=len(s)
+                region=s[start:end]
+                if "openTaskDialectDatabase" not in region:
+                    old_line = "require.NoError(t, model.InitDB())"
+                    new_lines = "previousDB := model.DB\\ndatabase, _ := openTaskDialectDatabase(t, &model.Task{})\\nmodel.DB = database\\nt.Cleanup(func() { model.DB = previousDB })"
+                    if region.count(old_line) != 1:
+                        raise SystemExit("capture test fixture cannot be safely adapted")
+                    s=s[:start]+region.replace(old_line,new_lines,1)+s[end:]
+                    p.write_text(s)
+            PY
+            gofmt -w controller/task.go controller/video_proxy.go controller/task_artifact_capture.go controller/task_generic_test.go controller/task_artifact_capture_test.go relay/relay_task.go
+            gofmt -w model/task_billing_recovery.go service/task_polling.go service/task_polling_test.go service/task_artifact_store.go service/task_artifact_s3_test.go
+            git apply --recount ../.tokenway-validation/image-creator.patch
+            python3 ../.tokenway-validation/add-creator-route-tree.py
+            git apply --recount ../.tokenway-patches/p2-legacy-video-download/task-artifacts.patch
+            mkdir -p web/src/features/usage-logs/components/__tests__
+            cp ../.tokenway-patches/p2-legacy-video-download/legacy-video-download.test.tsx web/src/features/usage-logs/components/__tests__/legacy-video-download.test.tsx
+            gofmt -w constant/task.go controller/playground.go relay/channel/minimax/adaptor.go relay/channel/minimax/adaptor_test.go relay/channel/minimax/image.go relay/common/relay_info.go relay/constant/relay_mode.go relay/constant/relay_mode_test.go relay/image_handler.go router/relay-router.go router/relay_router_test.go service/billing.go service/generated_image_task.go service/generated_image_task_test.go
+          } >/tmp/tokenway-patch.log 2>&1 || { echo "Source projection or patch application failed (details withheld to avoid exposing private source)."; exit 1; }
+          echo "Source projection and patch application passed."
+
+      - name: Install frontend dependencies
+        working-directory: source/web
+        shell: bash
+        run: |
+          if bun install --frozen-lockfile >/tmp/tokenway-bun-install.log 2>&1; then echo "Frontend dependencies installed."; else echo "Frontend dependency installation failed."; exit 1; fi
+
+      - name: Frontend typecheck, tests, and production build
+        working-directory: source/web
+        shell: bash
+        run: |
+          set -euo pipefail
+          if bun run typecheck >/tmp/tokenway-typecheck.log 2>&1; then echo "Frontend typecheck passed."; else echo "Frontend typecheck failed."; exit 1; fi
+          if bun run test >/tmp/tokenway-frontend-tests.log 2>&1; then echo "Frontend tests passed."; else echo "Frontend tests failed."; exit 1; fi
+          if bun run build >/tmp/tokenway-frontend-build.log 2>&1; then echo "Frontend production build passed."; else echo "Frontend production build failed."; exit 1; fi
+          test -s dist/index.html
+
+      - name: Restore and vendor Go modules
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            for d in source source/relaykit source/tokenkit; do
+              (cd "$d" && go mod download all && go mod verify && go mod vendor)
+              test -s "$d/vendor/modules.txt"
+            done
+            mkdir -p source/vendor/github.com/QuantumNous/new-api/relaykit/dto
+            cat > source/vendor/github.com/QuantumNous/new-api/relaykit/dto/token_sum.go <<'GO'
+            package dto
+            func saturatedNonNegativeTokenSum(values ...int) int {
+              maxInt := int(^uint(0) >> 1)
+              total := 0
+              for _, value := range values {
+                value = max(value, 0)
+                if value > maxInt-total { return maxInt }
+                total += value
+              }
+              return total
+            }
+            GO
+            cat > source/vendor/github.com/QuantumNous/new-api/relaykit/dto/notify.go <<'GO'
+            package dto
+            type Notify struct {
+              Type string `json:"type"`
+              Title string `json:"title"`
+              Content string `json:"content"`
+              Values []any `json:"values"`
+            }
+            const ContentValueParam = "{{value}}"
+            const (
+              NotifyTypeQuotaExceed = "quota_exceed"
+              NotifyTypeChannelUpdate = "channel_update"
+              NotifyTypeChannelTest = "channel_test"
+              NotifyTypeArtifactExpiring = "artifact_expiring"
+            )
+            func NewNotify(t string, title string, content string, values []any) Notify {
+              return Notify{Type:t, Title:title, Content:content, Values:values}
+            }
+            GO
+          } >/tmp/tokenway-vendor.log 2>&1 || { echo "Go module restoration or vendoring failed."; exit 1; }
+          echo "Go modules restored, verified, and vendored."
+
+      - name: Verify offline dependency graph
+        shell: bash
+        run: |
+          set -euo pipefail
+          export GOPROXY=off GOSUMDB=off GOFLAGS=-mod=vendor GOTOOLCHAIN=local
+          for d in source source/relaykit source/tokenkit; do
+            if (cd "$d" && go list -deps -test ./... >/dev/null) 2>/tmp/tokenway-go-list.err; then
+              echo "Offline dependency graph passed: $d"
+            else
+              echo "Offline dependency graph failed: $d"
+              exit 1
+            fi
+          done
+
+      - name: Full Go tests, build, and vet
+        shell: bash
+        run: |
+          set -euo pipefail
+          export GOPROXY=off GOSUMDB=off GOFLAGS=-mod=vendor GOTOOLCHAIN=local
+          for d in source source/relaykit source/tokenkit; do
+            if (cd "$d" && go test -p=1 ./... -count=1) >/tmp/tokenway-go-test.log 2>&1; then
+              echo "Full Go tests passed: $d"
+            else
+              echo "Full Go tests failed: $d (private log retained only on ephemeral runner)."
+              exit 1
+            fi
+          done
+          for d in source source/relaykit source/tokenkit; do
+            if (cd "$d" && go build -p=3 ./...) >/tmp/tokenway-go-build.log 2>&1; then
+              echo "Full Go build passed: $d"
+            else
+              echo "Full Go build failed: $d."
+              exit 1
+            fi
+          done
+          for d in source source/relaykit source/tokenkit; do
+            if (cd "$d" && go vet -p=3 ./...) >/tmp/tokenway-go-vet.log 2>&1; then
+              echo "Full Go vet passed: $d"
+            else
+              echo "Full Go vet failed: $d."
+              exit 1
+            fi
+          done
+
+      - name: Database migration, billing, task settlement, and artifact metadata matrix
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_quiet() {
+            label="$1"; shift
+            if "$@" >/tmp/tokenway-db-matrix.log 2>&1; then
+              echo "PASS: $label"
+            else
+              echo "FAIL: $label (details withheld from public logs)."
+              return 1
+            fi
+          }
+          run_quiet "schema migration compatibility" go test ./model -run '^TestMigrationSchemaStability$' -count=1
+          run_quiet "fixed-price billing database matrix" go test ./service -run '^TestFixedPriceBillingDatabaseMatrix$' -count=1
+          run_quiet "wallet cache and opening balance regressions" go test ./model -run 'TestWalletDeltaPreservesReservationsAcrossUserCacheSchemaRefresh|TestBackfillWalletOpeningBalances' -count=1
+          run_quiet "task settlement and capture on MySQL" env TEST_TASK_DB_DIALECT=mysql go test ./controller -run 'TestImmediateTaskSettlementDatabase|TestTaskArtifactCaptureClaimUsesFreshLeasePerSerialItem' -count=1
+          run_quiet "task settlement and capture on PostgreSQL" env TEST_TASK_DB_DIALECT=postgres go test ./controller -run 'TestImmediateTaskSettlementDatabase|TestTaskArtifactCaptureClaimUsesFreshLeasePerSerialItem' -count=1
+          run_quiet "task artifact metadata on MySQL" env TEST_TASK_DB_DIALECT=mysql go test ./service -run '^TestTaskArtifactMetadataDatabaseDialectRoundTrip$' -count=1
+          run_quiet "task artifact metadata on PostgreSQL" env TEST_TASK_DB_DIALECT=postgres go test ./service -run '^TestTaskArtifactMetadataDatabaseDialectRoundTrip$' -count=1
+          echo "All database matrix checks passed."
