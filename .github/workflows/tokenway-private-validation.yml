@@ -282,7 +282,13 @@ jobs:
             grep -E 'error TS[0-9]+' /tmp/tokenway-typecheck.log | sed -E 's#(/home/runner/[^ ]*)#<runner-path>#g' | cut -c1-320 | head -n 40
             exit 1
           fi
-          if bun run test >/tmp/tokenway-frontend-tests.log 2>&1; then echo "Frontend tests passed."; else echo "Frontend tests failed."; exit 1; fi
+          if bun run test >/tmp/tokenway-frontend-tests.log 2>&1; then
+            echo "Frontend tests passed."
+          else
+            echo "Frontend tests failed; sanitized test summary:"
+            grep -E '^( FAIL | FAIL | Test Files|      Tests|   Duration|Error:|AssertionError|[[:space:]]+× )' /tmp/tokenway-frontend-tests.log | sed -E 's#(/home/runner/[^ ]*)#<runner-path>#g' | cut -c1-260 | tail -n 60
+            exit 1
+          fi
           if bun run build >/tmp/tokenway-frontend-build.log 2>&1; then echo "Frontend production build passed."; else echo "Frontend production build failed."; exit 1; fi
           test -s dist/index.html
 
