@@ -120,6 +120,11 @@ jobs:
             test -s source/setting/ratio_setting/pricing_ratio_validation.go
             test -s source/model/request_billing_journal.go
             test -s source/model/subscription_usage_ledger.go
+            test -s private/.tokenway-validation/source/model/task_billing_recovery.go
+            if [[ ! -s source/model/task_billing_recovery.go ]]; then
+              install -D -m 0644 private/.tokenway-validation/source/model/task_billing_recovery.go source/model/task_billing_recovery.go
+            fi
+            test -s source/model/task_billing_recovery.go
             grep -q 'func ValidatePersistedModelPricingOptions' source/model/model_pricing_config.go
             grep -q 'func ValidateCheckinQuotaRange' source/setting/operation_setting/checkin_setting.go
             grep -q 'func CheckGroupGroupRatio' source/setting/ratio_setting/group_ratio.go
