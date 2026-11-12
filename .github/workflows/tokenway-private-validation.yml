@@ -65,7 +65,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: shanghailaofashi001/tokenway-v11-dev
-          ref: cdca5d2197db64894995e7dd1e0299b5aba5e879
+          ref: 593203b0181e97b39dfae5cb0974cff7922122e9
           token: ${{ secrets.TOKENWAY_SOURCE_READ_TOKEN }}
           path: private
           fetch-depth: 1
@@ -351,47 +351,76 @@ jobs:
       - name: Full Go tests, build, and vet
         shell: bash
         run: |
-          set -euo pipefail
-          export GOPROXY=off GOSUMDB=off GOFLAGS=-mod=vendor GOTOOLCHAIN=local
+          set -Eeuo pipefail
+          export GOWORK=off GOPROXY=off GOSUMDB=off GOFLAGS=-mod=vendor GOTOOLCHAIN=local
+
+          sanitize_go_log() {
+            sed -E \
+              's#(https?://)[^/@[:space:]]+:[^/@[:space:]]+@#\\1<redacted>@#g; s#([[:alnum:]_.-]+):[^@[:space:]]+@tcp#\\1:<redacted>@tcp#g; s#(postgres(ql)?://)[^:/@[:space:]]+:[^@/[:space:]]+@#\\1<redacted>@#g; s#(gh[pousr]_[A-Za-z0-9_]+)#<redacted>#g; s#(Bearer )[A-Za-z0-9._~-]+#\\1<redacted>#g; s#(/home/runner/[^ ]*)#<runner-path>#g'
+          }
+
           for d in source source/relaykit source/tokenkit; do
-            if (cd "$d" && go test -p=1 ./... -count=1) >/tmp/tokenway-go-test.log 2>&1; then
-              echo "Full Go tests passed: $d"
+            label="${d//\\//-}"
+            log="/tmp/tokenway-go-test-${label}.log"
+            if (cd "$d" && go test -p=1 ./... -count=1) >"$log" 2>&1; then
+              echo "PASS: full Go tests for $d"
             else
-              echo "Full Go tests failed: $d (private log retained only on ephemeral runner)."
-              exit 1
-            fi
-          done
-          for d in source source/relaykit source/tokenkit; do
-            if (cd "$d" && go build -p=3 ./...) >/tmp/tokenway-go-build.log 2>&1; then
-              echo "Full Go build passed: $d"
-            else
-              echo "Full Go build failed: $d."
-              exit 1
-            fi
-          done
-          for d in source source/relaykit source/tokenkit; do
-            if (cd "$d" && go vet -p=3 ./...) >/tmp/tokenway-go-vet.log 2>&1; then
-              echo "Full Go vet passed: $d"
-            else
-              echo "Full Go vet failed: $d."
-              exit 1
+              status=$?
+              echo "FAIL: full Go tests for $d (exit $status); sanitized diagnostics:"
+              tail -n 180 "$log" | sanitize_go_log
+              exit "$status"
             fi
           done
 
+          for d in source source/relaykit source/tokenkit; do
+            label="${d//\\//-}"
+            log="/tmp/tokenway-go-build-${label}.log"
+            if (cd "$d" && go build -p=3 ./...) >"$log" 2>&1; then
+              echo "PASS: full Go build for $d"
+            else
+              status=$?
+              echo "FAIL: full Go build for $d (exit $status); sanitized diagnostics:"
+              tail -n 180 "$log" | sanitize_go_log
+              exit "$status"
+            fi
+          done
+
+          for d in source source/relaykit source/tokenkit; do
+            label="${d//\\//-}"
+            log="/tmp/tokenway-go-vet-${label}.log"
+            if (cd "$d" && go vet -p=3 ./...) >"$log" 2>&1; then
+              echo "PASS: full Go vet for $d"
+            else
+              status=$?
+              echo "FAIL: full Go vet for $d (exit $status); sanitized diagnostics:"
+              tail -n 180 "$log" | sanitize_go_log
+              exit "$status"
+            fi
+          done
       - name: Database migration, billing, task settlement, and artifact metadata matrix
         working-directory: source
         shell: bash
         run: |
-          set -euo pipefail
+          set -Eeuo pipefail
+          export GOWORK=off GOPROXY=off GOSUMDB=off GOFLAGS=-mod=vendor GOTOOLCHAIN=local
+
+          sanitize_db_log() {
+            sed -E \
+              's#(https?://)[^/@[:space:]]+:[^/@[:space:]]+@#\\1<redacted>@#g; s#([[:alnum:]_.-]+):[^@[:space:]]+@tcp#\\1:<redacted>@tcp#g; s#(postgres(ql)?://)[^:/@[:space:]]+:[^@/[:space:]]+@#\\1<redacted>@#g; s#(gh[pousr]_[A-Za-z0-9_]+)#<redacted>#g; s#(Bearer )[A-Za-z0-9._~-]+#\\1<redacted>#g; s#(/home/runner/[^ ]*)#<runner-path>#g'
+          }
+
           run_quiet() {
             label="$1"; shift
             if "$@" >/tmp/tokenway-db-matrix.log 2>&1; then
               echo "PASS: $label"
             else
-              echo "FAIL: $label (details withheld from public logs)."
-              return 1
+              status=$?
+              echo "FAIL: $label (exit $status); sanitized diagnostics:"
+              tail -n 180 /tmp/tokenway-db-matrix.log | sanitize_db_log
+              return "$status"
             fi
           }
+
           run_quiet "schema migration compatibility" go test ./model -run '^TestMigrationSchemaStability$' -count=1
           run_quiet "fixed-price billing database matrix" go test ./service -run '^TestFixedPriceBillingDatabaseMatrix$' -count=1
           run_quiet "wallet cache and opening balance regressions" go test ./model -run 'TestWalletDeltaPreservesReservationsAcrossUserCacheSchemaRefresh|TestBackfillWalletOpeningBalances' -count=1
