@@ -306,44 +306,44 @@ jobs:
               echo "===== Go module passed: $d ====="
             done
             mkdir -p source/vendor/github.com/QuantumNous/new-api/relaykit/dto
-            printf '%s\\n' \\
-              'package dto' \\
-              'func saturatedNonNegativeTokenSum(values ...int) int {' \\
-              '  maxInt := int(^uint(0) >> 1)' \\
-              '  total := 0' \\
-              '  for _, value := range values {' \\
-              '    value = max(value, 0)' \\
-              '    if value > maxInt-total { return maxInt }' \\
-              '    total += value' \\
-              '  }' \\
-              '  return total' \\
-              '}' \\
+            printf '%s\n' \
+              'package dto' \
+              'func saturatedNonNegativeTokenSum(values ...int) int {' \
+              '  maxInt := int(^uint(0) >> 1)' \
+              '  total := 0' \
+              '  for _, value := range values {' \
+              '    value = max(value, 0)' \
+              '    if value > maxInt-total { return maxInt }' \
+              '    total += value' \
+              '  }' \
+              '  return total' \
+              '}' \
               > source/vendor/github.com/QuantumNous/new-api/relaykit/dto/token_sum.go
-            printf '%s\\n' \\
-              'package dto' \\
-              'type Notify struct {' \\
-              '  Type string `json:"type"`' \\
-              '  Title string `json:"title"`' \\
-              '  Content string `json:"content"`' \\
-              '  Values []any `json:"values"`' \\
-              '}' \\
-              'const ContentValueParam = "{{value}}"' \\
-              'const (' \\
-              '  NotifyTypeQuotaExceed = "quota_exceed"' \\
-              '  NotifyTypeChannelUpdate = "channel_update"' \\
-              '  NotifyTypeChannelTest = "channel_test"' \\
-              '  NotifyTypeArtifactExpiring = "artifact_expiring"' \\
-              ')' \\
-              'func NewNotify(t string, title string, content string, values []any) Notify {' \\
-              '  return Notify{Type:t, Title:title, Content:content, Values:values}' \\
-              '}' \\
+            printf '%s\n' \
+              'package dto' \
+              'type Notify struct {' \
+              '  Type string `json:"type"`' \
+              '  Title string `json:"title"`' \
+              '  Content string `json:"content"`' \
+              '  Values []any `json:"values"`' \
+              '}' \
+              'const ContentValueParam = "{{value}}"' \
+              'const (' \
+              '  NotifyTypeQuotaExceed = "quota_exceed"' \
+              '  NotifyTypeChannelUpdate = "channel_update"' \
+              '  NotifyTypeChannelTest = "channel_test"' \
+              '  NotifyTypeArtifactExpiring = "artifact_expiring"' \
+              ')' \
+              'func NewNotify(t string, title string, content string, values []any) Notify {' \
+              '  return Notify{Type:t, Title:title, Content:content, Values:values}' \
+              '}' \
               > source/vendor/github.com/QuantumNous/new-api/relaykit/dto/notify.go
           } >/tmp/tokenway-vendor.log 2>&1; then
             echo "Go modules restored, verified, and vendored."
           else
             status=$?
             echo "Go dependency restore/vendor failed (exit $status). Last 180 diagnostic lines:"
-            tail -n 180 /tmp/tokenway-vendor.log | sed -E 's#(https?://)[^/@ ]+:[^/@ ]+@#\\1<redacted>@#g; s#(gh[pousr]_[A-Za-z0-9_]+)#<redacted>#g; s#(Bearer )[A-Za-z0-9._~-]+#\\1<redacted>#g'
+            tail -n 180 /tmp/tokenway-vendor.log | sed -E 's#(https?://)[^/@ ]+:[^/@ ]+@#\1<redacted>@#g; s#(gh[pousr]_[A-Za-z0-9_]+)#<redacted>#g; s#(Bearer )[A-Za-z0-9._~-]+#\1<redacted>#g'
             exit "$status"
           fi
       - name: Verify offline dependency graph
