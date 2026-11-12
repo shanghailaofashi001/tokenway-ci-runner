@@ -285,8 +285,10 @@ jobs:
           if bun run test >/tmp/tokenway-frontend-tests.log 2>&1; then
             echo "Frontend tests passed."
           else
-            echo "Frontend tests failed; sanitized test summary:"
-            grep -E '^( FAIL | FAIL | Test Files|      Tests|   Duration|Error:|AssertionError|[[:space:]]+× )' /tmp/tokenway-frontend-tests.log | sed -E 's#(/home/runner/[^ ]*)#<runner-path>#g' | cut -c1-260 | tail -n 60
+            echo "Frontend tests failed; sanitized Vitest failure output:"
+            perl -pe 's/\e\[[0-9;]*[A-Za-z]//g' /tmp/tokenway-frontend-tests.log \
+              | sed -E 's#(/home/runner/[^ ]*)#<runner-path>#g; s#(/tmp/[^ ]*)#<temp-path>#g; s#(gh[pousr]_[A-Za-z0-9_]+)#<redacted>#g; s#(Bearer )[A-Za-z0-9._~-]+#\1<redacted>#g' \
+              | tail -n 140 | cut -c1-320
             exit 1
           fi
           if bun run build >/tmp/tokenway-frontend-build.log 2>&1; then echo "Frontend production build passed."; else echo "Frontend production build failed."; exit 1; fi
