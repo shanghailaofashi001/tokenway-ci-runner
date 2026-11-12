@@ -151,7 +151,7 @@ jobs:
                       raise SystemExit("capture test fixture cannot be safely adapted")
                   s=s[:start]+region.replace(old_line,new_lines,1)+s[end:]
                   p.write_text(s)
-            PY
+          PY
             gofmt -w controller/task.go controller/video_proxy.go controller/task_artifact_capture.go controller/task_generic_test.go controller/task_artifact_capture_test.go relay/relay_task.go
             gofmt -w model/task_billing_recovery.go service/task_polling.go service/task_polling_test.go service/task_artifact_store.go service/task_artifact_s3_test.go
             git apply --recount ../.tokenway-validation/image-creator.patch
