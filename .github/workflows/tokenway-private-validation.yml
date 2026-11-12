@@ -297,55 +297,40 @@ jobs:
       - name: Restore and vendor Go modules
         shell: bash
         run: |
-          set -euo pipefail
-          if {
-            for d in source source/relaykit source/tokenkit; do
-              echo "===== Go module: $d ====="
-              (cd "$d" && go mod download all && go mod verify && go mod vendor)
-              test -s "$d/vendor/modules.txt"
-              echo "===== Go module passed: $d ====="
-            done
-            mkdir -p source/vendor/github.com/QuantumNous/new-api/relaykit/dto
-            printf '%s\n' \
-              'package dto' \
-              'func saturatedNonNegativeTokenSum(values ...int) int {' \
-              '  maxInt := int(^uint(0) >> 1)' \
-              '  total := 0' \
-              '  for _, value := range values {' \
-              '    value = max(value, 0)' \
-              '    if value > maxInt-total { return maxInt }' \
-              '    total += value' \
-              '  }' \
-              '  return total' \
-              '}' \
-              > source/vendor/github.com/QuantumNous/new-api/relaykit/dto/token_sum.go
-            printf '%s\n' \
-              'package dto' \
-              'type Notify struct {' \
-              '  Type string `json:"type"`' \
-              '  Title string `json:"title"`' \
-              '  Content string `json:"content"`' \
-              '  Values []any `json:"values"`' \
-              '}' \
-              'const ContentValueParam = "{{value}}"' \
-              'const (' \
-              '  NotifyTypeQuotaExceed = "quota_exceed"' \
-              '  NotifyTypeChannelUpdate = "channel_update"' \
-              '  NotifyTypeChannelTest = "channel_test"' \
-              '  NotifyTypeArtifactExpiring = "artifact_expiring"' \
-              ')' \
-              'func NewNotify(t string, title string, content string, values []any) Notify {' \
-              '  return Notify{Type:t, Title:title, Content:content, Values:values}' \
-              '}' \
-              > source/vendor/github.com/QuantumNous/new-api/relaykit/dto/notify.go
-          } >/tmp/tokenway-vendor.log 2>&1; then
-            echo "Go modules restored, verified, and vendored."
-          else
-            status=$?
-            echo "Go dependency restore/vendor failed (exit $status). Last 180 diagnostic lines:"
-            tail -n 180 /tmp/tokenway-vendor.log | sed -E 's#(https?://)[^/@ ]+:[^/@ ]+@#\1<redacted>@#g; s#(gh[pousr]_[A-Za-z0-9_]+)#<redacted>#g; s#(Bearer )[A-Za-z0-9._~-]+#\1<redacted>#g'
-            exit "$status"
-          fi
+          set -Eeuo pipefail
+          for d in source source/relaykit source/tokenkit; do
+            label="${d//\//-}"
+            log="/tmp/tokenway-vendor-${label}.log"
+            echo "===== Go module: $d ====="
+
+            # Always build a fresh vendor tree. A failed vendor command must
+            # never be mistaken for success because an older modules.txt exists.
+            rm -rf "$d/vendor"
+
+            if (
+              cd "$d"
+              export GOWORK=off GOFLAGS= GOTOOLCHAIN=local
+              echo "+ go mod download all"
+              go mod download all || { status=$?; echo "FAILED: go mod download all ($status)"; exit "$status"; }
+              echo "+ go mod verify"
+              go mod verify || { status=$?; echo "FAILED: go mod verify ($status)"; exit "$status"; }
+              echo "+ go mod vendor"
+              go mod vendor || { status=$?; echo "FAILED: go mod vendor ($status)"; exit "$status"; }
+              test -s vendor/modules.txt || { echo "FAILED: vendor/modules.txt missing or empty after go mod vendor"; exit 1; }
+            ) >"$log" 2>&1; then
+              echo "PASS: fresh vendor generated for $d"
+            else
+              status=$?
+              echo "FAIL: Go dependency restore/vendor for $d (exit $status). Diagnostics:"
+              tail -n 180 "$log" | sed -E \
+                's#(https?://)[^/@ ]+:[^/@ ]+@#\\1<redacted>@#g; s#(gh[pousr]_[A-Za-z0-9_]+)#<redacted>#g; s#(Bearer )[A-Za-z0-9._~-]+#\\1<redacted>#g'
+              exit "$status"
+            fi
+          done
+
+          # The root module vendor tree is consumed by the subsequent offline
+          # graph check; verify it is the newly generated tree, not a stale copy.
+          test -s source/vendor/modules.txt || { echo "FAIL: root vendor/modules.txt missing"; exit 1; }
       - name: Verify offline dependency graph
         shell: bash
         run: |
