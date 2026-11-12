@@ -360,7 +360,7 @@ jobs:
 
           sanitize_go_log() {
             sed -E \
-              's#(https?://)[^/@[:space:]]+:[^/@[:space:]]+@#\\1<redacted>@#g; s#([[:alnum:]_.-]+):[^@[:space:]]+@tcp#\\1:<redacted>@tcp#g; s#(postgres(ql)?://)[^:/@[:space:]]+:[^@/[:space:]]+@#\\1<redacted>@#g; s#(gh[pousr]_[A-Za-z0-9_]+)#<redacted>#g; s#(Bearer )[A-Za-z0-9._~-]+#\\1<redacted>#g; s#(/home/runner/[^ ]*)#<runner-path>#g'
+              's#(https?://)[^/@[:space:]]+:[^/@[:space:]]+@#\1<redacted>@#g; s#([[:alnum:]_.-]+):[^@[:space:]]+@tcp#\1:<redacted>@tcp#g; s#(postgres(ql)?://)[^:/@[:space:]]+:[^@/[:space:]]+@#\1<redacted>@#g; s#(gh[pousr]_[A-Za-z0-9_]+)#<redacted>#g; s#(Bearer )[A-Za-z0-9._~-]+#\1<redacted>#g; s#(/home/runner/[^ ]*)#<runner-path>#g'
           }
 
           emit_test_failure() {
@@ -423,7 +423,7 @@ jobs:
           }
 
           for d in source source/relaykit source/tokenkit; do
-            label="${d//\\//-}"
+            label="${d//\//-}"
             log="/tmp/tokenway-go-test-${label}.jsonl"
             if (cd "$d" && go test -json -p=1 ./... -count=1) >"$log" 2>&1; then
               echo "PASS: full Go tests for $d"
@@ -436,7 +436,7 @@ jobs:
           done
 
           for d in source source/relaykit source/tokenkit; do
-            label="${d//\\//-}"
+            label="${d//\//-}"
             log="/tmp/tokenway-go-build-${label}.log"
             if (cd "$d" && go build -p=3 ./...) >"$log" 2>&1; then
               echo "PASS: full Go build for $d"
@@ -449,7 +449,7 @@ jobs:
           done
 
           for d in source source/relaykit source/tokenkit; do
-            label="${d//\\//-}"
+            label="${d//\//-}"
             log="/tmp/tokenway-go-vet-${label}.log"
             if (cd "$d" && go vet -p=3 ./...) >"$log" 2>&1; then
               echo "PASS: full Go vet for $d"
@@ -477,7 +477,7 @@ jobs:
 
           sanitize_db_log() {
             sed -E \
-              's#(https?://)[^/@[:space:]]+:[^/@[:space:]]+@#\\1<redacted>@#g; s#([[:alnum:]_.-]+):[^@[:space:]]+@tcp#\\1:<redacted>@tcp#g; s#(postgres(ql)?://)[^:/@[:space:]]+:[^@/[:space:]]+@#\\1<redacted>@#g; s#(gh[pousr]_[A-Za-z0-9_]+)#<redacted>#g; s#(Bearer )[A-Za-z0-9._~-]+#\\1<redacted>#g; s#(/home/runner/[^ ]*)#<runner-path>#g'
+              's#(https?://)[^/@[:space:]]+:[^/@[:space:]]+@#\1<redacted>@#g; s#([[:alnum:]_.-]+):[^@[:space:]]+@tcp#\1:<redacted>@tcp#g; s#(postgres(ql)?://)[^:/@[:space:]]+:[^@/[:space:]]+@#\1<redacted>@#g; s#(gh[pousr]_[A-Za-z0-9_]+)#<redacted>#g; s#(Bearer )[A-Za-z0-9._~-]+#\1<redacted>#g; s#(/home/runner/[^ ]*)#<runner-path>#g'
           }
 
           run_quiet() {
