@@ -275,7 +275,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if bun run typecheck >/tmp/tokenway-typecheck.log 2>&1; then echo "Frontend typecheck passed."; else echo "Frontend typecheck failed."; exit 1; fi
+          if bun run typecheck >/tmp/tokenway-typecheck.log 2>&1; then
+            echo "Frontend typecheck passed."
+          else
+            echo "Frontend typecheck failed; sanitized TypeScript diagnostics:"
+            grep -E 'error TS[0-9]+' /tmp/tokenway-typecheck.log | sed -E 's#(/home/runner/[^ ]*)#<runner-path>#g' | cut -c1-320 | head -n 40
+            exit 1
+          fi
           if bun run test >/tmp/tokenway-frontend-tests.log 2>&1; then echo "Frontend tests passed."; else echo "Frontend tests failed."; exit 1; fi
           if bun run build >/tmp/tokenway-frontend-build.log 2>&1; then echo "Frontend production build passed."; else echo "Frontend production build failed."; exit 1; fi
           test -s dist/index.html
