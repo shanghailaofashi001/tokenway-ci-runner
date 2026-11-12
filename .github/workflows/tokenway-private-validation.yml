@@ -134,7 +134,8 @@ jobs:
           if python3 ../.tokenway-validation/repair-ci-source.py >/tmp/tokenway-repair.log 2>&1; then
             echo "PASS: source contract repair"
           else
-            echo "FAIL: source contract repair (private details withheld)"
+            echo "FAIL: source contract repair; sanitized exception follows:"
+            tail -n 2 /tmp/tokenway-repair.log | sed -E 's#(/home/runner/[^ ]*)#<runner-path>#g; s#(gh[pousr]_[A-Za-z0-9_]+)#<redacted>#g'
             exit 1
           fi
 
