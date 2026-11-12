@@ -124,7 +124,7 @@ jobs:
             grep -q 'func ValidateCheckinQuotaRange' source/setting/operation_setting/checkin_setting.go
             grep -q 'func CheckGroupGroupRatio' source/setting/ratio_setting/group_ratio.go
             grep -q 'func ValidateTopupGroupRatioJSON' source/common/topup-ratio.go
-          } >/tmp/tokenway-restore.log 2>&1 || { echo "Private source restoration failed (details withheld to avoid exposing source in public logs)."; exit 1; }
+          } >/tmp/tokenway-restore.log 2>&1
           echo "Private source restoration passed."
 
       - name: Apply source projections and integration patches
@@ -160,7 +160,7 @@ jobs:
             mkdir -p web/src/features/usage-logs/components/__tests__
             cp ../.tokenway-patches/p2-legacy-video-download/legacy-video-download.test.tsx web/src/features/usage-logs/components/__tests__/legacy-video-download.test.tsx
             gofmt -w constant/task.go controller/playground.go relay/channel/minimax/adaptor.go relay/channel/minimax/adaptor_test.go relay/channel/minimax/image.go relay/common/relay_info.go relay/constant/relay_mode.go relay/constant/relay_mode_test.go relay/image_handler.go router/relay-router.go router/relay_router_test.go service/billing.go service/generated_image_task.go service/generated_image_task_test.go
-          } >/tmp/tokenway-patch.log 2>&1 || { echo "Source projection or patch application failed (details withheld to avoid exposing private source)."; exit 1; }
+          } >/tmp/tokenway-patch.log 2>&1
           echo "Source projection and patch application passed."
 
       - name: Install frontend dependencies
@@ -221,7 +221,7 @@ jobs:
               return Notify{Type:t, Title:title, Content:content, Values:values}
             }
             GO
-          } >/tmp/tokenway-vendor.log 2>&1 || { echo "Go module restoration or vendoring failed."; exit 1; }
+          } >/tmp/tokenway-vendor.log 2>&1
           echo "Go modules restored, verified, and vendored."
 
       - name: Verify offline dependency graph
