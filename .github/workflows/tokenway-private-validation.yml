@@ -65,7 +65,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: shanghailaofashi001/tokenway-v11-dev
-          ref: 092514683b609f6fad156719ebdc3b2ec33cf604
+          ref: daa7d0260319efabe00373697936008c464dcd8e
           token: ${{ secrets.TOKENWAY_SOURCE_READ_TOKEN }}
           path: private
           fetch-depth: 1
@@ -207,7 +207,7 @@ jobs:
         working-directory: source
         shell: bash
         run: |
-          if gofmt -w model/task_billing_recovery.go service/task_polling.go service/task_polling_test.go service/task_artifact_store.go service/task_artifact_s3_test.go service/task_artifact_metadata_dialect_test.go >/tmp/tokenway-gofmt-service.log 2>&1; then
+          if gofmt -w model/wallet_ledger.go model/wallet_ledger_test.go model/task_billing_recovery.go service/task_polling.go service/task_polling_test.go service/task_artifact_store.go service/task_artifact_s3_test.go service/task_artifact_metadata_dialect_test.go >/tmp/tokenway-gofmt-service.log 2>&1; then
             echo "PASS: billing recovery and artifact service gofmt"
           else
             echo "FAIL: billing recovery and artifact service gofmt (file/path or syntax issue)"
