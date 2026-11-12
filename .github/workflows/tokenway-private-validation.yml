@@ -127,41 +127,133 @@ jobs:
           } >/tmp/tokenway-restore.log 2>&1
           echo "Private source restoration passed."
 
-      - name: Apply source projections and integration patches
+      - name: Repair TokenWay source contracts
+        working-directory: source
         shell: bash
         run: |
-          set -euo pipefail
-          {
-            cd source
-            python3 ../.tokenway-validation/repair-ci-source.py
-            python3 ../.tokenway-validation/apply-host-artifact-projection.py
-            python3 - <<'PY'
+          if python3 ../.tokenway-validation/repair-ci-source.py >/tmp/tokenway-repair.log 2>&1; then
+            echo "PASS: source contract repair"
+          else
+            echo "FAIL: source contract repair (private details withheld)"
+            exit 1
+          fi
+
+      - name: Apply host artifact source projection
+        working-directory: source
+        shell: bash
+        run: |
+          if python3 ../.tokenway-validation/apply-host-artifact-projection.py >/tmp/tokenway-host-projection.log 2>&1; then
+            echo "PASS: host artifact projection"
+          else
+            echo "FAIL: host artifact projection (private details withheld)"
+            exit 1
+          fi
+
+      - name: Adapt task artifact capture database fixture
+        working-directory: source
+        shell: bash
+        run: |
+          if python3 - <<'PY' >/tmp/tokenway-capture-fixture.log 2>&1
           from pathlib import Path
-          p=Path("controller/task_artifact_capture_test.go")
-          s=p.read_text()
-          start=s.find("func TestTaskArtifactCaptureClaimUsesFreshLeasePerSerialItem(t *testing.T) {")
+          p = Path("controller/task_artifact_capture_test.go")
+          s = p.read_text()
+          start = s.find("func TestTaskArtifactCaptureClaimUsesFreshLeasePerSerialItem(t *testing.T) {")
           if start >= 0:
-              end=s.find("\nfunc ", start+1)
-              if end < 0: end=len(s)
-              region=s[start:end]
+              end = s.find("\\nfunc ", start + 1)
+              if end < 0:
+                  end = len(s)
+              region = s[start:end]
               if "openTaskDialectDatabase" not in region:
                   old_line = "require.NoError(t, model.InitDB())"
-                  new_lines = "previousDB := model.DB\ndatabase, _ := openTaskDialectDatabase(t, &model.Task{})\nmodel.DB = database\nt.Cleanup(func() { model.DB = previousDB })"
+                  new_lines = "previousDB := model.DB\\ndatabase, _ := openTaskDialectDatabase(t, &model.Task{})\\nmodel.DB = database\\nt.Cleanup(func() { model.DB = previousDB })"
                   if region.count(old_line) != 1:
                       raise SystemExit("capture test fixture cannot be safely adapted")
-                  s=s[:start]+region.replace(old_line,new_lines,1)+s[end:]
+                  s = s[:start] + region.replace(old_line, new_lines, 1) + s[end:]
                   p.write_text(s)
           PY
-            gofmt -w controller/task.go controller/video_proxy.go controller/task_artifact_capture.go controller/task_generic_test.go controller/task_artifact_capture_test.go relay/relay_task.go
-            gofmt -w model/task_billing_recovery.go service/task_polling.go service/task_polling_test.go service/task_artifact_store.go service/task_artifact_s3_test.go
-            git apply --recount ../.tokenway-validation/image-creator.patch
-            python3 ../.tokenway-validation/add-creator-route-tree.py
-            git apply --recount ../.tokenway-patches/p2-legacy-video-download/task-artifacts.patch
-            mkdir -p web/src/features/usage-logs/components/__tests__
-            cp ../.tokenway-patches/p2-legacy-video-download/legacy-video-download.test.tsx web/src/features/usage-logs/components/__tests__/legacy-video-download.test.tsx
-            gofmt -w constant/task.go controller/playground.go relay/channel/minimax/adaptor.go relay/channel/minimax/adaptor_test.go relay/channel/minimax/image.go relay/common/relay_info.go relay/constant/relay_mode.go relay/constant/relay_mode_test.go relay/image_handler.go router/relay-router.go router/relay_router_test.go service/billing.go service/generated_image_task.go service/generated_image_task_test.go
-          } >/tmp/tokenway-patch.log 2>&1
-          echo "Source projection and patch application passed."
+          then
+            echo "PASS: task artifact capture fixture adaptation"
+          else
+            echo "FAIL: task artifact capture fixture adaptation (private details withheld)"
+            exit 1
+          fi
+
+      - name: Format task billing and artifact source files
+        working-directory: source
+        shell: bash
+        run: |
+          if gofmt -w controller/task.go controller/video_proxy.go controller/task_artifact_capture.go controller/task_generic_test.go controller/task_artifact_capture_test.go relay/relay_task.go >/tmp/tokenway-gofmt-task.log 2>&1; then
+            echo "PASS: task billing and artifact gofmt"
+          else
+            echo "FAIL: task billing and artifact gofmt (file/path or syntax issue)"
+            exit 1
+          fi
+
+      - name: Format billing recovery and artifact service files
+        working-directory: source
+        shell: bash
+        run: |
+          if gofmt -w model/task_billing_recovery.go service/task_polling.go service/task_polling_test.go service/task_artifact_store.go service/task_artifact_s3_test.go >/tmp/tokenway-gofmt-service.log 2>&1; then
+            echo "PASS: billing recovery and artifact service gofmt"
+          else
+            echo "FAIL: billing recovery and artifact service gofmt (file/path or syntax issue)"
+            exit 1
+          fi
+
+      - name: Apply image creator integration patch
+        working-directory: source
+        shell: bash
+        run: |
+          if git apply --recount ../.tokenway-validation/image-creator.patch >/tmp/tokenway-image-creator-patch.log 2>&1; then
+            echo "PASS: image creator integration patch"
+          else
+            echo "FAIL: image creator integration patch (context mismatch or already-applied change)"
+            exit 1
+          fi
+
+      - name: Register image creator route tree
+        working-directory: source
+        shell: bash
+        run: |
+          if python3 ../.tokenway-validation/add-creator-route-tree.py >/tmp/tokenway-creator-route.log 2>&1; then
+            echo "PASS: image creator route tree"
+          else
+            echo "FAIL: image creator route tree (private details withheld)"
+            exit 1
+          fi
+
+      - name: Apply legacy video download integration patch
+        working-directory: source
+        shell: bash
+        run: |
+          if git apply --recount ../.tokenway-patches/p2-legacy-video-download/task-artifacts.patch >/tmp/tokenway-legacy-video-patch.log 2>&1; then
+            echo "PASS: legacy video download integration patch"
+          else
+            echo "FAIL: legacy video download integration patch (context mismatch or already-applied change)"
+            exit 1
+          fi
+
+      - name: Install legacy video download frontend regression test
+        working-directory: source
+        shell: bash
+        run: |
+          if mkdir -p web/src/features/usage-logs/components/__tests__ && cp ../.tokenway-patches/p2-legacy-video-download/legacy-video-download.test.tsx web/src/features/usage-logs/components/__tests__/legacy-video-download.test.tsx; then
+            echo "PASS: legacy video download regression test installed"
+          else
+            echo "FAIL: legacy video download regression test installation"
+            exit 1
+          fi
+
+      - name: Format remaining integration source files
+        working-directory: source
+        shell: bash
+        run: |
+          if gofmt -w constant/task.go controller/playground.go relay/channel/minimax/adaptor.go relay/channel/minimax/adaptor_test.go relay/channel/minimax/image.go relay/common/relay_info.go relay/constant/relay_mode.go relay/constant/relay_mode_test.go relay/image_handler.go router/relay-router.go router/relay_router_test.go service/billing.go service/generated_image_task.go service/generated_image_task_test.go >/tmp/tokenway-gofmt-integration.log 2>&1; then
+            echo "PASS: remaining integration gofmt"
+          else
+            echo "FAIL: remaining integration gofmt (file/path or syntax issue)"
+            exit 1
+          fi
 
       - name: Install frontend dependencies
         working-directory: source/web
