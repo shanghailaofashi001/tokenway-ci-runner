@@ -136,21 +136,21 @@ jobs:
             python3 ../.tokenway-validation/repair-ci-source.py
             python3 ../.tokenway-validation/apply-host-artifact-projection.py
             python3 - <<'PY'
-            from pathlib import Path
-            p=Path("controller/task_artifact_capture_test.go")
-            s=p.read_text()
-            start=s.find("func TestTaskArtifactCaptureClaimUsesFreshLeasePerSerialItem(t *testing.T) {")
-            if start >= 0:
-                end=s.find("\\nfunc ", start+1)
-                if end < 0: end=len(s)
-                region=s[start:end]
-                if "openTaskDialectDatabase" not in region:
-                    old_line = "require.NoError(t, model.InitDB())"
-                    new_lines = "previousDB := model.DB\\ndatabase, _ := openTaskDialectDatabase(t, &model.Task{})\\nmodel.DB = database\\nt.Cleanup(func() { model.DB = previousDB })"
-                    if region.count(old_line) != 1:
-                        raise SystemExit("capture test fixture cannot be safely adapted")
-                    s=s[:start]+region.replace(old_line,new_lines,1)+s[end:]
-                    p.write_text(s)
+          from pathlib import Path
+          p=Path("controller/task_artifact_capture_test.go")
+          s=p.read_text()
+          start=s.find("func TestTaskArtifactCaptureClaimUsesFreshLeasePerSerialItem(t *testing.T) {")
+          if start >= 0:
+              end=s.find("\nfunc ", start+1)
+              if end < 0: end=len(s)
+              region=s[start:end]
+              if "openTaskDialectDatabase" not in region:
+                  old_line = "require.NoError(t, model.InitDB())"
+                  new_lines = "previousDB := model.DB\ndatabase, _ := openTaskDialectDatabase(t, &model.Task{})\nmodel.DB = database\nt.Cleanup(func() { model.DB = previousDB })"
+                  if region.count(old_line) != 1:
+                      raise SystemExit("capture test fixture cannot be safely adapted")
+                  s=s[:start]+region.replace(old_line,new_lines,1)+s[end:]
+                  p.write_text(s)
             PY
             gofmt -w controller/task.go controller/video_proxy.go controller/task_artifact_capture.go controller/task_generic_test.go controller/task_artifact_capture_test.go relay/relay_task.go
             gofmt -w model/task_billing_recovery.go service/task_polling.go service/task_polling_test.go service/task_artifact_store.go service/task_artifact_s3_test.go
