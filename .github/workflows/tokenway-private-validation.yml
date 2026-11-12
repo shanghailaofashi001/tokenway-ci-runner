@@ -352,14 +352,17 @@ jobs:
           set -euo pipefail
           export GOPROXY=off GOSUMDB=off GOFLAGS=-mod=vendor GOTOOLCHAIN=local
           for d in source source/relaykit source/tokenkit; do
+            echo "===== Offline dependency graph: $d ====="
             if (cd "$d" && go list -deps -test ./... >/dev/null) 2>/tmp/tokenway-go-list.err; then
               echo "Offline dependency graph passed: $d"
             else
-              echo "Offline dependency graph failed: $d"
-              exit 1
+              status=$?
+              echo "Offline dependency graph failed: $d (exit $status)"
+              echo "Go diagnostic:"
+              sed -E 's#(https?://)[^/@ ]+:[^/@ ]+@#\\1<redacted>@#g; s#(gh[pousr]_[A-Za-z0-9_]+)#<redacted>#g; s#(Bearer )[A-Za-z0-9._~-]+#\\1<redacted>#g' /tmp/tokenway-go-list.err | tail -n 220
+              exit "$status"
             fi
           done
-
       - name: Full Go tests, build, and vet
         shell: bash
         run: |
