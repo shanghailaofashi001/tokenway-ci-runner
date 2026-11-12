@@ -207,7 +207,7 @@ jobs:
         working-directory: source
         shell: bash
         run: |
-          if gofmt -w model/wallet_ledger.go model/wallet_ledger_test.go model/task_billing_recovery.go service/task_polling.go service/task_polling_test.go service/task_artifact_store.go service/task_artifact_s3_test.go service/task_artifact_metadata_dialect_test.go >/tmp/tokenway-gofmt-service.log 2>&1; then
+          if gofmt -w model/wallet_ledger.go model/wallet_ledger_test.go model/task_billing_recovery.go service/task_polling.go service/task_polling_test.go service/task_artifact_store.go service/task_artifact_s3_test.go service/task_artifact_metadata_dialect_test.go service/task_artifact_s3_roundtrip_test.go >/tmp/tokenway-gofmt-service.log 2>&1; then
             echo "PASS: billing recovery and artifact service gofmt"
           else
             echo "FAIL: billing recovery and artifact service gofmt (file/path or syntax issue)"
