@@ -312,6 +312,23 @@ jobs:
           # The root module vendor tree is consumed by the subsequent offline
           # graph check; verify it is the newly generated tree, not a stale copy.
           test -s source/vendor/modules.txt || { echo "FAIL: root vendor/modules.txt missing"; exit 1; }
+      - name: Export Go dependency vendor cache
+        if: ${{ steps.go_vendor.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: tokenway-go-vendor-${{ github.run_id }}
+          path: |
+            source/vendor/
+            source/relaykit/vendor/
+            source/tokenkit/vendor/
+            source/go.mod
+            source/go.sum
+            source/relaykit/go.mod
+            source/relaykit/go.sum
+            source/tokenkit/go.mod
+            source/tokenkit/go.sum
+          if-no-files-found: error
+          retention-days: 2
       - name: Prepare embedded web assets for Go-only validation
         working-directory: source
         shell: bash
