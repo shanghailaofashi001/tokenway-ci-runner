@@ -312,6 +312,17 @@ jobs:
           # The root module vendor tree is consumed by the subsequent offline
           # graph check; verify it is the newly generated tree, not a stale copy.
           test -s source/vendor/modules.txt || { echo "FAIL: root vendor/modules.txt missing"; exit 1; }
+      - name: Prepare embedded web assets for Go-only validation
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p web/dist
+          if [[ ! -s web/dist/index.html ]]; then
+            printf '%s\\n' '<!doctype html><html><head><meta charset="utf-8"></head><body>Go validation placeholder; frontend build runs later.</body></html>' > web/dist/index.html
+          fi
+          test -s web/dist/index.html
+          echo "PASS: Go embed path is present; this placeholder is only for Go validation and the actual frontend build runs later."
       - name: Verify offline dependency graph
         id: offline_graph
         shell: bash
