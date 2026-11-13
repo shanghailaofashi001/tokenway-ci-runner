@@ -274,36 +274,6 @@ jobs:
             exit 1
           fi
 
-      - name: Install frontend dependencies
-        working-directory: source/web
-        shell: bash
-        run: |
-          if bun install --frozen-lockfile >/tmp/tokenway-bun-install.log 2>&1; then echo "Frontend dependencies installed."; else echo "Frontend dependency installation failed."; exit 1; fi
-
-      - name: Frontend typecheck, tests, and production build
-        working-directory: source/web
-        shell: bash
-        run: |
-          set -euo pipefail
-          if bun run typecheck >/tmp/tokenway-typecheck.log 2>&1; then
-            echo "Frontend typecheck passed."
-          else
-            echo "Frontend typecheck failed; sanitized TypeScript diagnostics:"
-            grep -E 'error TS[0-9]+' /tmp/tokenway-typecheck.log | sed -E 's#(/home/runner/[^ ]*)#<runner-path>#g' | cut -c1-320 | head -n 40
-            exit 1
-          fi
-          if bun run test >/tmp/tokenway-frontend-tests.log 2>&1; then
-            echo "Frontend tests passed."
-          else
-            echo "Frontend tests failed; sanitized Vitest failure output:"
-            perl -pe 's/\e\[[0-9;]*[A-Za-z]//g' /tmp/tokenway-frontend-tests.log \
-              | sed -E 's#(/home/runner/[^ ]*)#<runner-path>#g; s#(/tmp/[^ ]*)#<temp-path>#g; s#(gh[pousr]_[A-Za-z0-9_]+)#<redacted>#g; s#(Bearer )[A-Za-z0-9._~-]+#\1<redacted>#g' \
-              | tail -n 140 | cut -c1-320
-            exit 1
-          fi
-          if bun run build >/tmp/tokenway-frontend-build.log 2>&1; then echo "Frontend production build passed."; else echo "Frontend production build failed."; exit 1; fi
-          test -s dist/index.html
-
       - name: Restore and vendor Go modules
         id: go_vendor
         shell: bash
@@ -519,5 +489,33 @@ jobs:
             exit 1
           fi
           echo "All database matrix checks passed."
+      - name: Install frontend dependencies
+        working-directory: source/web
+        shell: bash
+        run: |
+          if bun install --frozen-lockfile >/tmp/tokenway-bun-install.log 2>&1; then echo "Frontend dependencies installed."; else echo "Frontend dependency installation failed."; exit 1; fi
 
+      - name: Frontend typecheck, tests, and production build
+        working-directory: source/web
+        shell: bash
+        run: |
+          set -euo pipefail
+          if bun run typecheck >/tmp/tokenway-typecheck.log 2>&1; then
+            echo "Frontend typecheck passed."
+          else
+            echo "Frontend typecheck failed; sanitized TypeScript diagnostics:"
+            grep -E 'error TS[0-9]+' /tmp/tokenway-typecheck.log | sed -E 's#(/home/runner/[^ ]*)#<runner-path>#g' | cut -c1-320 | head -n 40
+            exit 1
+          fi
+          if bun run test >/tmp/tokenway-frontend-tests.log 2>&1; then
+            echo "Frontend tests passed."
+          else
+            echo "Frontend tests failed; sanitized Vitest failure output:"
+            perl -pe 's/\e\[[0-9;]*[A-Za-z]//g' /tmp/tokenway-frontend-tests.log \
+              | sed -E 's#(/home/runner/[^ ]*)#<runner-path>#g; s#(/tmp/[^ ]*)#<temp-path>#g; s#(gh[pousr]_[A-Za-z0-9_]+)#<redacted>#g; s#(Bearer )[A-Za-z0-9._~-]+#\1<redacted>#g' \
+              | tail -n 140 | cut -c1-320
+            exit 1
+          fi
+          if bun run build >/tmp/tokenway-frontend-build.log 2>&1; then echo "Frontend production build passed."; else echo "Frontend production build failed."; exit 1; fi
+          test -s dist/index.html
 # Manual validation refresh: force the pinned Go 1.26.10 full validation workflow to run.
