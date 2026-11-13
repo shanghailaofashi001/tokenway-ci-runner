@@ -2,6 +2,10 @@ name: TOKENWAY private-source validation
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/tokenway-private-validation.yml"
   push:
     branches: [main]
     paths:
