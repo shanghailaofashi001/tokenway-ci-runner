@@ -515,3 +515,5 @@ jobs:
             exit 1
           fi
           echo "All database matrix checks passed."
+
+# Manual validation refresh: force the pinned Go 1.26.10 full validation workflow to run.
