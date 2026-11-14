@@ -1,6 +1,6 @@
 name: TOKENWAY private-source validation
 
-# Source restoration verification revision 6 - restore Batch 3 model and BillingSession integration
+# Source restoration verification revision 7 - idempotent rollback and typed review guard
 on:
   workflow_dispatch:
   pull_request:
@@ -149,7 +149,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          python3 -m py_compile .tokenway-validation/repair-ci-source.py .tokenway-validation/apply-host-artifact-projection.py .tokenway-validation/add-creator-route-tree.py .tokenway-validation/apply-subscription-extra-refund-once.py
+          python3 -m py_compile .tokenway-validation/repair-ci-source.py .tokenway-validation/apply-host-artifact-projection.py .tokenway-validation/add-creator-route-tree.py .tokenway-validation/apply-subscription-extra-refund-once.py .tokenway-validation/apply-subscription-extra-reserve-idempotency.py
           echo "PASS: all source restoration scripts compile"
       - name: Repair TokenWay source contracts
         working-directory: source
@@ -295,6 +295,12 @@ jobs:
         run: |
           set -euo pipefail
           python ../.tokenway-validation/apply-subscription-extra-refund-once.py
+      - name: Make subscription reserve and rollback replay idempotent; preserve review status
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python ../.tokenway-validation/apply-subscription-extra-reserve-idempotency.py
       - name: Restore and vendor Go modules
         id: go_vendor
         shell: bash
