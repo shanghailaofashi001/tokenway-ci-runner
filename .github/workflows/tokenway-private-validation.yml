@@ -474,14 +474,14 @@ jobs:
             exit 1
           fi
           echo "All three Go modules passed full tests, build, and vet."
-      - name: Race-check concurrent video task polling and logger rotation
+      - name: Race-check logger rotation, video polling, and parallel provider tests
         if: ${{ always() && steps.go_vendor.outcome == 'success' && steps.offline_graph.outcome == 'success' }}
         working-directory: source
         shell: bash
         run: |
           set -euo pipefail
           export GOWORK=off GOPROXY=off GOSUMDB=off GOFLAGS=-mod=vendor GOTOOLCHAIN=local
-          go test -race -count=1 -p=2 ./service -run "^TestUpdateVideoTasks(DefaultSleepDoesNotBlockOtherChannels|SlowChannelDoesNotBlockOtherChannels)$"
+          go test -race -count=1 -p=2 ./service ./relay/channel/gemini ./relay/channel/minimax
       - name: Database migration, billing, task settlement, and artifact metadata matrix
         if: ${{ always() && steps.go_vendor.outcome == 'success' && steps.offline_graph.outcome == 'success' }}
         working-directory: source
