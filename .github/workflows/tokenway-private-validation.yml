@@ -481,7 +481,9 @@ jobs:
         run: |
           set -euo pipefail
           export GOWORK=off GOPROXY=off GOSUMDB=off GOFLAGS=-mod=vendor GOTOOLCHAIN=local
-          go test -race -count=1 -p=2 ./service -run '^TestUpdateVideoTasks(DefaultSleepDoesNotBlockOtherChannels|SlowChannelDoesNotBlockOtherChannels)
+          go test -race -count=1 -p=2 ./service -run "^TestUpdateVideoTasks(DefaultSleepDoesNotBlockOtherChannels|SlowChannelDoesNotBlockOtherChannels)$"
+      - name: Database migration, billing, task settlement, and artifact metadata matrix
+        if: ${{ always() && steps.go_vendor.outcome == 'success' && steps.offline_graph.outcome == 'success' }}
         working-directory: source
         shell: bash
         run: |
