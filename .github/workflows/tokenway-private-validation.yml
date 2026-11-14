@@ -65,7 +65,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: shanghailaofashi001/tokenway-v11-dev
-          ref: 4cc7417bf7ab1d0a56a8a66ddbfc10f4e3eaa194
+          ref: 9b0e9bdd11999d0f2d70daecda0da07982b4feaf
           token: ${{ secrets.TOKENWAY_SOURCE_READ_TOKEN }}
           path: private
           fetch-depth: 1
@@ -116,7 +116,10 @@ jobs:
             base64 -d .tokenway-validation/wallet-redemption-subscription-source.tar.gz.base64 | tar -xz -C source
             cat .tokenway-validation/personal-qr-source.part* | base64 -d | tar -xz -C source
             cat .tokenway-validation/billing-session.part* | base64 -d | tar -xz -C source
+            cat .tokenway-validation/batch3-subscription-model.part* | base64 -d | tar -xz -C source
             test -s source/model/subscription.go
+            grep -q 'func ApplySubscriptionPreConsumeExtraReserve' source/model/subscription.go
+            grep -q 'func refundSubscriptionPreConsumeTx' source/model/subscription.go
             test -s source/setting/ratio_setting/pricing_ratio_validation.go
             test -s source/model/request_billing_journal.go
             test -s source/model/subscription_usage_ledger.go
@@ -136,7 +139,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          python3 -m py_compile .tokenway-validation/repair-ci-source.py .tokenway-validation/apply-host-artifact-projection.py .tokenway-validation/add-creator-route-tree.py
+          python3 -m py_compile .tokenway-validation/repair-ci-source.py .tokenway-validation/apply-host-artifact-projection.py .tokenway-validation/add-creator-route-tree.py .tokenway-validation/apply-subscription-extra-refund-once.py .tokenway-validation/apply-subscription-extra-reserve-idempotency.py
           echo "PASS: all source restoration scripts compile"
       - name: Repair TokenWay source contracts
         working-directory: source
@@ -149,6 +152,17 @@ jobs:
             tail -n 30 /tmp/tokenway-repair.log | sed -E 's#(/home/runner/[^ ]*)#<runner-path>#g; s#(gh[pousr]_[A-Za-z0-9_]+)#<redacted>#g'
             exit 1
           fi
+
+      - name: Apply Batch 3 subscription reserve and refund repairs
+        working-directory: source
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 ../.tokenway-validation/apply-subscription-extra-refund-once.py
+          python3 ../.tokenway-validation/apply-subscription-extra-reserve-idempotency.py
+          grep -q 'idempotency_key LIKE ? ESCAPE' model/subscription.go
+          grep -q 'TestBillingSessionSubscriptionExtraReserveRefundsOnce' service/subscription_refund_once_test.go
+          grep -q 'TestSubscriptionRefundEscapesRequestIDLikeWildcards' model/subscription_billing_atomic_test.go
 
       - name: Apply host artifact source projection
         working-directory: source
