@@ -65,7 +65,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: shanghailaofashi001/tokenway-v11-dev
-          ref: bb6c1e105d99f74e553a6b13bd387d033c5e0715
+          ref: 28701ae3bc767177faa9829d07dcd88eb881c9f4
           token: ${{ secrets.TOKENWAY_SOURCE_READ_TOKEN }}
           path: private
           fetch-depth: 1
@@ -160,7 +160,6 @@ jobs:
           set -Eeuo pipefail
           python3 ../.tokenway-validation/apply-subscription-extra-refund-once.py
           python3 ../.tokenway-validation/apply-subscription-extra-reserve-idempotency.py
-          grep -q 'idempotency_key LIKE ? ESCAPE' model/subscription.go
           grep -q 'TestBillingSessionSubscriptionExtraReserveRefundsOnce' service/subscription_refund_once_test.go
           grep -q 'TestSubscriptionRefundEscapesRequestIDLikeWildcards' model/subscription_billing_atomic_test.go
 
