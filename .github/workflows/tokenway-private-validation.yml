@@ -1,7 +1,12 @@
 name: TOKENWAY private-source validation
 
+# Source restoration verification revision 9 - replace model helper by function boundary
 on:
   workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/tokenway-private-validation.yml"
   push:
     branches: [main]
     paths:
@@ -65,7 +70,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: shanghailaofashi001/tokenway-v11-dev
-          ref: 4cc7417bf7ab1d0a56a8a66ddbfc10f4e3eaa194
+          ref: codex/fix-task-artifact-backfill-session # reset reused GORM destination IDs in regression tests
           token: ${{ secrets.TOKENWAY_SOURCE_READ_TOKEN }}
           path: private
           fetch-depth: 1
@@ -114,6 +119,14 @@ jobs:
             base64 -d .tokenway-validation/missing-source-definitions.tar.gz.base64 | tar -xz -C source
             base64 -d .tokenway-validation/ratio-validation-source.tar.gz.base64 | tar -xz -C source
             base64 -d .tokenway-validation/wallet-redemption-subscription-source.tar.gz.base64 | tar -xz -C source
+            # Restore the exact Batch 3 subscription model snapshot after the older
+            # wallet-redemption archive; this is the source of ExtraReserved and
+            # the durable request-scoped reserve/refund helpers.
+            cat .tokenway-validation/batch3-subscription-model.part* | base64 -d | tar -xz -C source
+            test -s source/model/subscription_billing_atomic_test.go
+            grep -q 'ExtraReserved' source/model/subscription.go
+            grep -q 'func ApplySubscriptionPreConsumeExtraReserve' source/model/subscription.go
+            grep -q 'func RefundSubscriptionPreConsume' source/model/subscription.go
             cat .tokenway-validation/personal-qr-source.part* | base64 -d | tar -xz -C source
             cat .tokenway-validation/billing-session.part* | base64 -d | tar -xz -C source
             test -s source/model/subscription.go
@@ -136,7 +149,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          python3 -m py_compile .tokenway-validation/repair-ci-source.py .tokenway-validation/apply-host-artifact-projection.py .tokenway-validation/add-creator-route-tree.py
+          python3 -m py_compile .tokenway-validation/repair-ci-source.py .tokenway-validation/apply-host-artifact-projection.py .tokenway-validation/add-creator-route-tree.py .tokenway-validation/apply-subscription-extra-refund-once.py .tokenway-validation/apply-subscription-extra-reserve-idempotency.py
           echo "PASS: all source restoration scripts compile"
       - name: Repair TokenWay source contracts
         working-directory: source
@@ -259,6 +272,12 @@ jobs:
             exit 1
           fi
 
+      - name: Isolate Gin global mode for parallel relay tests
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python ../.tokenway-validation/apply-gin-race-isolation.py
       - name: Format remaining integration source files
         working-directory: source
         shell: bash
@@ -270,36 +289,18 @@ jobs:
             exit 1
           fi
 
-      - name: Install frontend dependencies
-        working-directory: source/web
-        shell: bash
-        run: |
-          if bun install --frozen-lockfile >/tmp/tokenway-bun-install.log 2>&1; then echo "Frontend dependencies installed."; else echo "Frontend dependency installation failed."; exit 1; fi
-
-      - name: Frontend typecheck, tests, and production build
-        working-directory: source/web
+      - name: Integrate durable subscription reserve, rollback, and single refund paths
+        working-directory: source
         shell: bash
         run: |
           set -euo pipefail
-          if bun run typecheck >/tmp/tokenway-typecheck.log 2>&1; then
-            echo "Frontend typecheck passed."
-          else
-            echo "Frontend typecheck failed; sanitized TypeScript diagnostics:"
-            grep -E 'error TS[0-9]+' /tmp/tokenway-typecheck.log | sed -E 's#(/home/runner/[^ ]*)#<runner-path>#g' | cut -c1-320 | head -n 40
-            exit 1
-          fi
-          if bun run test >/tmp/tokenway-frontend-tests.log 2>&1; then
-            echo "Frontend tests passed."
-          else
-            echo "Frontend tests failed; sanitized Vitest failure output:"
-            perl -pe 's/\e\[[0-9;]*[A-Za-z]//g' /tmp/tokenway-frontend-tests.log \
-              | sed -E 's#(/home/runner/[^ ]*)#<runner-path>#g; s#(/tmp/[^ ]*)#<temp-path>#g; s#(gh[pousr]_[A-Za-z0-9_]+)#<redacted>#g; s#(Bearer )[A-Za-z0-9._~-]+#\1<redacted>#g' \
-              | tail -n 140 | cut -c1-320
-            exit 1
-          fi
-          if bun run build >/tmp/tokenway-frontend-build.log 2>&1; then echo "Frontend production build passed."; else echo "Frontend production build failed."; exit 1; fi
-          test -s dist/index.html
-
+          python ../.tokenway-validation/apply-subscription-extra-refund-once.py
+      - name: Make subscription reserve and rollback replay idempotent; preserve review status
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python ../.tokenway-validation/apply-subscription-extra-reserve-idempotency.py
       - name: Restore and vendor Go modules
         id: go_vendor
         shell: bash
@@ -338,6 +339,34 @@ jobs:
           # The root module vendor tree is consumed by the subsequent offline
           # graph check; verify it is the newly generated tree, not a stale copy.
           test -s source/vendor/modules.txt || { echo "FAIL: root vendor/modules.txt missing"; exit 1; }
+      - name: Export Go dependency vendor cache
+        if: ${{ steps.go_vendor.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: tokenway-go-vendor-${{ github.run_id }}
+          path: |
+            source/vendor/
+            source/relaykit/vendor/
+            source/tokenkit/vendor/
+            source/go.mod
+            source/go.sum
+            source/relaykit/go.mod
+            source/relaykit/go.sum
+            source/tokenkit/go.mod
+            source/tokenkit/go.sum
+          if-no-files-found: error
+          retention-days: 2
+      - name: Prepare embedded web assets for Go-only validation
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p web/dist
+          if [[ ! -s web/dist/index.html ]]; then
+            printf '%s\\n' '<!doctype html><html><head><meta charset="utf-8"></head><body>Go validation placeholder; frontend build runs later.</body></html>' > web/dist/index.html
+          fi
+          test -s web/dist/index.html
+          echo "PASS: Go embed path is present; this placeholder is only for Go validation and the actual frontend build runs later."
       - name: Verify offline dependency graph
         id: offline_graph
         shell: bash
@@ -472,6 +501,14 @@ jobs:
             exit 1
           fi
           echo "All three Go modules passed full tests, build, and vet."
+      - name: Race-check logger rotation, video polling, and parallel provider tests
+        if: ${{ always() && steps.go_vendor.outcome == 'success' && steps.offline_graph.outcome == 'success' }}
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          export GOWORK=off GOPROXY=off GOSUMDB=off GOFLAGS=-mod=vendor GOTOOLCHAIN=local
+          go test -race -count=1 -p=2 ./service ./relay/channel/gemini ./relay/channel/minimax
       - name: Database migration, billing, task settlement, and artifact metadata matrix
         if: ${{ always() && steps.go_vendor.outcome == 'success' && steps.offline_graph.outcome == 'success' }}
         working-directory: source
@@ -515,5 +552,32 @@ jobs:
             exit 1
           fi
           echo "All database matrix checks passed."
+      - name: Install frontend dependencies
+        working-directory: source/web
+        shell: bash
+        run: |
+          if bun install --frozen-lockfile >/tmp/tokenway-bun-install.log 2>&1; then echo "Frontend dependencies installed."; else echo "Frontend dependency installation failed."; exit 1; fi
 
-# Manual validation refresh: force the pinned Go 1.26.10 full validation workflow to run.
+      - name: Frontend typecheck, tests, and production build
+        working-directory: source/web
+        shell: bash
+        run: |
+          set -euo pipefail
+          if bun run typecheck >/tmp/tokenway-typecheck.log 2>&1; then
+            echo "Frontend typecheck passed."
+          else
+            echo "Frontend typecheck failed; sanitized TypeScript diagnostics:"
+            grep -E 'error TS[0-9]+' /tmp/tokenway-typecheck.log | sed -E 's#(/home/runner/[^ ]*)#<runner-path>#g' | cut -c1-320 | head -n 40
+            exit 1
+          fi
+          if bun run test >/tmp/tokenway-frontend-tests.log 2>&1; then
+            echo "Frontend tests passed."
+          else
+            echo "Frontend tests failed; sanitized Vitest failure output:"
+            perl -pe 's/\e\[[0-9;]*[A-Za-z]//g' /tmp/tokenway-frontend-tests.log \
+              | sed -E 's#(/home/runner/[^ ]*)#<runner-path>#g; s#(/tmp/[^ ]*)#<temp-path>#g; s#(gh[pousr]_[A-Za-z0-9_]+)#<redacted>#g; s#(Bearer )[A-Za-z0-9._~-]+#\1<redacted>#g' \
+              | tail -n 140 | cut -c1-320
+            exit 1
+          fi
+          if bun run build >/tmp/tokenway-frontend-build.log 2>&1; then echo "Frontend production build passed."; else echo "Frontend production build failed."; exit 1; fi
+          test -s dist/index.html
