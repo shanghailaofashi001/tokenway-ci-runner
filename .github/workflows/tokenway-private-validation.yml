@@ -1,6 +1,6 @@
 name: TOKENWAY private-source validation
 
-# Source restoration verification revision 5 - durable extra-reserve API fixture
+# Source restoration verification revision 6 - restore Batch 3 model and BillingSession integration
 on:
   workflow_dispatch:
   pull_request:
@@ -119,6 +119,14 @@ jobs:
             base64 -d .tokenway-validation/missing-source-definitions.tar.gz.base64 | tar -xz -C source
             base64 -d .tokenway-validation/ratio-validation-source.tar.gz.base64 | tar -xz -C source
             base64 -d .tokenway-validation/wallet-redemption-subscription-source.tar.gz.base64 | tar -xz -C source
+            # Restore the exact Batch 3 subscription model snapshot after the older
+            # wallet-redemption archive; this is the source of ExtraReserved and
+            # the durable request-scoped reserve/refund helpers.
+            cat .tokenway-validation/batch3-subscription-model.part* | base64 -d | tar -xz -C source
+            test -s source/model/subscription_billing_atomic_test.go
+            grep -q 'ExtraReserved' source/model/subscription.go
+            grep -q 'func ApplySubscriptionPreConsumeExtraReserve' source/model/subscription.go
+            grep -q 'func RefundSubscriptionPreConsume' source/model/subscription.go
             cat .tokenway-validation/personal-qr-source.part* | base64 -d | tar -xz -C source
             cat .tokenway-validation/billing-session.part* | base64 -d | tar -xz -C source
             test -s source/model/subscription.go
@@ -141,7 +149,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          python3 -m py_compile .tokenway-validation/repair-ci-source.py .tokenway-validation/apply-host-artifact-projection.py .tokenway-validation/add-creator-route-tree.py
+          python3 -m py_compile .tokenway-validation/repair-ci-source.py .tokenway-validation/apply-host-artifact-projection.py .tokenway-validation/add-creator-route-tree.py .tokenway-validation/apply-subscription-extra-refund-once.py
           echo "PASS: all source restoration scripts compile"
       - name: Repair TokenWay source contracts
         working-directory: source
@@ -281,7 +289,7 @@ jobs:
             exit 1
           fi
 
-      - name: Make subscription extra-reserve refund atomic and install regression
+      - name: Integrate durable subscription reserve, rollback, and single refund paths
         working-directory: source
         shell: bash
         run: |
