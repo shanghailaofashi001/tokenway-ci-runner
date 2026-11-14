@@ -481,7 +481,155 @@ jobs:
         run: |
           set -euo pipefail
           export GOWORK=off GOPROXY=off GOSUMDB=off GOFLAGS=-mod=vendor GOTOOLCHAIN=local
-          go test -race -count=1 -p=2 ./service -run '^TestUpdateVideoTasks(DefaultSleepDoesNotBlockOtherChannels|SlowChannelDoesNotBlockOtherChannels)        if: ${{ always() && steps.go_vendor.outcome == 'success' && steps.offline_graph.outcome == 'success' }}
+          go test -race -count=1 -p=2 ./service -run '^TestUpdateVideoTasks(DefaultSleepDoesNotBlockOtherChannels|SlowChannelDoesNotBlockOtherChannels)
+        working-directory: source
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          export GOWORK=off GOPROXY=off GOSUMDB=off GOFLAGS=-mod=vendor GOTOOLCHAIN=local
+          matrix_failed=0
+
+          sanitize_db_log() {
+            sed -E \
+              's#(https?://)[^/@[:space:]]+:[^/@[:space:]]+@#\1<redacted>@#g; s#([[:alnum:]_.-]+):[^@[:space:]]+@tcp#\1:<redacted>@tcp#g; s#(postgres(ql)?://)[^:/@[:space:]]+:[^@/[:space:]]+@#\1<redacted>@#g; s#(gh[pousr]_[A-Za-z0-9_]+)#<redacted>#g; s#(Bearer )[A-Za-z0-9._~-]+#\1<redacted>#g; s#(/home/runner/[^ ]*)#<runner-path>#g'
+          }
+
+          run_quiet() {
+            label="$1"; shift
+            log="/tmp/tokenway-db-matrix-$(printf '%s' "$label" | tr ' /' '__').log"
+            if "$@" >"$log" 2>&1; then
+              echo "PASS: $label"
+            else
+              status=$?
+              echo "FAIL: $label (exit $status); sanitized diagnostics:"
+              {
+                grep -E -B 3 -A 14 '(^--- FAIL:|^FAIL[[:space:]]|Error Trace:|Test:[[:space:]]|panic:|fatal error:|^# )' "$log" || true
+                tail -n 80 "$log"
+              } | sanitize_db_log
+              matrix_failed=1
+            fi
+          }
+
+          run_quiet "schema migration compatibility" go test ./model -run '^TestMigrationSchemaStability$' -count=1
+          run_quiet "fixed-price billing database matrix" go test ./service -run '^TestFixedPriceBillingDatabaseMatrix$' -count=1
+          run_quiet "wallet cache and opening balance regressions" go test ./model -run 'TestWalletDeltaPreservesReservationsAcrossUserCacheSchemaRefresh|TestBackfillWalletOpeningBalances' -count=1
+          run_quiet "task settlement and capture on MySQL" env TEST_TASK_DB_DIALECT=mysql go test ./controller -run 'TestImmediateTaskSettlementDatabase|TestTaskArtifactCaptureClaimUsesFreshLeasePerSerialItem' -count=1
+          run_quiet "task settlement and capture on PostgreSQL" env TEST_TASK_DB_DIALECT=postgres go test ./controller -run 'TestImmediateTaskSettlementDatabase|TestTaskArtifactCaptureClaimUsesFreshLeasePerSerialItem' -count=1
+          run_quiet "task artifact metadata on MySQL" env TEST_TASK_DB_DIALECT=mysql go test ./service -run '^TestTaskArtifactMetadataDatabaseDialectRoundTrip$' -count=1
+          run_quiet "task artifact metadata on PostgreSQL" env TEST_TASK_DB_DIALECT=postgres go test ./service -run '^TestTaskArtifactMetadataDatabaseDialectRoundTrip$' -count=1
+
+          if (( matrix_failed != 0 )); then
+            echo "One or more database matrix checks failed; all independent checks were still executed."
+            exit 1
+          fi
+          echo "All database matrix checks passed."
+      - name: Install frontend dependencies
+        working-directory: source/web
+        shell: bash
+        run: |
+          if bun install --frozen-lockfile >/tmp/tokenway-bun-install.log 2>&1; then echo "Frontend dependencies installed."; else echo "Frontend dependency installation failed."; exit 1; fi
+
+      - name: Frontend typecheck, tests, and production build
+        working-directory: source/web
+        shell: bash
+        run: |
+          set -euo pipefail
+          if bun run typecheck >/tmp/tokenway-typecheck.log 2>&1; then
+            echo "Frontend typecheck passed."
+          else
+            echo "Frontend typecheck failed; sanitized TypeScript diagnostics:"
+            grep -E 'error TS[0-9]+' /tmp/tokenway-typecheck.log | sed -E 's#(/home/runner/[^ ]*)#<runner-path>#g' | cut -c1-320 | head -n 40
+            exit 1
+          fi
+          if bun run test >/tmp/tokenway-frontend-tests.log 2>&1; then
+            echo "Frontend tests passed."
+          else
+            echo "Frontend tests failed; sanitized Vitest failure output:"
+            perl -pe 's/\e\[[0-9;]*[A-Za-z]//g' /tmp/tokenway-frontend-tests.log \
+              | sed -E 's#(/home/runner/[^ ]*)#<runner-path>#g; s#(/tmp/[^ ]*)#<temp-path>#g; s#(gh[pousr]_[A-Za-z0-9_]+)#<redacted>#g; s#(Bearer )[A-Za-z0-9._~-]+#\1<redacted>#g' \
+              | tail -n 140 | cut -c1-320
+            exit 1
+          fi
+          if bun run build >/tmp/tokenway-frontend-build.log 2>&1; then echo "Frontend production build passed."; else echo "Frontend production build failed."; exit 1; fi
+          test -s dist/index.html
+# Manual validation refresh: force the pinned Go 1.26.10 full validation workflow to run.
+
+      - name: Database migration, billing, task settlement, and artifact metadata matrix
+        if: ${{ always() && steps.go_vendor.outcome == 'success' && steps.offline_graph.outcome == 'success' }}
+        working-directory: source
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          export GOWORK=off GOPROXY=off GOSUMDB=off GOFLAGS=-mod=vendor GOTOOLCHAIN=local
+          matrix_failed=0
+
+          sanitize_db_log() {
+            sed -E \
+              's#(https?://)[^/@[:space:]]+:[^/@[:space:]]+@#\1<redacted>@#g; s#([[:alnum:]_.-]+):[^@[:space:]]+@tcp#\1:<redacted>@tcp#g; s#(postgres(ql)?://)[^:/@[:space:]]+:[^@/[:space:]]+@#\1<redacted>@#g; s#(gh[pousr]_[A-Za-z0-9_]+)#<redacted>#g; s#(Bearer )[A-Za-z0-9._~-]+#\1<redacted>#g; s#(/home/runner/[^ ]*)#<runner-path>#g'
+          }
+
+          run_quiet() {
+            label="$1"; shift
+            log="/tmp/tokenway-db-matrix-$(printf '%s' "$label" | tr ' /' '__').log"
+            if "$@" >"$log" 2>&1; then
+              echo "PASS: $label"
+            else
+              status=$?
+              echo "FAIL: $label (exit $status); sanitized diagnostics:"
+              {
+                grep -E -B 3 -A 14 '(^--- FAIL:|^FAIL[[:space:]]|Error Trace:|Test:[[:space:]]|panic:|fatal error:|^# )' "$log" || true
+                tail -n 80 "$log"
+              } | sanitize_db_log
+              matrix_failed=1
+            fi
+          }
+
+          run_quiet "schema migration compatibility" go test ./model -run '^TestMigrationSchemaStability$' -count=1
+          run_quiet "fixed-price billing database matrix" go test ./service -run '^TestFixedPriceBillingDatabaseMatrix$' -count=1
+          run_quiet "wallet cache and opening balance regressions" go test ./model -run 'TestWalletDeltaPreservesReservationsAcrossUserCacheSchemaRefresh|TestBackfillWalletOpeningBalances' -count=1
+          run_quiet "task settlement and capture on MySQL" env TEST_TASK_DB_DIALECT=mysql go test ./controller -run 'TestImmediateTaskSettlementDatabase|TestTaskArtifactCaptureClaimUsesFreshLeasePerSerialItem' -count=1
+          run_quiet "task settlement and capture on PostgreSQL" env TEST_TASK_DB_DIALECT=postgres go test ./controller -run 'TestImmediateTaskSettlementDatabase|TestTaskArtifactCaptureClaimUsesFreshLeasePerSerialItem' -count=1
+          run_quiet "task artifact metadata on MySQL" env TEST_TASK_DB_DIALECT=mysql go test ./service -run '^TestTaskArtifactMetadataDatabaseDialectRoundTrip$' -count=1
+          run_quiet "task artifact metadata on PostgreSQL" env TEST_TASK_DB_DIALECT=postgres go test ./service -run '^TestTaskArtifactMetadataDatabaseDialectRoundTrip$' -count=1
+
+          if (( matrix_failed != 0 )); then
+            echo "One or more database matrix checks failed; all independent checks were still executed."
+            exit 1
+          fi
+          echo "All database matrix checks passed."
+      - name: Install frontend dependencies
+        working-directory: source/web
+        shell: bash
+        run: |
+          if bun install --frozen-lockfile >/tmp/tokenway-bun-install.log 2>&1; then echo "Frontend dependencies installed."; else echo "Frontend dependency installation failed."; exit 1; fi
+
+      - name: Frontend typecheck, tests, and production build
+        working-directory: source/web
+        shell: bash
+        run: |
+          set -euo pipefail
+          if bun run typecheck >/tmp/tokenway-typecheck.log 2>&1; then
+            echo "Frontend typecheck passed."
+          else
+            echo "Frontend typecheck failed; sanitized TypeScript diagnostics:"
+            grep -E 'error TS[0-9]+' /tmp/tokenway-typecheck.log | sed -E 's#(/home/runner/[^ ]*)#<runner-path>#g' | cut -c1-320 | head -n 40
+            exit 1
+          fi
+          if bun run test >/tmp/tokenway-frontend-tests.log 2>&1; then
+            echo "Frontend tests passed."
+          else
+            echo "Frontend tests failed; sanitized Vitest failure output:"
+            perl -pe 's/\e\[[0-9;]*[A-Za-z]//g' /tmp/tokenway-frontend-tests.log \
+              | sed -E 's#(/home/runner/[^ ]*)#<runner-path>#g; s#(/tmp/[^ ]*)#<temp-path>#g; s#(gh[pousr]_[A-Za-z0-9_]+)#<redacted>#g; s#(Bearer )[A-Za-z0-9._~-]+#\1<redacted>#g' \
+              | tail -n 140 | cut -c1-320
+            exit 1
+          fi
+          if bun run build >/tmp/tokenway-frontend-build.log 2>&1; then echo "Frontend production build passed."; else echo "Frontend production build failed."; exit 1; fi
+          test -s dist/index.html
+# Manual validation refresh: force the pinned Go 1.26.10 full validation workflow to run.
+
+      - name: Database migration, billing, task settlement, and artifact metadata matrix
+        if: ${{ always() && steps.go_vendor.outcome == 'success' && steps.offline_graph.outcome == 'success' }}
         working-directory: source
         shell: bash
         run: |
