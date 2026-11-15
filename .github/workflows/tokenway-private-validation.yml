@@ -65,7 +65,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: shanghailaofashi001/tokenway-v11-dev
-          ref: 8418ff046245ef85115e41dc11120fe3251903f9
+          ref: fb713d364c2966621195e6b970e408909abcbca5
           token: ${{ secrets.TOKENWAY_SOURCE_READ_TOKEN }}
           path: private
           fetch-depth: 1
@@ -191,6 +191,8 @@ jobs:
           patch --batch --forward -p1 < ../private/.tokenway-validation/brand-h3/TOKENWAY-CNY-DEFAULT-TEST-FIX.patch
           patch --batch --forward --dry-run -p1 < ../private/.tokenway-validation/brand-h3/TOKENWAY-CNY-TEST-IMPORT-CLEANUP.patch
           patch --batch --forward -p1 < ../private/.tokenway-validation/brand-h3/TOKENWAY-CNY-TEST-IMPORT-CLEANUP.patch
+          patch --batch --forward --dry-run -p1 < ../private/.tokenway-validation/brand-h3/TOKENWAY-CNY-TEST-STATE-FIX.patch
+          patch --batch --forward -p1 < ../private/.tokenway-validation/brand-h3/TOKENWAY-CNY-TEST-STATE-FIX.patch
           python3 - <<'PY'
           from pathlib import Path
           import base64, re
@@ -382,7 +384,7 @@ jobs:
             grep -E 'error TS[0-9]+' /tmp/tokenway-typecheck.log | sed -E 's#(/home/runner/[^ ]*)#<runner-path>#g' | cut -c1-320 | head -n 40
             exit 1
           fi
-          if bun run test >/tmp/tokenway-frontend-tests.log 2>&1; then
+          if bun run test --reporter=verbose >/tmp/tokenway-frontend-tests.log 2>&1; then
             echo "Frontend tests passed."
           else
             echo "Frontend tests failed; sanitized Vitest failure output:"
