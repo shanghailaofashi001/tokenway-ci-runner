@@ -65,7 +65,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: shanghailaofashi001/tokenway-v11-dev
-          ref: 6894f9c728941aa5b4a2ed68697b5a9c267dfa8f
+          ref: b5c350771a7565ac009758e267f62872f3578092
           token: ${{ secrets.TOKENWAY_SOURCE_READ_TOKEN }}
           path: private
           fetch-depth: 1
@@ -143,6 +143,8 @@ jobs:
             test -s "private/$path" || { echo "Missing private deployment source: $path" >&2; exit 1; }
           done
           install -D -m 0644 private/.dockerignore source/.dockerignore
+          install -D -m 0644 private/VERSION source/VERSION
+          test "$(tr -d '\r\n' < source/VERSION)" = "1.0.0-rc.52"
           install -D -m 0644 private/docker-compose.yml source/docker-compose.yml
           install -D -m 0644 private/.env.production.example source/.env.production.example
           install -D -m 0644 private/docs/TOKENWAY-AI-DEPLOYMENT.md source/docs/TOKENWAY-AI-DEPLOYMENT.md
@@ -593,7 +595,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           test "$(git -C source rev-parse HEAD)" = "48a6c87f9e7757fdc58e5be9bcb4f8281ad0dfd0"
-          test "$(git -C private rev-parse HEAD)" = "6894f9c728941aa5b4a2ed68697b5a9c267dfa8f"
+          test "$(git -C private rev-parse HEAD)" = "b5c350771a7565ac009758e267f62872f3578092"
           test "$(cat source/VERSION)" = "1.0.0-rc.52"
           test "$(go version | awk '{print $3}')" = "go1.26.10"
           test "$(bun --version)" = "1.4.4"
@@ -615,7 +617,7 @@ jobs:
           - Product version: 1.0.0-rc.52
           - New API upstream: QuantumNous/new-api
           - Upstream commit: 48a6c87f9e7757fdc58e5be9bcb4f8281ad0dfd0
-          - TokenWay integration/validation pin: shanghailaofashi001/tokenway-v11-dev@6894f9c728941aa5b4a2ed68697b5a9c267dfa8f
+          - TokenWay integration/validation pin: shanghailaofashi001/tokenway-v11-dev@b5c350771a7565ac009758e267f62872f3578092
 
           ## First-launch features retained
           - New API's native channel, model, API-key, group, usage and admin capabilities.
@@ -662,7 +664,7 @@ jobs:
           - Workflow run: $GITHUB_RUN_ID
           - Product version: 1.0.0-rc.52
           - New API upstream: 48a6c87f9e7757fdc58e5be9bcb4f8281ad0dfd0
-          - TokenWay integration pin: 6894f9c728941aa5b4a2ed68697b5a9c267dfa8f
+          - TokenWay integration pin: b5c350771a7565ac009758e267f62872f3578092
           - Go: $(go version)
           - Bun: $(bun --version)
 
