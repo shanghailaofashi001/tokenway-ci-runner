@@ -173,7 +173,7 @@ jobs:
           from pathlib import Path
           import base64, re
           html = Path('../private/.tokenway-validation/brand-h3/TOKENWAY-AI-REFERENCE-H3-READY-PREVIEW.html').read_text(encoding='utf-8')
-          images = re.findall(r'data:image/webp;base64,([^"\\']+)', html)
+          images = re.findall(r"""data:image/webp;base64,([^"']+)""", html)
           names = ['hero-scene.webp','brand-mark.webp','gpt.webp','claude.webp','gemini.webp','grok.webp','mistral.webp','deepseek.webp','kimi.webp','qwen.webp','doubao.webp','minimax.webp','glm.webp','image-art.webp','video-art.webp','audio-art.webp']
           if len(images) != 17:
               raise SystemExit(f'Expected 17 embedded WebP references, found {len(images)}')
