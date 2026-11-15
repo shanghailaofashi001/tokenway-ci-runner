@@ -529,4 +529,143 @@ jobs:
           fi
           echo "All database matrix checks passed."
 
+
+      - name: Clean Docker Compose install and health smoke
+        if: success()
+        working-directory: source
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          cat > .env.ci <<'EOF'
+          TOKENWAY_ENV_FILE=.env.ci
+          TOKENWAY_VERSION=1.0.0-rc.52
+          TOKENWAY_BIND_ADDRESS=127.0.0.1
+          TOKENWAY_HOST_PORT=3000
+          POSTGRES_USER=tokenway
+          POSTGRES_PASSWORD=ci-postgres-password
+          POSTGRES_DB=tokenway_ci
+          REDIS_PASSWORD=ci-redis-password
+          SESSION_SECRET=ci-only-not-production-secret-0123456789abcdef
+          SESSION_COOKIE_SECURE=false
+          SESSION_COOKIE_TRUSTED_URL=http://127.0.0.1:3000
+          TRUSTED_PROXIES=127.0.0.1,::1
+          TASK_ARTIFACT_STORE_MODE=upstream
+          EOF
+          cleanup() {
+            docker compose --env-file .env.ci down -v --remove-orphans >/dev/null 2>&1 || true
+            rm -f .env.ci
+          }
+          trap cleanup EXIT
+          docker compose --env-file .env.ci config --quiet
+          docker compose --env-file .env.ci up -d --build --wait --wait-timeout 300
+          curl --retry 15 --retry-delay 2 --retry-connrefused --fail --silent --show-error \
+            http://127.0.0.1:3000/api/status | tee /tmp/tokenway-api-status.json
+          grep -q '"success":true' /tmp/tokenway-api-status.json
+          echo "PASS: Docker image build, PostgreSQL/Redis startup, application health, and API status."
+
+      - name: Package exact validated first-launch source
+        if: success()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test "$(git -C source rev-parse HEAD)" = "48a6c87f9e7757fdc58e5be9bcb4f8281ad0dfd0"
+          test "$(git -C private rev-parse HEAD)" = "28701ae3bc767177faa9829d07dcd88eb881c9f4"
+          test "$(cat source/VERSION)" = "1.0.0-rc.52"
+          test "$(go version | awk '{print $3}')" = "go1.26.10"
+          test "$(bun --version)" = "1.4.4"
+          test -s source/web/dist/index.html
+          test -s source/vendor/modules.txt
+          test -s source/relaykit/vendor/modules.txt
+          test -s source/tokenkit/vendor/modules.txt
+          find source -type d -name node_modules -prune -exec rm -rf {} +
+          rm -rf source/.git
+          cat > source/TOKENWAY-FIRST-LAUNCH.md <<'EOF'
+          # TokenWay RC52 — first-launch package
+
+          ## Fixed source identity
+          - Product version: 1.0.0-rc.52
+          - New API upstream: QuantumNous/new-api
+          - Upstream commit: 48a6c87f9e7757fdc58e5be9bcb4f8281ad0dfd0
+          - TokenWay integration/validation pin: shanghailaofashi001/tokenway-v11-dev@28701ae3bc767177faa9829d07dcd88eb881c9f4
+
+          ## First-launch features retained
+          - New API's native channel, model, API-key, group, usage and admin capabilities.
+          - Kuaipao AI text upstream presets: Claude Messages and OpenAI Chat Completions; Responses remains restricted to explicitly verified model IDs.
+          - One RMB customer wallet, durable ledger, request/token/task/subscription billing, refund idempotency, recovery journal and unknown-upstream-outcome review.
+          - Personal WeChat/Alipay QR top-up submission with administrator review; no automatic credit based only on a static QR code.
+          - S3-compatible task artifact storage, ownership checks, retention, expiry notice and cleanup; default upstream mode remains available when S3 is not configured.
+          - Creator image/video workspace, MiniMax media adapter support and legacy task artifact retrieval/download.
+
+          ## Keep out of the first launch
+          - Automatic official WeChat Pay/Alipay merchant settlement.
+          - Full user file manager with sharing/recycle-bin features.
+          - Additional upstream provider pools and failover.
+          - Advanced upstream cost/retail reconciliation dashboards and expanded operations analytics.
+          These remain post-launch scope; they are not required to turn on the first-launch configuration.
+
+          ## Minimal deployment
+          1. Copy .env.production.example to .env; set unique PostgreSQL and Redis passwords, a strong random SESSION_SECRET, the public SESSION_COOKIE_TRUSTED_URL, and trusted proxy addresses.
+          2. Put the service behind the deployment's TLS reverse proxy; retain the Compose default localhost-only bind unless the reverse proxy is intentionally colocated differently.
+          3. Configure Kuaipao channel credentials and only the models/protocols actually enabled by that account. Do not enable unverified Responses models.
+          4. Keep TASK_ARTIFACT_STORE_MODE=upstream until an S3-compatible bucket has been configured and tested. Then configure endpoint, bucket, region, access key, secret, prefix and lifecycle policy before switching to S3 mode.
+          5. Configure the personal QR image URLs and review manual recharge submissions in the admin UI. Do not claim automated merchant settlement.
+          6. Back up PostgreSQL and the .env file before the first production migration. Verify a restore before relying on production data.
+
+          The automated validation package includes Go/frontend/database tests and a clean Docker Compose startup smoke. Live Kuaipao, a real S3 bucket, production payment accounts, production backup/restore and a real VPS/domain deployment still require deployment-specific credentials and infrastructure.
+          EOF
+          (
+            cd source
+            find . -type f ! -name 'TOKENWAY-SOURCE-MANIFEST.sha256' -print0 \
+              | LC_ALL=C sort -z | xargs -0 sha256sum > TOKENWAY-SOURCE-MANIFEST.sha256
+          )
+          mkdir -p release-output
+          cp source/TOKENWAY-SOURCE-MANIFEST.sha256 release-output/TOKENWAY-RC52-SOURCE-MANIFEST.sha256
+          (
+            cd source
+            zip -qr ../release-output/TOKENWAY-RC52-FIRST-LAUNCH-VALIDATED.zip .
+          )
+          unzip -tq release-output/TOKENWAY-RC52-FIRST-LAUNCH-VALIDATED.zip
+          sha256sum release-output/TOKENWAY-RC52-FIRST-LAUNCH-VALIDATED.zip \
+            > release-output/TOKENWAY-RC52-FIRST-LAUNCH-VALIDATED.zip.sha256
+          cat > release-output/TOKENWAY-RC52-FIRST-LAUNCH-VALIDATION.md <<EOF
+          # TokenWay RC52 first-launch validation
+
+          - Workflow run: $GITHUB_RUN_ID
+          - Product version: 1.0.0-rc.52
+          - New API upstream: 48a6c87f9e7757fdc58e5be9bcb4f8281ad0dfd0
+          - TokenWay integration pin: 28701ae3bc767177faa9829d07dcd88eb881c9f4
+          - Go: $(go version)
+          - Bun: $(bun --version)
+
+          ## Successful gates in this same workflow run
+          - Full Go tests, build and vet: root module, relaykit and tokenkit.
+          - Frontend typecheck, Vitest tests and production build.
+          - MySQL 8.4 and PostgreSQL 16 migration/billing/task/artifact metadata regression matrix.
+          - Docker image build and clean Compose startup with PostgreSQL, Redis and application health check.
+          - Exact source pin checks, generated frontend distribution check, vendored Go module manifests and ZIP integrity.
+
+          ## Not covered by this automated run
+          - Live Kuaipao account/model/usage reconciliation.
+          - Real S3 bucket credentials, lifecycle policy and byte-for-byte staging checks.
+          - Production merchant payment credentials/webhooks.
+          - Production VPS, public domain/TLS, reverse proxy and backup/restore rehearsal.
+
+          This package is a validated first-launch source candidate, not proof of a live production deployment. Do not point validation or migration tests at production data.
+          EOF
+          (
+            cd release-output
+            sha256sum TOKENWAY-RC52-SOURCE-MANIFEST.sha256 TOKENWAY-RC52-FIRST-LAUNCH-VALIDATION.md \
+              > TOKENWAY-RC52-RELEASE-SIDECARS.sha256
+          )
+          echo "PASS: exact tested source packaged; ZIP, manifest and validation report generated."
+
+      - name: Upload validated first-launch source package
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: TOKENWAY-RC52-FIRST-LAUNCH-VALIDATED
+          path: release-output/*
+          if-no-files-found: error
+          retention-days: 30
+
 # Manual validation refresh: force the pinned Go 1.26.10 full validation workflow to run.
