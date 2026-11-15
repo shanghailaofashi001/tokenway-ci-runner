@@ -65,7 +65,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: shanghailaofashi001/tokenway-v11-dev
-          ref: fb713d364c2966621195e6b970e408909abcbca5
+          ref: c9fd9c7c5f65e0f70ed7935bdba34c8815c0af47
           token: ${{ secrets.TOKENWAY_SOURCE_READ_TOKEN }}
           path: private
           fetch-depth: 1
@@ -390,7 +390,8 @@ jobs:
             echo "Frontend tests failed; sanitized Vitest failure output:"
             perl -pe 's/\e\[[0-9;]*[A-Za-z]//g' /tmp/tokenway-frontend-tests.log \
               | sed -E 's#(/home/runner/[^ ]*)#<runner-path>#g; s#(/tmp/[^ ]*)#<temp-path>#g; s#(gh[pousr]_[A-Za-z0-9_]+)#<redacted>#g; s#(Bearer )[A-Za-z0-9._~-]+#\1<redacted>#g' \
-              | tail -n 140 | cut -c1-320
+              | grep -E '(^ FAIL |^ ❯ src/|Test Files|Tests )' \\
+              | tail -n 160 | cut -c1-320
             exit 1
           fi
           if bun run build >/tmp/tokenway-frontend-build.log 2>&1; then echo "Frontend production build passed."; else echo "Frontend production build failed."; exit 1; fi
