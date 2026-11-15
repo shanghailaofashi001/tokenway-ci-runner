@@ -65,7 +65,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: shanghailaofashi001/tokenway-v11-dev
-          ref: 2307e93ff5fa9275a0f8bd7ef7cc7e8072c63461
+          ref: 7e630f1e09fb1d6048375931e8c69bed5b19cc07
           token: ${{ secrets.TOKENWAY_SOURCE_READ_TOKEN }}
           path: private
           fetch-depth: 1
@@ -159,6 +159,40 @@ jobs:
           grep -q 'TASK_ARTIFACT_STORE_MODE=s3' source/.env.production.example
           bash -n source/scripts/validate-tokenway-docker.sh
           echo "PASS: TokenWay Compose builds its own Dockerfile; production env and verifier restored."
+
+      - name: Apply TokenWay AI brand and MiniMax H3 candidate patches
+        working-directory: source
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git apply --check ../private/.tokenway-validation/brand-h3/TOKENWAY-AI-BRANDED-WEBSITE.patch
+          git apply ../private/.tokenway-validation/brand-h3/TOKENWAY-AI-BRANDED-WEBSITE.patch
+          git apply --check ../private/.tokenway-validation/brand-h3/TOKENWAY-AI-REFERENCE-H3-READY.patch
+          git apply ../private/.tokenway-validation/brand-h3/TOKENWAY-AI-REFERENCE-H3-READY.patch
+          python3 - <<'PY'
+          from pathlib import Path
+          import base64, re
+          html = Path('../private/.tokenway-validation/brand-h3/TOKENWAY-AI-REFERENCE-H3-READY-PREVIEW.html').read_text(encoding='utf-8')
+          images = re.findall(r'data:image/webp;base64,([^"\\']+)', html)
+          names = ['hero-scene.webp','brand-mark.webp','gpt.webp','claude.webp','gemini.webp','grok.webp','mistral.webp','deepseek.webp','kimi.webp','qwen.webp','doubao.webp','minimax.webp','glm.webp','image-art.webp','video-art.webp','audio-art.webp']
+          if len(images) != 17:
+              raise SystemExit(f'Expected 17 embedded WebP references, found {len(images)}')
+          target = Path('web/public/tokenway-home')
+          target.mkdir(parents=True, exist_ok=True)
+          for name, encoded in zip(names, images):
+              data = base64.b64decode(encoded, validate=True)
+              if not data.startswith(b'RIFF') or data[8:12] != b'WEBP':
+                  raise SystemExit(f'Invalid WebP payload: {name}')
+              (target / name).write_bytes(data)
+          expected = ['hero-scene.webp','brand-mark.webp','gpt.webp','claude.webp','gemini.webp','grok.webp','mistral.webp','deepseek.webp','kimi.webp','qwen.webp','doubao.webp','minimax.webp','glm.webp','image-art.webp','video-art.webp','audio-art.webp']
+          if any(not (target / name).is_file() or (target / name).stat().st_size < 1000 for name in expected):
+              raise SystemExit('One or more homepage WebP assets are missing or truncated')
+          print('PASS: 16 TokenWay homepage WebP assets restored from the preserved visual reference')
+          PY
+          node --check plugins/tasks/hailuo/plugin.js
+          grep -q 'h3_context_ir' plugins/tasks/hailuo/plugin.js
+          grep -q 'video_regeneration' plugins/tasks/hailuo/plugin.js
+          echo "PASS: TokenWay reference homepage and MiniMax H3 source patches applied."
 
       - name: Compile source restoration scripts
         shell: bash
@@ -599,7 +633,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           test "$(git -C source rev-parse HEAD)" = "48a6c87f9e7757fdc58e5be9bcb4f8281ad0dfd0"
-          test "$(git -C private rev-parse HEAD)" = "2307e93ff5fa9275a0f8bd7ef7cc7e8072c63461"
+          test "$(git -C private rev-parse HEAD)" = "7e630f1e09fb1d6048375931e8c69bed5b19cc07"
           test "$(cat source/VERSION)" = "1.0.0-rc.52"
           test "$(go version | awk '{print $3}')" = "go1.26.10"
           test "$(bun --version)" = "1.4.4"
@@ -623,7 +657,7 @@ jobs:
           - Product version: 1.0.0-rc.52
           - New API upstream: QuantumNous/new-api
           - Upstream commit: 48a6c87f9e7757fdc58e5be9bcb4f8281ad0dfd0
-          - TokenWay integration/validation pin: shanghailaofashi001/tokenway-v11-dev@2307e93ff5fa9275a0f8bd7ef7cc7e8072c63461
+          - TokenWay integration/validation pin: shanghailaofashi001/tokenway-v11-dev@7e630f1e09fb1d6048375931e8c69bed5b19cc07
 
           ## First-launch features retained
           - New API's native channel, model, API-key, group, usage and admin capabilities.
@@ -670,7 +704,7 @@ jobs:
           - Workflow run: $GITHUB_RUN_ID
           - Product version: 1.0.0-rc.52
           - New API upstream: 48a6c87f9e7757fdc58e5be9bcb4f8281ad0dfd0
-          - TokenWay integration pin: 2307e93ff5fa9275a0f8bd7ef7cc7e8072c63461
+          - TokenWay integration pin: 7e630f1e09fb1d6048375931e8c69bed5b19cc07
           - Go: $(go version)
           - Bun: $(bun --version)
 
