@@ -165,10 +165,10 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          git apply --check ../private/.tokenway-validation/brand-h3/TOKENWAY-AI-BRANDED-WEBSITE.patch
-          git apply ../private/.tokenway-validation/brand-h3/TOKENWAY-AI-BRANDED-WEBSITE.patch
-          git apply --check ../private/.tokenway-validation/brand-h3/TOKENWAY-AI-REFERENCE-H3-READY.patch
-          git apply ../private/.tokenway-validation/brand-h3/TOKENWAY-AI-REFERENCE-H3-READY.patch
+          patch --batch --forward --dry-run -p1 < ../private/.tokenway-validation/brand-h3/TOKENWAY-AI-BRANDED-WEBSITE.patch
+          patch --batch --forward -p1 < ../private/.tokenway-validation/brand-h3/TOKENWAY-AI-BRANDED-WEBSITE.patch
+          patch --batch --forward --dry-run -p1 < ../private/.tokenway-validation/brand-h3/TOKENWAY-AI-REFERENCE-H3-READY.patch
+          patch --batch --forward -p1 < ../private/.tokenway-validation/brand-h3/TOKENWAY-AI-REFERENCE-H3-READY.patch
           python3 - <<'PY'
           from pathlib import Path
           import base64, re
