@@ -405,7 +405,7 @@ jobs:
             status=$?
             echo "Frontend production build failed; sanitized diagnostics follow:"
             tail -n 140 /tmp/tokenway-frontend-build.log | sed -E \
-              's#(/home/runner/[^ ]*)#<runner-path>#g; s#(/tmp/[^ ]*)#<temp-path>#g; s#(gh[pousr]_[A-Za-z0-9_]+)#<redacted>#g; s#(Bearer )[A-Za-z0-9._~-]+#\\1<redacted>#g'
+              's#(/home/runner/[^ ]*)#<runner-path>#g; s#(/tmp/[^ ]*)#<temp-path>#g; s#(gh[pousr]_[A-Za-z0-9_]+)#<redacted>#g; s#(Bearer )[A-Za-z0-9._~-]+#\1<redacted>#g'
             exit "$status"
           fi
           test -s dist/index.html
