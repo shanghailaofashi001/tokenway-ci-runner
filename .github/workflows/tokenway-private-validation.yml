@@ -165,10 +165,27 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          patch --batch --forward --dry-run -p1 < ../private/.tokenway-validation/brand-h3/TOKENWAY-AI-BRANDED-WEBSITE.patch
-          patch --batch --forward -p1 < ../private/.tokenway-validation/brand-h3/TOKENWAY-AI-BRANDED-WEBSITE.patch
-          patch --batch --forward --dry-run -p1 < ../private/.tokenway-validation/brand-h3/TOKENWAY-AI-REFERENCE-H3-READY.patch
-          patch --batch --forward -p1 < ../private/.tokenway-validation/brand-h3/TOKENWAY-AI-REFERENCE-H3-READY.patch
+          python3 - <<'PY'
+          from pathlib import Path
+          jobs = [
+              ('../private/.tokenway-validation/brand-h3/TOKENWAY-AI-BRANDED-WEBSITE.patch', '--- a/common/constants.go\\n', '/tmp/tokenway-brand.patch'),
+              ('../private/.tokenway-validation/brand-h3/TOKENWAY-AI-REFERENCE-H3-READY.patch', '--- a/docs/TOKENWAY-AI-DEPLOYMENT.md\\n', '/tmp/tokenway-h3.patch'),
+          ]
+          for source, next_file, destination in jobs:
+              content = Path(source).read_text(encoding='utf-8')
+              marker = next_file.replace('\\\\n', '\\n')
+              offset = content.find(marker)
+              if offset < 0:
+                  raise SystemExit(f'Expected patch section boundary not found: {source}')
+              filtered = content[offset:]
+              if not filtered.endswith('\\n'):
+                  filtered += '\\n'
+              Path(destination).write_text(filtered, encoding='utf-8')
+          PY
+          patch --batch --forward --dry-run -p1 < /tmp/tokenway-brand.patch
+          patch --batch --forward -p1 < /tmp/tokenway-brand.patch
+          patch --batch --forward --dry-run -p1 < /tmp/tokenway-h3.patch
+          patch --batch --forward -p1 < /tmp/tokenway-h3.patch
           python3 - <<'PY'
           from pathlib import Path
           import base64, re
