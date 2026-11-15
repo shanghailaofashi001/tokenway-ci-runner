@@ -390,8 +390,7 @@ jobs:
             echo "Frontend tests failed; sanitized Vitest failure output:"
             perl -pe 's/\e\[[0-9;]*[A-Za-z]//g' /tmp/tokenway-frontend-tests.log \
               | sed -E 's#(/home/runner/[^ ]*)#<runner-path>#g; s#(/tmp/[^ ]*)#<temp-path>#g; s#(gh[pousr]_[A-Za-z0-9_]+)#<redacted>#g; s#(Bearer )[A-Za-z0-9._~-]+#\1<redacted>#g' \
-              | grep -E '(^ FAIL |^ ❯ src/|Test Files|Tests )' \\
-              | tail -n 160 | cut -c1-320
+              | grep -E '(^ FAIL |^ ❯ src/|Test Files|Tests )' | tail -n 160 | cut -c1-320
             exit 1
           fi
           if bun run build >/tmp/tokenway-frontend-build.log 2>&1; then echo "Frontend production build passed."; else echo "Frontend production build failed."; exit 1; fi
