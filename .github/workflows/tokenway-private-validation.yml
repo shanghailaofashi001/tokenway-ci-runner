@@ -214,6 +214,9 @@ jobs:
               if not data.startswith(b'RIFF') or data[8:12] != b'WEBP':
                   raise SystemExit(f'Invalid WebP payload: {name}')
               (target / name).write_bytes(data)
+          source_assets = Path('web/src/assets/tokenway-home')
+          source_assets.mkdir(parents=True, exist_ok=True)
+          (source_assets / 'hero-scene.webp').write_bytes((target / 'hero-scene.webp').read_bytes())
           expected = ['hero-scene.webp','brand-mark.webp','gpt.webp','claude.webp','gemini.webp','grok.webp','mistral.webp','deepseek.webp','kimi.webp','qwen.webp','doubao.webp','minimax.webp','glm.webp','image-art.webp','video-art.webp','audio-art.webp']
           if any(not (target / name).is_file() or (target / name).stat().st_size < 1000 for name in expected):
               raise SystemExit('One or more homepage WebP assets are missing or truncated')
