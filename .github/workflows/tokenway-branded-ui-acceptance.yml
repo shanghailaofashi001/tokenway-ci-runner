@@ -60,8 +60,8 @@ jobs:
               if offset < 0:
                   raise SystemExit(f'Patch boundary missing: {source_path}: {marker}')
               payload = source[offset:]
-              if not payload.endswith('\\n'):
-                  payload += '\\n'
+              if not payload.endswith('\n'):
+                  payload += '\n'
               Path(destination).write_text(payload, encoding='utf-8')
           PY
           patch --batch --forward --dry-run -p1 -d source < /tmp/tokenway-brand.patch
