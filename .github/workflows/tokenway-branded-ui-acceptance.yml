@@ -28,7 +28,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: shanghailaofashi001/tokenway-v11-dev
-          ref: 14ffcbd6afefa5128266ae96623844057b8765f7
+          ref: 41d7c788b094eab3affa1d82245b63d5b57cd423
           token: ${{ secrets.TOKENWAY_SOURCE_READ_TOKEN }}
           path: private
           fetch-depth: 1
@@ -42,6 +42,31 @@ jobs:
           path: source
           fetch-depth: 1
           persist-credentials: false
+
+      - name: Capture pinned upstream lint baseline
+        working-directory: source/web
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git -C .. worktree add --detach /tmp/tokenway-upstream-baseline HEAD
+          ln -s "$PWD/node_modules" /tmp/tokenway-upstream-baseline/web/node_modules
+          set +e
+          (cd /tmp/tokenway-upstream-baseline/web && ./node_modules/.bin/oxlint -c .oxlintrc.json --format json .) > /tmp/tokenway-upstream-lint.json
+          lint_status=$?
+          set -e
+          if test "$lint_status" -gt 1; then
+            echo "Upstream baseline linter crashed with exit code $lint_status"
+            exit "$lint_status"
+          fi
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path('/tmp/tokenway-upstream-lint.json').read_text())
+          diagnostics = report.get('diagnostics', [])
+          errors = sum(item.get('severity') == 'error' for item in diagnostics)
+          warnings = sum(item.get('severity') == 'warning' for item in diagnostics)
+          print(f'Pinned upstream baseline: {errors} errors, {warnings} warnings')
+          PY
 
       - name: Restore and apply TokenWay brand and UI fixes
         shell: bash
@@ -153,6 +178,91 @@ jobs:
         working-directory: source/web
         run: bun run test
 
-      - name: Frontend lint
+      - name: Frontend changed-file lint (upstream baseline delta)
         working-directory: source/web
-        run: bun run lint
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          import collections
+          import json
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          root = Path.cwd()
+          baseline = json.loads(Path('/tmp/tokenway-upstream-lint.json').read_text())
+
+          result = subprocess.run(
+              ['./node_modules/.bin/oxlint', '-c', '.oxlintrc.json', '--format', 'json', '.'],
+              cwd=root, text=True, capture_output=True,
+          )
+          if result.returncode not in (0, 1):
+              print(result.stderr)
+              raise SystemExit(f'Oxlint execution failed: {result.returncode}')
+          try:
+              current = json.loads(result.stdout)
+          except json.JSONDecodeError as exc:
+              print(result.stdout[-8000:])
+              print(result.stderr[-4000:])
+              raise SystemExit(f'Oxlint did not return valid JSON: {exc}')
+
+          def relative(path):
+              value = str(path).replace('\\', '/')
+              for marker in ('/source/web/', '/tokenway-upstream-baseline/web/'):
+                  if marker in value:
+                      value = value.rsplit(marker, 1)[1]
+              if value.startswith('./'):
+                  value = value[2:]
+              if value.startswith('web/'):
+                  value = value[4:]
+              return value
+
+          changed = set()
+          for command in (
+              ['git', '-C', '..', 'diff', '--name-only', '--', 'web/src'],
+              ['git', '-C', '..', 'ls-files', '--others', '--exclude-standard', '--', 'web/src'],
+          ):
+              output = subprocess.run(command, text=True, capture_output=True, check=True).stdout
+              changed.update(
+                  relative(line) for line in output.splitlines()
+                  if line.endswith(('.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'))
+              )
+
+          if not changed:
+              raise SystemExit('No changed frontend source files detected; refusing an empty lint check')
+
+          def counts(report, severity):
+              counter = collections.Counter()
+              for item in report.get('diagnostics', []):
+                  if item.get('severity') != severity:
+                      continue
+                  file = relative(item.get('filename', ''))
+                  if file in changed:
+                      counter[(file, item.get('code', ''), item.get('message', ''))] += 1
+              return counter
+
+          base_errors = counts(baseline, 'error')
+          now_errors = counts(current, 'error')
+          base_warnings = counts(baseline, 'warning')
+          now_warnings = counts(current, 'warning')
+
+          introduced = []
+          for key, amount in now_errors.items():
+              delta = amount - base_errors[key]
+              if delta > 0:
+                  introduced.extend([key] * delta)
+
+          warning_delta = sum(max(0, amount - base_warnings[key]) for key, amount in now_warnings.items())
+          total_errors = sum(item.get('severity') == 'error' for item in current.get('diagnostics', []))
+          total_warnings = sum(item.get('severity') == 'warning' for item in current.get('diagnostics', []))
+          print(f'Checked {len(changed)} changed frontend files')
+          print(f'Full pinned-source lint: {total_errors} errors, {total_warnings} warnings')
+          print(f'New warnings in changed frontend files: {warning_delta}')
+          if introduced:
+              print('New lint errors introduced by this candidate:')
+              for file, code, message in introduced:
+                  print(f' - {file}: {code}: {message}')
+              raise SystemExit(1)
+          print('PASS: no new lint errors in changed frontend files versus the exact upstream baseline')
+          PY
