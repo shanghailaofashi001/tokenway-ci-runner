@@ -108,6 +108,9 @@ jobs:
           for name in names:
               if not (target / name).is_file() or (target / name).stat().st_size < 1000:
                   raise SystemExit(f'Missing or truncated image: {name}')
+          source_assets = Path('source/web/src/assets/tokenway-home')
+          source_assets.mkdir(parents=True, exist_ok=True)
+          (source_assets / 'hero-scene.webp').write_bytes((target / 'hero-scene.webp').read_bytes())
           print('PASS: 16 branded homepage images restored and verified')
           PY
 
