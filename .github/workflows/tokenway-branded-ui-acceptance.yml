@@ -79,7 +79,7 @@ jobs:
           grep -Fq "changeLanguage('zhCN')" source/web/src/features/home/tokenway-landing.tsx
           ! grep -Fq "changeLanguage('zh-CN')" source/web/src/features/home/tokenway-landing.tsx
           grep -Fq "AI Audio Creation" source/web/src/features/home/tokenway-landing.tsx
-          grep -Fq "href='/docs'" source/web/src/features/home/tokenway-landing.tsx
+          grep -Fq "to='/docs'" source/web/src/features/home/tokenway-landing.tsx
           ! grep -Fq "docs.newapi.pro" source/web/src/features/home/tokenway-landing.tsx
           grep -Fq 'DocsLink:                   "/docs",' source/setting/operation_setting/general_setting.go
           grep -Fq "applyFaviconToDom('/favicon.svg')" source/web/src/main.tsx
