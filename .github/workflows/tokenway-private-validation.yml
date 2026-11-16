@@ -69,7 +69,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: shanghailaofashi001/tokenway-v11-dev
-          ref: 0e38a82bb1ea2e1ce161d5e7fe2efd2e7d0b59c4
+          ref: 5052803b2335516027fa9836dc4d6d476e55bbd8
           token: ${{ secrets.TOKENWAY_SOURCE_READ_TOKEN }}
           path: private
           fetch-depth: 1
@@ -712,7 +712,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           test "$(git -C source rev-parse HEAD)" = "48a6c87f9e7757fdc58e5be9bcb4f8281ad0dfd0"
-          test "$(git -C private rev-parse HEAD)" = "0e38a82bb1ea2e1ce161d5e7fe2efd2e7d0b59c4"
+          test "$(git -C private rev-parse HEAD)" = "5052803b2335516027fa9836dc4d6d476e55bbd8"
           test "$(cat source/VERSION)" = "1.0.0-rc.52"
           test "$(go version | awk '{print $3}')" = "go1.26.10"
           test "$(bun --version)" = "1.4.4"
@@ -736,7 +736,7 @@ jobs:
           - Product version: 1.0.0-rc.52
           - New API upstream: QuantumNous/new-api
           - Upstream commit: 48a6c87f9e7757fdc58e5be9bcb4f8281ad0dfd0
-          - TokenWay integration/validation pin: shanghailaofashi001/tokenway-v11-dev@0e38a82bb1ea2e1ce161d5e7fe2efd2e7d0b59c4
+          - TokenWay integration/validation pin: shanghailaofashi001/tokenway-v11-dev@5052803b2335516027fa9836dc4d6d476e55bbd8
 
           ## First-launch features retained
           - New API's native channel, model, API-key, group, usage and admin capabilities.
@@ -783,7 +783,7 @@ jobs:
           - Workflow run: $GITHUB_RUN_ID
           - Product version: 1.0.0-rc.52
           - New API upstream: 48a6c87f9e7757fdc58e5be9bcb4f8281ad0dfd0
-          - TokenWay integration pin: 0e38a82bb1ea2e1ce161d5e7fe2efd2e7d0b59c4
+          - TokenWay integration pin: 5052803b2335516027fa9836dc4d6d476e55bbd8
           - Go: $(go version)
           - Bun: $(bun --version)
 
