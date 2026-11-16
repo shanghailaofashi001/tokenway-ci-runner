@@ -47,6 +47,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
+          mkdir -p source/docs
           python3 - <<'PY'
           from pathlib import Path
           jobs = [
