@@ -43,6 +43,15 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+
+      - name: Install frozen frontend dependencies
+        working-directory: source/web
+        run: bun install --frozen-lockfile
+
       - name: Capture pinned upstream lint baseline
         working-directory: source/web
         shell: bash
@@ -150,15 +159,6 @@ jobs:
           (source_assets / 'hero-scene.webp').write_bytes((target / 'hero-scene.webp').read_bytes())
           print('PASS: 16 branded homepage images restored and verified')
           PY
-
-      - name: Set up Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.4.4
-
-      - name: Install frozen frontend dependencies
-        working-directory: source/web
-        run: bun install --frozen-lockfile
 
       - name: Generate route tree and production build
         working-directory: source/web
