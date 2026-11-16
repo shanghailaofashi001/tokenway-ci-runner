@@ -1,0 +1,124 @@
+name: TokenWay branded UI acceptance
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/tokenway-branded-ui-acceptance.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tokenway-branded-ui-acceptance
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout CI orchestration
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Checkout exact TokenWay candidate
+        uses: actions/checkout@v4
+        with:
+          repository: shanghailaofashi001/tokenway-v11-dev
+          ref: 35531e700a5deaa2c50dfc844c518b8ab8c1ac1f
+          token: ${{ secrets.TOKENWAY_SOURCE_READ_TOKEN }}
+          path: private
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Checkout pinned New API base
+        uses: actions/checkout@v4
+        with:
+          repository: QuantumNous/new-api
+          ref: 48a6c87f9e7757fdc58e5be9bcb4f8281ad0dfd0
+          path: source
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Restore and apply TokenWay brand and UI fixes
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -s private/.tokenway-validation/brand-h3/TOKENWAY-AI-BRANDED-WEBSITE.patch
+          git -C source apply --recount ../private/.tokenway-validation/brand-h3/TOKENWAY-AI-BRANDED-WEBSITE.patch
+          if test -s private/.tokenway-validation/brand-h3/TOKENWAY-AI-REFERENCE-H3-READY.patch; then
+            git -C source apply --recount ../private/.tokenway-validation/brand-h3/TOKENWAY-AI-REFERENCE-H3-READY.patch
+          fi
+          (cd source && python3 ../private/.tokenway-validation/brand-h3/apply-tokenway-ui-followup.py)
+          (cd source && python3 ../private/.tokenway-validation/apply-tokenway-brand-runtime-fix.py)
+          install -D -m 0644 private/web/src/routes/docs.tsx source/web/src/routes/docs.tsx
+          grep -Fq "createFileRoute('/docs')" source/web/src/routes/docs.tsx
+          grep -Fq "TokenWayPublicLayout" source/web/src/routes/docs.tsx
+          grep -Fq "changeLanguage('zhCN')" source/web/src/features/home/tokenway-landing.tsx
+          ! grep -Fq "changeLanguage('zh-CN')" source/web/src/features/home/tokenway-landing.tsx
+          grep -Fq "AI Audio Creation" source/web/src/features/home/tokenway-landing.tsx
+          grep -Fq "href='/docs'" source/web/src/features/home/tokenway-landing.tsx
+          ! grep -Fq "docs.newapi.pro" source/web/src/features/home/tokenway-landing.tsx
+          grep -Fq 'DocsLink:                   "/docs",' source/setting/operation_setting/general_setting.go
+          grep -Fq "applyFaviconToDom('/favicon.svg')" source/web/src/main.tsx
+          ! grep -Fq "M15 6v12a3 0" source/web/src/assets/logo.tsx
+          grep -Fq "<a href='/sign-in'" source/web/src/features/home/tokenway-landing.tsx
+
+      - name: Restore TokenWay homepage reference images
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          import base64, re
+          from pathlib import Path
+          html = Path('private/.tokenway-validation/brand-h3/TOKENWAY-AI-REFERENCE-H3-READY-PREVIEW.html').read_text(encoding='utf-8')
+          images = re.findall(r"""data:image/webp;base64,([^"']+)""", html)
+          names = ['hero-scene.webp','brand-mark.webp','gpt.webp','claude.webp','gemini.webp','grok.webp','mistral.webp','deepseek.webp','kimi.webp','qwen.webp','doubao.webp','minimax.webp','glm.webp','image-art.webp','video-art.webp','audio-art.webp']
+          if len(images) != 17:
+              raise SystemExit(f'Expected 17 embedded WebP references, found {len(images)}')
+          target = Path('source/web/public/tokenway-home')
+          target.mkdir(parents=True, exist_ok=True)
+          for name, encoded in zip(names, images):
+              data = base64.b64decode(encoded, validate=True)
+              if not data.startswith(b'RIFF') or data[8:12] != b'WEBP':
+                  raise SystemExit(f'Invalid WebP payload: {name}')
+              (target / name).write_bytes(data)
+          for name in names:
+              if not (target / name).is_file() or (target / name).stat().st_size < 1000:
+                  raise SystemExit(f'Missing or truncated image: {name}')
+          print('PASS: 16 branded homepage images restored and verified')
+          PY
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+
+      - name: Install frozen frontend dependencies
+        working-directory: source/web
+        run: bun install --frozen-lockfile
+
+      - name: Generate route tree and production build
+        working-directory: source/web
+        run: bun run build
+
+      - name: Verify generated docs route registration
+        working-directory: source/web
+        run: |
+          grep -Fq "docsRouteImport" src/routeTree.gen.ts
+          grep -Fq "'/docs'" src/routeTree.gen.ts
+
+      - name: Frontend typecheck
+        working-directory: source/web
+        run: bun run typecheck
+
+      - name: Frontend unit tests
+        working-directory: source/web
+        run: bun run test
+
+      - name: Frontend lint
+        working-directory: source/web
+        run: bun run lint
