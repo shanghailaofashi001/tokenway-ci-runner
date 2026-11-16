@@ -764,7 +764,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           test "$(git -C source rev-parse HEAD)" = "48a6c87f9e7757fdc58e5be9bcb4f8281ad0dfd0"
-          test "$(git -C private rev-parse HEAD)" = "f6f42e94404b2ba68ff8829e9c2707b33189c688"
+          test "$(git -C private rev-parse HEAD)" = "c9b3deb8cb67dcb229c9743875f26cca7b384044"
           test "$(cat source/VERSION)" = "1.0.0-rc.52"
           test "$(go version | awk '{print $3}')" = "go1.26.10"
           test "$(bun --version)" = "1.4.4"
@@ -788,7 +788,7 @@ jobs:
           - Product version: 1.0.0-rc.52
           - New API upstream: QuantumNous/new-api
           - Upstream commit: 48a6c87f9e7757fdc58e5be9bcb4f8281ad0dfd0
-          - TokenWay integration/validation pin: shanghailaofashi001/tokenway-v11-dev@f6f42e94404b2ba68ff8829e9c2707b33189c688
+          - TokenWay integration/validation pin: shanghailaofashi001/tokenway-v11-dev@c9b3deb8cb67dcb229c9743875f26cca7b384044
 
           ## First-launch features retained
           - New API's native channel, model, API-key, group, usage and admin capabilities.
