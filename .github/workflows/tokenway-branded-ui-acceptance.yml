@@ -48,6 +48,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           mkdir -p source/docs
+          install -D -m 0644 private/docs/TOKENWAY-AI-DEPLOYMENT.md source/docs/TOKENWAY-AI-DEPLOYMENT.md
           python3 - <<'PY'
           from pathlib import Path
           jobs = [
