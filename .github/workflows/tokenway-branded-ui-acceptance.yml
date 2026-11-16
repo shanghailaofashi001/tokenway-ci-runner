@@ -82,8 +82,8 @@ jobs:
             TOKENWAY-CNY-TEST-STATE-FIX.patch \
             TOKENWAY-CNY-TEST-ISOLATION-FIX.patch; do
             patch_path="../private/.tokenway-validation/brand-h3/$patch_file"
-            patch --batch --forward --dry-run -p1 < "$patch_path"
-            patch --batch --forward -p1 < "$patch_path"
+            (cd source && patch --batch --forward --dry-run -p1 < "$patch_path")
+            (cd source && patch --batch --forward -p1 < "$patch_path")
           done
           install -D -m 0644 private/web/src/routes/docs.tsx source/web/src/routes/docs.tsx
           grep -Fq "createFileRoute('/docs')" source/web/src/routes/docs.tsx
