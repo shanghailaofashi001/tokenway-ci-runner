@@ -296,6 +296,15 @@ jobs:
           grep -Fq 'TaskArtifactStoreFailClosed()' controller/task.go
           grep -Fq 'TaskArtifactStoreFailClosed()' controller/video_proxy.go
 
+      - name: Guard runtime artifact persistence failures
+        working-directory: source
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 ../private/.tokenway-validation/brand-h3/apply-rc52-s3-runtime-write-fail-closed.py
+          grep -Fq 'proxyTaskMediaWithArtifactUsingStore' controller/video_proxy.go
+          grep -Fq 'TestProxyTaskMediaFailsClosedWhenS3PersistFails' controller/task_generic_test.go
+
       - name: Adapt task artifact capture database fixture
         working-directory: source
         shell: bash
