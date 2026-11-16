@@ -130,7 +130,7 @@ jobs:
       - name: Verify generated docs route registration
         working-directory: source/web
         run: |
-          grep -Fq "docsRouteImport" src/routeTree.gen.ts
+          grep -Fq "./routes/docs" src/routeTree.gen.ts
           grep -Fq "'/docs'" src/routeTree.gen.ts
 
       - name: Frontend typecheck
