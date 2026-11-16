@@ -69,7 +69,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: shanghailaofashi001/tokenway-v11-dev
-          ref: 3ee968adb86318438d34ffc14580d09c68beba90
+          ref: c9b3deb8cb67dcb229c9743875f26cca7b384044
           token: ${{ secrets.TOKENWAY_SOURCE_READ_TOKEN }}
           path: private
           fetch-depth: 1
@@ -417,6 +417,20 @@ jobs:
             echo "FAIL: image creator route tree (private details withheld)"
             exit 1
           fi
+
+      - name: Apply final TokenWay brand/runtime hardening
+        working-directory: source
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 ../private/.tokenway-validation/apply-tokenway-brand-runtime-fix.py
+          test -s web/src/features/brand/tokenway-brand-links.ts
+          grep -Fq "href: '/creator'" web/src/features/brand/tokenway-brand-links.ts
+          grep -Fq "to='/creator'" web/src/features/home/tokenway-landing.tsx
+          grep -Fq "href='/sign-in'" web/src/features/home/tokenway-landing.tsx
+          grep -Fq "applyFaviconToDom('/favicon.svg')" web/src/main.tsx
+          grep -Fq "replaceAll(':', '')" web/src/features/brand/tokenway-brand.tsx
+          echo "PASS: final brand runtime hardening; authenticated Creator route kept."
 
       - name: Apply legacy video download integration patch
         working-directory: source
@@ -821,7 +835,7 @@ jobs:
           - Workflow run: $GITHUB_RUN_ID
           - Product version: 1.0.0-rc.52
           - New API upstream: 48a6c87f9e7757fdc58e5be9bcb4f8281ad0dfd0
-          - TokenWay integration pin: f6f42e94404b2ba68ff8829e9c2707b33189c688
+          - TokenWay integration pin: $(git -C private rev-parse HEAD)
           - Go: $(go version)
           - Bun: $(bun --version)
 
