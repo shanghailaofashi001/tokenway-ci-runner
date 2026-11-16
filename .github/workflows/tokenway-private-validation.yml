@@ -2,6 +2,10 @@ name: TOKENWAY private-source validation
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/tokenway-private-validation.yml"
   push:
     branches: [main]
     paths:
@@ -65,7 +69,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: shanghailaofashi001/tokenway-v11-dev
-          ref: 9dcb41bcb6540587d622ddb0cff34d2bdb8fa9de
+          ref: f6f42e94404b2ba68ff8829e9c2707b33189c688
           token: ${{ secrets.TOKENWAY_SOURCE_READ_TOKEN }}
           path: private
           fetch-depth: 1
@@ -185,6 +189,22 @@ jobs:
           patch --batch --forward -p1 < /tmp/tokenway-brand.patch
           patch --batch --forward --dry-run -p1 < /tmp/tokenway-h3.patch
           patch --batch --forward -p1 < /tmp/tokenway-h3.patch
+          base64 -d ../private/.tokenway-validation/brand-h3/TOKENWAY-RC52-S3-H3-SAFETY-FIX.patch.gz.b64 | gzip -dc > /tmp/tokenway-s3-h3-safety.patch
+          python3 - <<'PY'
+          from pathlib import Path
+          patch = Path('/tmp/tokenway-s3-h3-safety.patch')
+          source = patch.read_text(encoding='utf-8')
+          start = source.find('diff --git a/controller/task.go ')
+          if start >= 0:
+              end = source.find('diff --git a/docs/TOKENWAY-AI-DEPLOYMENT.md ', start)
+              if end < 0:
+                  raise SystemExit('controller patch section has no following boundary')
+              source = source[:start] + source[end:]
+          patch.write_text(source, encoding='utf-8')
+          PY
+          patch --batch --forward --dry-run -p1 < /tmp/tokenway-s3-h3-safety.patch
+          patch --batch --forward -p1 < /tmp/tokenway-s3-h3-safety.patch
+          python3 ../private/.tokenway-validation/brand-h3/apply-rc52-s3-config-fail-closed.py
           patch --batch --forward --dry-run -p1 < ../private/.tokenway-validation/brand-h3/TOKENWAY-FRONTEND-TYPECHECK-FIX.patch
           patch --batch --forward -p1 < ../private/.tokenway-validation/brand-h3/TOKENWAY-FRONTEND-TYPECHECK-FIX.patch
           patch --batch --forward --dry-run -p1 < ../private/.tokenway-validation/brand-h3/TOKENWAY-CNY-DEFAULT-TEST-FIX.patch
@@ -210,6 +230,9 @@ jobs:
               if not data.startswith(b'RIFF') or data[8:12] != b'WEBP':
                   raise SystemExit(f'Invalid WebP payload: {name}')
               (target / name).write_bytes(data)
+          source_assets = Path('web/src/assets/tokenway-home')
+          source_assets.mkdir(parents=True, exist_ok=True)
+          (source_assets / 'hero-scene.webp').write_bytes((target / 'hero-scene.webp').read_bytes())
           expected = ['hero-scene.webp','brand-mark.webp','gpt.webp','claude.webp','gemini.webp','grok.webp','mistral.webp','deepseek.webp','kimi.webp','qwen.webp','doubao.webp','minimax.webp','glm.webp','image-art.webp','video-art.webp','audio-art.webp']
           if any(not (target / name).is_file() or (target / name).stat().st_size < 1000 for name in expected):
               raise SystemExit('One or more homepage WebP assets are missing or truncated')
@@ -218,6 +241,10 @@ jobs:
           node --check plugins/tasks/hailuo/plugin.js
           grep -q 'h3_context_ir' plugins/tasks/hailuo/plugin.js
           grep -q 'video_regeneration' plugins/tasks/hailuo/plugin.js
+          grep -Fq 'Context-IR is temporarily disabled' plugins/tasks/hailuo/plugin.js
+          grep -Fq 'An explicitly requested but invalid S3 configuration remains in S3 mode' setting/system_setting/task_artifact_store.go
+          ! grep -Fq 'task artifact S3 storage is not implemented; using upstream mode' setting/system_setting/task_artifact_store.go
+          grep -Fq 'deployment placeholder' setting/system_setting/task_artifact_store.go
           echo "PASS: TokenWay reference homepage and MiniMax H3 source patches applied."
 
       - name: Compile source restoration scripts
@@ -259,6 +286,45 @@ jobs:
             tail -n 2 /tmp/tokenway-host-projection.log | sed -E 's#(/home/runner/[^ ]*)#<runner-path>#g; s#(gh[pousr]_[A-Za-z0-9_]+)#<redacted>#g'
             exit 1
           fi
+
+      - name: Guard artifact downloads when explicit S3 storage is unavailable
+        working-directory: source
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 ../private/.tokenway-validation/brand-h3/apply-rc52-controller-artifact-fail-closed.py
+          grep -Fq 'TaskArtifactStoreFailClosed()' controller/task.go
+          grep -Fq 'TaskArtifactStoreFailClosed()' controller/video_proxy.go
+
+      - name: Guard runtime artifact persistence failures
+        working-directory: source
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 ../private/.tokenway-validation/brand-h3/apply-rc52-s3-runtime-write-fail-closed.py
+          python3 ../private/.tokenway-validation/brand-h3/apply-rc52-s3-runtime-range-safe.py
+          grep -Fq 'proxyTaskMediaWithArtifactUsingStore' controller/video_proxy.go
+          grep -Fq 'TestProxyTaskMediaFailsClosedWhenS3PersistFails' controller/task_generic_test.go
+
+      - name: Initialize S3 store after dotenv
+        working-directory: source
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 ../private/.tokenway-validation/brand-h3/apply-rc52-s3-env-load-order.py
+          grep -Fq 'service.InitTaskArtifactStore()' main.go
+          grep -Fq 'TestTaskArtifactStoreInitializesAfterDotEnvLoad' service/task_artifact_store_test.go
+          grep -Fq 'taskArtifactStoreInitMu sync.RWMutex' service/task_artifact_store.go
+
+      - name: Persist JSON ContentPath artifacts before serving
+        working-directory: source
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 ../private/.tokenway-validation/brand-h3/apply-rc52-s3-contentpath-fail-closed.py
+          grep -Fq 'persistTaskMediaContentPath(' controller/video_proxy.go
+          grep -Fq 'TestProxyTaskMediaContentPathPersistsBeforeServing' controller/task_generic_test.go
+          grep -Fq 'TestProxyTaskMediaContentPathFailsClosedWhenS3PersistFails' controller/task_generic_test.go
 
       - name: Adapt task artifact capture database fixture
         working-directory: source
@@ -305,7 +371,7 @@ jobs:
         working-directory: source
         shell: bash
         run: |
-          if gofmt -w model/wallet_ledger.go model/wallet_ledger_test.go model/task_billing_recovery.go service/task_polling.go service/task_polling_test.go service/task_artifact_store.go service/task_artifact_s3_test.go service/task_artifact_metadata_dialect_test.go service/task_artifact_s3_roundtrip_test.go >/tmp/tokenway-gofmt-service.log 2>&1; then
+          if gofmt -w main.go model/wallet_ledger.go model/wallet_ledger_test.go model/task_billing_recovery.go service/task_polling.go service/task_polling_test.go service/task_artifact_store.go service/task_artifact_store_test.go service/task_artifact_s3_test.go service/task_artifact_metadata_dialect_test.go service/task_artifact_s3_roundtrip_test.go setting/system_setting/task_artifact_store.go >/tmp/tokenway-gofmt-service.log 2>&1; then
             echo "PASS: billing recovery and artifact service gofmt"
           else
             echo "FAIL: billing recovery and artifact service gofmt (file/path or syntax issue)"
@@ -395,7 +461,15 @@ jobs:
               | grep -E '(^ FAIL |^ ❯ src/|Test Files|Tests |TestingLibraryElementError|Unable to find|Expected|Received|AssertionError|TOKENWAY_DEBUG_MODEL_PRICING)' | tail -n 160 | cut -c1-320
             exit 1
           fi
-          if bun run build >/tmp/tokenway-frontend-build.log 2>&1; then echo "Frontend production build passed."; else echo "Frontend production build failed."; exit 1; fi
+          if bun run build >/tmp/tokenway-frontend-build.log 2>&1; then
+            echo "Frontend production build passed."
+          else
+            status=$?
+            echo "Frontend production build failed; sanitized diagnostics follow:"
+            tail -n 140 /tmp/tokenway-frontend-build.log | sed -E \
+              's#(/home/runner/[^ ]*)#<runner-path>#g; s#(/tmp/[^ ]*)#<temp-path>#g; s#(gh[pousr]_[A-Za-z0-9_]+)#<redacted>#g; s#(Bearer )[A-Za-z0-9._~-]+#\1<redacted>#g'
+            exit "$status"
+          fi
           test -s dist/index.html
 
       - name: Restore and vendor Go modules
@@ -659,7 +733,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           test "$(git -C source rev-parse HEAD)" = "48a6c87f9e7757fdc58e5be9bcb4f8281ad0dfd0"
-          test "$(git -C private rev-parse HEAD)" = "9dcb41bcb6540587d622ddb0cff34d2bdb8fa9de"
+          test "$(git -C private rev-parse HEAD)" = "f6f42e94404b2ba68ff8829e9c2707b33189c688"
           test "$(cat source/VERSION)" = "1.0.0-rc.52"
           test "$(go version | awk '{print $3}')" = "go1.26.10"
           test "$(bun --version)" = "1.4.4"
@@ -683,7 +757,7 @@ jobs:
           - Product version: 1.0.0-rc.52
           - New API upstream: QuantumNous/new-api
           - Upstream commit: 48a6c87f9e7757fdc58e5be9bcb4f8281ad0dfd0
-          - TokenWay integration/validation pin: shanghailaofashi001/tokenway-v11-dev@9dcb41bcb6540587d622ddb0cff34d2bdb8fa9de
+          - TokenWay integration/validation pin: shanghailaofashi001/tokenway-v11-dev@f6f42e94404b2ba68ff8829e9c2707b33189c688
 
           ## First-launch features retained
           - New API's native channel, model, API-key, group, usage and admin capabilities.
@@ -730,7 +804,7 @@ jobs:
           - Workflow run: $GITHUB_RUN_ID
           - Product version: 1.0.0-rc.52
           - New API upstream: 48a6c87f9e7757fdc58e5be9bcb4f8281ad0dfd0
-          - TokenWay integration pin: 9dcb41bcb6540587d622ddb0cff34d2bdb8fa9de
+          - TokenWay integration pin: f6f42e94404b2ba68ff8829e9c2707b33189c688
           - Go: $(go version)
           - Bun: $(bun --version)
 
