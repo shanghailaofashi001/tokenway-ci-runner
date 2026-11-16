@@ -47,10 +47,27 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          test -s private/.tokenway-validation/brand-h3/TOKENWAY-AI-BRANDED-WEBSITE.patch
-          git -C source apply --recount ../private/.tokenway-validation/brand-h3/TOKENWAY-AI-BRANDED-WEBSITE.patch
-          if test -s private/.tokenway-validation/brand-h3/TOKENWAY-AI-REFERENCE-H3-READY.patch; then
-            git -C source apply --recount ../private/.tokenway-validation/brand-h3/TOKENWAY-AI-REFERENCE-H3-READY.patch
+          python3 - <<'PY'
+          from pathlib import Path
+          jobs = [
+              ('private/.tokenway-validation/brand-h3/TOKENWAY-AI-BRANDED-WEBSITE.patch', '--- a/common/constants.go', '/tmp/tokenway-brand.patch'),
+              ('private/.tokenway-validation/brand-h3/TOKENWAY-AI-REFERENCE-H3-READY.patch', '--- a/docs/TOKENWAY-AI-DEPLOYMENT.md', '/tmp/tokenway-reference.patch'),
+          ]
+          for source_path, marker, destination in jobs:
+              source = Path(source_path).read_text(encoding='utf-8')
+              offset = source.find(marker)
+              if offset < 0:
+                  raise SystemExit(f'Patch boundary missing: {source_path}: {marker}')
+              payload = source[offset:]
+              if not payload.endswith('\\n'):
+                  payload += '\\n'
+              Path(destination).write_text(payload, encoding='utf-8')
+          PY
+          patch --batch --forward --dry-run -p1 -d source < /tmp/tokenway-brand.patch
+          patch --batch --forward -p1 -d source < /tmp/tokenway-brand.patch
+          if test -s /tmp/tokenway-reference.patch; then
+            patch --batch --forward --dry-run -p1 -d source < /tmp/tokenway-reference.patch
+            patch --batch --forward -p1 -d source < /tmp/tokenway-reference.patch
           fi
           (cd source && python3 ../private/.tokenway-validation/brand-h3/apply-tokenway-ui-followup.py)
           (cd source && python3 ../private/.tokenway-validation/apply-tokenway-brand-runtime-fix.py)
