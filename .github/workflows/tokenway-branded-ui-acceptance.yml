@@ -73,6 +73,18 @@ jobs:
           fi
           (cd source && python3 ../private/.tokenway-validation/brand-h3/apply-tokenway-ui-followup.py)
           (cd source && python3 ../private/.tokenway-validation/apply-tokenway-brand-runtime-fix.py)
+          # Keep tests deterministic after TokenWay's production CNY default:
+          # test fixtures explicitly select USD where assertions expect USD,
+          # and isolate persisted currency preferences between test cases.
+          for patch_file in \
+            TOKENWAY-CNY-DEFAULT-TEST-FIX.patch \
+            TOKENWAY-CNY-TEST-IMPORT-CLEANUP.patch \
+            TOKENWAY-CNY-TEST-STATE-FIX.patch \
+            TOKENWAY-CNY-TEST-ISOLATION-FIX.patch; do
+            patch_path="../private/.tokenway-validation/brand-h3/$patch_file"
+            patch --batch --forward --dry-run -p1 < "$patch_path"
+            patch --batch --forward -p1 < "$patch_path"
+          done
           install -D -m 0644 private/web/src/routes/docs.tsx source/web/src/routes/docs.tsx
           grep -Fq "createFileRoute('/docs')" source/web/src/routes/docs.tsx
           grep -Fq "TokenWayPublicLayout" source/web/src/routes/docs.tsx
