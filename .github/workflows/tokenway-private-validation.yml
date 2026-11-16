@@ -302,6 +302,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           python3 ../private/.tokenway-validation/brand-h3/apply-rc52-s3-runtime-write-fail-closed.py
+          python3 ../private/.tokenway-validation/brand-h3/apply-rc52-s3-runtime-range-safe.py
           grep -Fq 'proxyTaskMediaWithArtifactUsingStore' controller/video_proxy.go
           grep -Fq 'TestProxyTaskMediaFailsClosedWhenS3PersistFails' controller/task_generic_test.go
 
