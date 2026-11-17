@@ -69,7 +69,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: shanghailaofashi001/tokenway-v11-dev
-          ref: 24dde54751a1b75837764deccb1ae28775a6bd8b
+          ref: 5ffb024f6b10d005effbf69af72d771eb84ae99e
           token: ${{ secrets.TOKENWAY_SOURCE_READ_TOKEN }}
           path: private
           fetch-depth: 1
@@ -384,6 +384,10 @@ jobs:
         run: |
           set -Eeuo pipefail
           python3 ../private/.tokenway-validation/brand-h3/apply-tokenway-ui-followup.py
+          python3 ../private/.tokenway-validation/brand-h3/apply-tokenway-docs-internal-only.py
+          ! grep -Fq 'docs.newapi.pro' web/src/hooks/use-top-nav-links.ts
+          ! grep -Fq 'docs.newapi.pro' web/src/features/home/components/sections/hero.tsx
+          grep -Fq "href: '/docs'" web/src/hooks/use-top-nav-links.ts
           grep -Fq "changeLanguage('zhCN')" web/src/features/home/tokenway-landing.tsx
           ! grep -Fq "changeLanguage('zh-CN')" web/src/features/home/tokenway-landing.tsx
           ! grep -Fq "docs.newapi.pro" web/src/features/home/tokenway-landing.tsx
@@ -563,6 +567,29 @@ jobs:
               exit "$status"
             fi
           done
+      - name: Guard focused Advanced Custom tests against empty -run matches
+        working-directory: source
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          export GOWORK=off GOPROXY=off GOSUMDB=off GOFLAGS=-mod=vendor GOTOOLCHAIN=local
+          package=./relay/channel/advancedcustom
+          pattern='^(TestAdaptorUsesExactRouteAndQueryAuth|TestAdaptorBuildModelListRequestUsesConfiguredRouteAuth|TestAdaptorBuildModelListRequestUsesConfiguredQueryAuth|TestAdaptorBuildModelListRequestDefaultAndNoAuth)'
+          listed="$(go test "$package" -list .)"
+          test_names=(
+            TestAdaptorUsesExactRouteAndQueryAuth
+            TestAdaptorBuildModelListRequestUsesConfiguredRouteAuth
+            TestAdaptorBuildModelListRequestUsesConfiguredQueryAuth
+            TestAdaptorBuildModelListRequestDefaultAndNoAuth
+          )
+          for test_name in "${test_names[@]}"; do
+            if ! grep -Fxq "$test_name" <<<"$listed"; then
+              echo "FAIL: expected focused Go test is missing: $test_name" >&2
+              exit 3
+            fi
+          done
+          go test "$package" -run "$pattern" -count=1
+          echo "PASS: all focused Advanced Custom tests were discovered and executed."
       - name: Full Go tests, build, and vet
         id: full_go
         shell: bash
@@ -768,7 +795,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           test "$(git -C source rev-parse HEAD)" = "48a6c87f9e7757fdc58e5be9bcb4f8281ad0dfd0"
-          test "$(git -C private rev-parse HEAD)" = "24dde54751a1b75837764deccb1ae28775a6bd8b"
+          test "$(git -C private rev-parse HEAD)" = "5ffb024f6b10d005effbf69af72d771eb84ae99e"
           test "$(cat source/VERSION)" = "1.0.0-rc.52"
           test "$(go version | awk '{print $3}')" = "go1.26.10"
           test "$(bun --version)" = "1.4.4"
@@ -792,7 +819,333 @@ jobs:
           - Product version: 1.0.0-rc.52
           - New API upstream: QuantumNous/new-api
           - Upstream commit: 48a6c87f9e7757fdc58e5be9bcb4f8281ad0dfd0
-          - TokenWay integration/validation pin: shanghailaofashi001/tokenway-v11-dev@24dde54751a1b75837764deccb1ae28775a6bd8b
+          - TokenWay integration/validation pin: shanghailaofashi001/tokenway-v11-dev@5ffb024f6b10d005effbf69af72d771eb84ae99e
+
+          ## First-launch features retained
+          - New API's native channel, model, API-key, group, usage and admin capabilities.
+          - Kuaipao AI text upstream presets: Claude Messages and OpenAI Chat Completions; Responses remains restricted to explicitly verified model IDs.
+          - One RMB customer wallet, durable ledger, request/token/task/subscription billing, refund idempotency, recovery journal and unknown-upstream-outcome review.
+          - Personal WeChat/Alipay QR top-up submission with administrator review; no automatic credit based only on a static QR code.
+          - S3-compatible task artifact storage, ownership checks, retention, expiry notice and cleanup; default upstream mode remains available when S3 is not configured.
+          - Creator image/video workspace, MiniMax media adapter support and legacy task artifact retrieval/download.
+
+          ## Keep out of the first launch
+          - Automatic official WeChat Pay/Alipay merchant settlement.
+          - Full user file manager with sharing/recycle-bin features.
+          - Additional upstream provider pools and failover.
+          - Advanced upstream cost/retail reconciliation dashboards and expanded operations analytics.
+          These remain post-launch scope; they are not required to turn on the first-launch configuration.
+
+          ## Minimal deployment
+          1. Copy .env.production.example to .env; set unique PostgreSQL and Redis passwords, a strong random SESSION_SECRET, the public SESSION_COOKIE_TRUSTED_URL, and trusted proxy addresses.
+          2. Put the service behind the deployment's TLS reverse proxy; retain the Compose default localhost-only bind unless the reverse proxy is intentionally colocated differently.
+          3. Configure Kuaipao channel credentials and only the models/protocols actually enabled by that account. Do not enable unverified Responses models.
+          4. Configure and verify an S3-compatible bucket (endpoint, bucket, region, access key, secret, prefix, read/write/delete/range access and lifecycle policy) before production media use. The production environment template selects S3 and must not be used with placeholder credentials. upstream mode is only a temporary development fallback; it does not provide durable TokenWay artifact retention after provider URLs expire.
+          5. Configure the personal QR image URLs and review manual recharge submissions in the admin UI. Do not claim automated merchant settlement.
+          6. Back up PostgreSQL and the .env file before the first production migration. Verify a restore before relying on production data.
+
+          The automated validation package includes Go/frontend/database tests and a clean Docker Compose startup smoke. Live Kuaipao, a real S3 bucket, production payment accounts, production backup/restore and a real VPS/domain deployment still require deployment-specific credentials and infrastructure.
+          EOF
+          (
+            cd source
+            find . -type f ! -name 'TOKENWAY-SOURCE-MANIFEST.sha256' -print0 \
+              | LC_ALL=C sort -z | xargs -0 sha256sum > TOKENWAY-SOURCE-MANIFEST.sha256
+          )
+          mkdir -p release-output
+          cp source/TOKENWAY-SOURCE-MANIFEST.sha256 release-output/TOKENWAY-RC52-SOURCE-MANIFEST.sha256
+          (
+            cd source
+            zip -qr ../release-output/TOKENWAY-RC52-FIRST-LAUNCH-VALIDATED.zip .
+          )
+          unzip -tq release-output/TOKENWAY-RC52-FIRST-LAUNCH-VALIDATED.zip
+          sha256sum release-output/TOKENWAY-RC52-FIRST-LAUNCH-VALIDATED.zip \
+            > release-output/TOKENWAY-RC52-FIRST-LAUNCH-VALIDATED.zip.sha256
+          cat > release-output/TOKENWAY-RC52-FIRST-LAUNCH-VALIDATION.md <<EOF
+          # TokenWay RC52 first-launch validation
+
+          - Workflow run: $GITHUB_RUN_ID
+          - Product version: 1.0.0-rc.52
+          - New API upstream: 48a6c87f9e7757fdc58e5be9bcb4f8281ad0dfd0
+          - TokenWay integration pin: $(git -C private rev-parse HEAD)
+          - Go: $(go version)
+          - Bun: $(bun --version)
+
+          ## Successful gates in this same workflow run
+          - Full Go tests, build and vet: root module, relaykit and tokenkit.
+          - Frontend typecheck, Vitest tests and production build.
+          - MySQL 8.4 and PostgreSQL 16 migration/billing/task/artifact metadata regression matrix.
+          - Docker image build and clean Compose startup with PostgreSQL, Redis and application health check.
+          - Exact source pin checks, generated frontend distribution check, vendored Go module manifests and ZIP integrity.
+
+          ## Not covered by this automated run
+          - Live Kuaipao account/model/usage reconciliation.
+          - Real S3 bucket credentials, lifecycle policy and byte-for-byte staging checks.
+          - Production merchant payment credentials/webhooks.
+          - Production VPS, public domain/TLS, reverse proxy and backup/restore rehearsal.
+
+          This package is a validated first-launch source candidate, not proof of a live production deployment. Do not point validation or migration tests at production data.
+          EOF
+          (
+            cd release-output
+            sha256sum TOKENWAY-RC52-SOURCE-MANIFEST.sha256 TOKENWAY-RC52-FIRST-LAUNCH-VALIDATION.md \
+              > TOKENWAY-RC52-RELEASE-SIDECARS.sha256
+          )
+          echo "PASS: exact tested source packaged; ZIP, manifest and validation report generated."
+
+      - name: Upload validated first-launch source package
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: TOKENWAY-RC52-FIRST-LAUNCH-VALIDATED
+          path: release-output/*
+          if-no-files-found: error
+          retention-days: 30
+
+# Manual validation refresh: force the pinned Go 1.26.10 full validation workflow to run.
+
+          listed="$(go test "$package" -list .)"
+          for test_name in \
+            TestAdaptorUsesExactRouteAndQueryAuth \
+            TestAdaptorBuildModelListRequestUsesConfiguredRouteAuth \
+            TestAdaptorBuildModelListRequestUsesConfiguredQueryAuth \
+            TestAdaptorBuildModelListRequestDefaultAndNoAuth; do
+            if ! grep -Fxq "$test_name" <<<"$listed"; then
+              echo "FAIL: expected focused Go test is missing: $test_name" >&2
+              exit 3
+            fi
+          done
+          go test "$package" -run "$pattern" -count=1
+          echo "PASS: all focused Advanced Custom tests were discovered and executed."
+      - name: Full Go tests, build, and vet
+        id: full_go
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          export GOWORK=off GOPROXY=off GOSUMDB=off GOFLAGS=-mod=vendor GOTOOLCHAIN=local
+          validation_failed=0
+
+          sanitize_go_log() {
+            sed -E \
+              's#(https?://)[^/@[:space:]]+:[^/@[:space:]]+@#\1<redacted>@#g; s#([[:alnum:]_.-]+):[^@[:space:]]+@tcp#\1:<redacted>@tcp#g; s#(postgres(ql)?://)[^:/@[:space:]]+:[^@/[:space:]]+@#\1<redacted>@#g; s#(gh[pousr]_[A-Za-z0-9_]+)#<redacted>#g; s#(Bearer )[A-Za-z0-9._~-]+#\1<redacted>#g; s#(/home/runner/[^ ]*)#<runner-path>#g'
+          }
+
+          emit_test_failure() {
+            python3 - "$1" <<'PY' | sanitize_go_log
+          import json
+          import sys
+
+          events = []
+          with open(sys.argv[1], encoding="utf-8", errors="replace") as stream:
+              for raw in stream:
+                  try:
+                      events.append(json.loads(raw))
+                  except json.JSONDecodeError:
+                      continue
+
+          failures = [event for event in events if event.get("Action") == "fail"]
+          failed_packages = sorted({event.get("Package", "") for event in failures if event.get("Package")})
+          named = {}
+          for event in failures:
+              package = event.get("Package", "")
+              test = event.get("Test", "")
+              if package and test:
+                  named.setdefault(package, set()).add(test)
+
+          if not failures:
+              print("No structured Go test failure event found; final raw diagnostics:")
+              for event in events[-120:]:
+                  if event.get("Action") == "output":
+                      print(event.get("Output", "").rstrip())
+          for package in failed_packages:
+              tests = sorted(named.get(package, set()))
+              print(f"FAILED PACKAGE: {package}")
+              if tests:
+                  for test in tests:
+                      print(f"FAILED TEST: {test}")
+                  selected = []
+                  for event in events:
+                      if event.get("Package") != package or event.get("Action") != "output":
+                          continue
+                      test = event.get("Test", "")
+                      if not test or any(
+                          test == failure or test.startswith(failure + "/") or failure.startswith(test + "/")
+                          for failure in tests
+                      ):
+                          selected.append(event.get("Output", "").rstrip())
+                  for output in selected[-260:]:
+                      if output:
+                          print(output)
+              else:
+                  print("No named test event; package output follows:")
+                  selected = [
+                      event.get("Output", "").rstrip()
+                      for event in events
+                      if event.get("Package") == package and event.get("Action") == "output"
+                  ]
+                  for output in selected[-260:]:
+                      if output:
+                          print(output)
+          PY
+          }
+
+          for d in source source/relaykit source/tokenkit; do
+            label="${d//\//-}"
+            log="/tmp/tokenway-go-test-${label}.jsonl"
+            if (cd "$d" && go test -json -p=1 ./... -count=1) >"$log" 2>&1; then
+              echo "PASS: full Go tests for $d"
+            else
+              status=$?
+              echo "FAIL: full Go tests for $d (exit $status); failing test names and associated diagnostics:"
+              emit_test_failure "$log"
+              validation_failed=1
+            fi
+          done
+
+          for d in source source/relaykit source/tokenkit; do
+            label="${d//\//-}"
+            log="/tmp/tokenway-go-build-${label}.log"
+            if (cd "$d" && go build -p=3 ./...) >"$log" 2>&1; then
+              echo "PASS: full Go build for $d"
+            else
+              status=$?
+              echo "FAIL: full Go build for $d (exit $status); sanitized diagnostics:"
+              tail -n 140 "$log" | sanitize_go_log
+              validation_failed=1
+            fi
+          done
+
+          for d in source source/relaykit source/tokenkit; do
+            label="${d//\//-}"
+            log="/tmp/tokenway-go-vet-${label}.log"
+            if (cd "$d" && go vet -p=3 ./...) >"$log" 2>&1; then
+              echo "PASS: full Go vet for $d"
+            else
+              status=$?
+              echo "FAIL: full Go vet for $d (exit $status); sanitized diagnostics:"
+              tail -n 140 "$log" | sanitize_go_log
+              validation_failed=1
+            fi
+          done
+
+          if (( validation_failed != 0 )); then
+            echo "One or more Go test/build/vet checks failed; all modules and check types were still executed."
+            exit 1
+          fi
+          echo "All three Go modules passed full tests, build, and vet."
+      - name: Database migration, billing, task settlement, and artifact metadata matrix
+        if: ${{ always() && steps.go_vendor.outcome == 'success' && steps.offline_graph.outcome == 'success' }}
+        working-directory: source
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          export GOWORK=off GOPROXY=off GOSUMDB=off GOFLAGS=-mod=vendor GOTOOLCHAIN=local
+          matrix_failed=0
+
+          sanitize_db_log() {
+            sed -E \
+              's#(https?://)[^/@[:space:]]+:[^/@[:space:]]+@#\1<redacted>@#g; s#([[:alnum:]_.-]+):[^@[:space:]]+@tcp#\1:<redacted>@tcp#g; s#(postgres(ql)?://)[^:/@[:space:]]+:[^@/[:space:]]+@#\1<redacted>@#g; s#(gh[pousr]_[A-Za-z0-9_]+)#<redacted>#g; s#(Bearer )[A-Za-z0-9._~-]+#\1<redacted>#g; s#(/home/runner/[^ ]*)#<runner-path>#g'
+          }
+
+          run_quiet() {
+            label="$1"; shift
+            log="/tmp/tokenway-db-matrix-$(printf '%s' "$label" | tr ' /' '__').log"
+            if "$@" >"$log" 2>&1; then
+              echo "PASS: $label"
+            else
+              status=$?
+              echo "FAIL: $label (exit $status); sanitized diagnostics:"
+              {
+                grep -E -B 3 -A 14 '(^--- FAIL:|^FAIL[[:space:]]|Error Trace:|Test:[[:space:]]|panic:|fatal error:|^# )' "$log" || true
+                tail -n 80 "$log"
+              } | sanitize_db_log
+              matrix_failed=1
+            fi
+          }
+
+          run_quiet "schema migration compatibility" go test ./model -run '^TestMigrationSchemaStability$' -count=1
+          run_quiet "fixed-price billing database matrix" go test ./service -run '^TestFixedPriceBillingDatabaseMatrix$' -count=1
+          run_quiet "wallet cache and opening balance regressions" go test ./model -run 'TestWalletDeltaPreservesReservationsAcrossUserCacheSchemaRefresh|TestBackfillWalletOpeningBalances' -count=1
+          run_quiet "task settlement and capture on MySQL" env TEST_TASK_DB_DIALECT=mysql go test ./controller -run 'TestImmediateTaskSettlementDatabase|TestTaskArtifactCaptureClaimUsesFreshLeasePerSerialItem' -count=1
+          run_quiet "task settlement and capture on PostgreSQL" env TEST_TASK_DB_DIALECT=postgres go test ./controller -run 'TestImmediateTaskSettlementDatabase|TestTaskArtifactCaptureClaimUsesFreshLeasePerSerialItem' -count=1
+          run_quiet "task artifact metadata on MySQL" env TEST_TASK_DB_DIALECT=mysql go test ./service -run '^TestTaskArtifactMetadataDatabaseDialectRoundTrip$' -count=1
+          run_quiet "task artifact metadata on PostgreSQL" env TEST_TASK_DB_DIALECT=postgres go test ./service -run '^TestTaskArtifactMetadataDatabaseDialectRoundTrip$' -count=1
+
+          if (( matrix_failed != 0 )); then
+            echo "One or more database matrix checks failed; all independent checks were still executed."
+            exit 1
+          fi
+          echo "All database matrix checks passed."
+
+
+      - name: Clean Docker Compose install and health smoke
+        if: success()
+        working-directory: source
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          cat > .env.ci <<'EOF'
+          TOKENWAY_ENV_FILE=.env.ci
+          TOKENWAY_VERSION=1.0.0-rc.52
+          TOKENWAY_BIND_ADDRESS=127.0.0.1
+          TOKENWAY_HOST_PORT=3000
+          POSTGRES_USER=tokenway
+          POSTGRES_PASSWORD=ci-postgres-password
+          POSTGRES_DB=tokenway_ci
+          REDIS_PASSWORD=ci-redis-password
+          SESSION_SECRET=ci-only-not-production-secret-0123456789abcdef
+          SESSION_COOKIE_SECURE=false
+          TRUSTED_PROXIES=127.0.0.1,::1
+          TASK_ARTIFACT_STORE_MODE=upstream
+          EOF
+          cleanup() {
+            docker compose --env-file .env.ci down -v --remove-orphans >/dev/null 2>&1 || true
+            rm -f .env.ci
+          }
+          trap cleanup EXIT
+          docker compose --env-file .env.ci config --quiet
+          grep -q 'dockerfile: Dockerfile' docker-compose.yml
+          ! grep -q 'calciumion/new-api:latest' docker-compose.yml
+          if ! docker compose --env-file .env.ci up -d --build --wait --wait-timeout 300; then
+            docker compose --env-file .env.ci ps -a || true
+            docker compose --env-file .env.ci logs --no-color --tail=200 || true
+            exit 1
+          fi
+          curl --retry 15 --retry-delay 2 --retry-connrefused --fail --silent --show-error \
+            http://127.0.0.1:3000/api/status | tee /tmp/tokenway-api-status.json
+          grep -q '"success":true' /tmp/tokenway-api-status.json
+          echo "PASS: TokenWay source Dockerfile build, PostgreSQL/Redis startup, application health, and API status."
+
+      - name: Package exact validated first-launch source
+        if: success()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test "$(git -C source rev-parse HEAD)" = "48a6c87f9e7757fdc58e5be9bcb4f8281ad0dfd0"
+          test "$(git -C private rev-parse HEAD)" = "5ffb024f6b10d005effbf69af72d771eb84ae99e"
+          test "$(cat source/VERSION)" = "1.0.0-rc.52"
+          test "$(go version | awk '{print $3}')" = "go1.26.10"
+          test "$(bun --version)" = "1.4.4"
+          test -s source/web/dist/index.html
+          test -s source/docker-compose.yml
+          test -s source/Dockerfile
+          grep -q 'go build -pgo=off' source/Dockerfile
+          test -s source/.env.production.example
+          test -s source/docs/TOKENWAY-AI-DEPLOYMENT.md
+          grep -q 'dockerfile: Dockerfile' source/docker-compose.yml
+          ! grep -q 'calciumion/new-api:latest' source/docker-compose.yml
+          test -s source/vendor/modules.txt
+          test -s source/relaykit/vendor/modules.txt
+          test -s source/tokenkit/vendor/modules.txt
+          find source -type d -name node_modules -prune -exec rm -rf {} +
+          rm -rf source/.git
+          cat > source/TOKENWAY-FIRST-LAUNCH.md <<'EOF'
+          # TokenWay RC52 — first-launch package
+
+          ## Fixed source identity
+          - Product version: 1.0.0-rc.52
+          - New API upstream: QuantumNous/new-api
+          - Upstream commit: 48a6c87f9e7757fdc58e5be9bcb4f8281ad0dfd0
+          - TokenWay integration/validation pin: shanghailaofashi001/tokenway-v11-dev@5ffb024f6b10d005effbf69af72d771eb84ae99e
 
           ## First-launch features retained
           - New API's native channel, model, API-key, group, usage and admin capabilities.
