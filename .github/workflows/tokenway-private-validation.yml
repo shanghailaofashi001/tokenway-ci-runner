@@ -570,7 +570,23 @@ jobs:
           set -Eeuo pipefail
           export GOWORK=off GOPROXY=off GOSUMDB=off GOFLAGS=-mod=vendor GOTOOLCHAIN=local
           package=./relay/channel/advancedcustom
-          pattern='^(TestAdaptorUsesExactRouteAndQueryAuth|TestAdaptorBuildModelListRequestUsesConfiguredRouteAuth|TestAdaptorBuildModelListRequestUsesConfiguredQueryAuth|TestAdaptorBuildModelListRequestDefaultAndNoAuth)        id: full_go
+          pattern='^(TestAdaptorUsesExactRouteAndQueryAuth|TestAdaptorBuildModelListRequestUsesConfiguredRouteAuth|TestAdaptorBuildModelListRequestUsesConfiguredQueryAuth|TestAdaptorBuildModelListRequestDefaultAndNoAuth)'
+          listed="$(go test "$package" -list .)"
+          for test_name in
+            TestAdaptorUsesExactRouteAndQueryAuth
+            TestAdaptorBuildModelListRequestUsesConfiguredRouteAuth
+            TestAdaptorBuildModelListRequestUsesConfiguredQueryAuth
+            TestAdaptorBuildModelListRequestDefaultAndNoAuth
+          do
+            if ! grep -Fxq "$test_name" <<<"$listed"; then
+              echo "FAIL: expected focused Go test is missing: $test_name" >&2
+              exit 3
+            fi
+          done
+          go test "$package" -run "$pattern" -count=1
+          echo "PASS: all focused Advanced Custom tests were discovered and executed."
+      - name: Full Go tests, build, and vet
+        id: full_go
         shell: bash
         run: |
           set -Eeuo pipefail
