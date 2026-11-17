@@ -572,12 +572,13 @@ jobs:
           package=./relay/channel/advancedcustom
           pattern='^(TestAdaptorUsesExactRouteAndQueryAuth|TestAdaptorBuildModelListRequestUsesConfiguredRouteAuth|TestAdaptorBuildModelListRequestUsesConfiguredQueryAuth|TestAdaptorBuildModelListRequestDefaultAndNoAuth)'
           listed="$(go test "$package" -list .)"
-          for test_name in
+          test_names=(
             TestAdaptorUsesExactRouteAndQueryAuth
             TestAdaptorBuildModelListRequestUsesConfiguredRouteAuth
             TestAdaptorBuildModelListRequestUsesConfiguredQueryAuth
             TestAdaptorBuildModelListRequestDefaultAndNoAuth
-          do
+          )
+          for test_name in "${test_names[@]}"; do
             if ! grep -Fxq "$test_name" <<<"$listed"; then
               echo "FAIL: expected focused Go test is missing: $test_name" >&2
               exit 3
