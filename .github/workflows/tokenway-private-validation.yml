@@ -424,14 +424,14 @@ jobs:
           from pathlib import Path
           p = Path('web/src/test-setup.ts')
           s = p.read_text(encoding='utf-8')
-          import_line = "import { usePricingPreferencesStore } from '@/stores/pricing-preferences-store'\\n"
-          anchor = "import { DEFAULT_CURRENCY_CONFIG, useSystemConfigStore } from '@/stores/system-config-store'\\n"
+          import_line = "import { usePricingPreferencesStore } from '@/stores/pricing-preferences-store'\n"
+          anchor = "import { DEFAULT_CURRENCY_CONFIG, useSystemConfigStore } from '@/stores/system-config-store'\n"
           if import_line not in s:
               if anchor not in s:
                   raise SystemExit('pricing preference store import anchor missing')
               s = s.replace(anchor, import_line + anchor, 1)
-          reset = "  usePricingPreferencesStore.setState({ currency: 'USD' })\\n"
-          before = "beforeEach(() => {\\n"
+          reset = "  usePricingPreferencesStore.setState({ currency: 'USD' })\n"
+          before = "beforeEach(() => {\n"
           if reset not in s:
               if s.count(before) != 1:
                   raise SystemExit('test setup beforeEach anchor is not unique')
