@@ -427,7 +427,12 @@ jobs:
           if block.count(old) != 1:
               raise SystemExit(f"expected exactly one subscription plan lookup block in transaction, got {block.count(old)}")
           block = block.replace(old, new, 1)
-          old = """subscription, err := CreateUserSubscriptionFromPlanTx(tx, order.UserId, plan, "order")
+          old = 'subscription, err := CreateUserSubscriptionFromPlanTx(tx, order.UserId, plan, "order")'
+          new = 'subscription, createErr := CreateUserSubscriptionFromPlanTx(tx, order.UserId, &plan, "order")'
+          if block.count(old) != 1:
+              raise SystemExit(f"expected exactly one subscription creation call in transaction, got {block.count(old)}")
+          block = block.replace(old, new, 1)
+          old = """subscription, createErr := CreateUserSubscriptionFromPlanTx(tx, order.UserId, &plan, "order")
           \\t\\tif err != nil {
           \\t\\t\\treturn err
           \\t\\t}"""
@@ -435,9 +440,21 @@ jobs:
           \\t\\tif createErr != nil {
           \\t\\t\\treturn createErr
           \\t\\t}"""
-          if block.count(old) != 1:
-              raise SystemExit(f"expected exactly one subscription creation block in transaction, got {block.count(old)}")
-          block = block.replace(old, new, 1)
+          if block.count(old) == 1:
+              block = block.replace(old, new, 1)
+          elif block.count(old) == 0:
+              # The caller only needs to rename the existing error check directly
+              # following the CreateUserSubscriptionFromPlanTx call.
+              call = 'subscription, createErr := CreateUserSubscriptionFromPlanTx(tx, order.UserId, &plan, "order")'
+              pos = block.index(call) + len(call)
+              tail = block[pos:]
+              check_old = '\\n\\t\\tif err != nil {\\n\\t\\t\\treturn err\\n\\t\\t}'
+              check_new = '\\n\\t\\tif createErr != nil {\\n\\t\\t\\treturn createErr\\n\\t\\t}'
+              if not tail.startswith(check_old):
+                  raise SystemExit("subscription creation error check is not adjacent to the call")
+              block = block[:pos] + check_new + tail[len(check_old):]
+          else:
+              raise SystemExit(f"unexpected duplicate subscription creation block: {block.count(old)}")
           p.write_text(s[:start] + block + s[end:], encoding="utf-8")
           print("Subscription completion now loads its plan through the active transaction.")
 
