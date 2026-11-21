@@ -340,50 +340,7 @@ jobs:
               raise SystemExit(1)
           print('PASS: no new lint errors in changed frontend files versus the exact upstream baseline')
           PY
-          # The UI follow-up already installs the shared USD test setup.
-          # Apply the remaining state fixes without replaying its test-setup hunk.
-          python3 - <<'PY'
-          from pathlib import Path
-          import re
-          nl = chr(10)
-          p = Path('source/web/src/test-setup.ts')
-          s = p.read_text(encoding='utf-8')
-          import_line = "import { usePricingPreferencesStore } from '@/stores/pricing-preferences-store'" + nl
-          anchor = "import { DEFAULT_CURRENCY_CONFIG, useSystemConfigStore } from '@/stores/system-config-store'" + nl
-          if import_line not in s:
-              if anchor not in s:
-                  raise SystemExit('test setup currency import anchor missing')
-              s = s.replace(anchor, anchor + import_line, 1)
-          reset_line = "  usePricingPreferencesStore.setState({ currency: 'USD' })" + nl
-          if reset_line not in s:
-              before = "beforeEach(() => {" + nl
-              if s.count(before) != 1:
-                  raise SystemExit('test setup beforeEach anchor is not unique')
-              s = s.replace(before, before + reset_line, 1)
-          p.write_text(s, encoding='utf-8')
-          patch = Path('private/.tokenway-validation/brand-h3/TOKENWAY-CNY-TEST-STATE-FIX.patch')
-          parts = re.split(r'(?=^--- a/)', patch.read_text(encoding='utf-8'), flags=re.MULTILINE)
-          patch.write_text(''.join(part for part in parts if not re.search(r'^--- a/web/src/test-setup[.]ts', part, flags=re.MULTILINE)), encoding='utf-8')
-          PY
-          patch --batch --forward --dry-run -p1 -d source < private/.tokenway-validation/brand-h3/TOKENWAY-CNY-TEST-STATE-FIX.patch
-          patch --batch --forward -p1 -d source < private/.tokenway-validation/brand-h3/TOKENWAY-CNY-TEST-STATE-FIX.patch
-          patch_path="private/.tokenway-validation/brand-h3/TOKENWAY-CNY-TEST-ISOLATION-FIX.patch"
-          patch --batch --forward --dry-run -p1 -d source < "$patch_path"
-          patch --batch --forward -p1 -d source < "$patch_path"
-          install -D -m 0644 private/web/src/routes/docs.tsx source/web/src/routes/docs.tsx
-          grep -Fq "createFileRoute('/docs')" source/web/src/routes/docs.tsx
-          grep -Fq "TokenWayPublicLayout" source/web/src/routes/docs.tsx
-          grep -Fq "changeLanguage('zhCN')" source/web/src/features/home/tokenway-landing.tsx
-          ! grep -Fq "changeLanguage('zh-CN')" source/web/src/features/home/tokenway-landing.tsx
-          grep -Fq "AI Audio Creation" source/web/src/features/home/tokenway-landing.tsx
-          grep -Fq "to='/docs'" source/web/src/features/home/tokenway-landing.tsx
-          ! grep -Fq "docs.newapi.pro" source/web/src/features/home/tokenway-landing.tsx
-          grep -Fq 'DocsLink:                   "/docs",' source/setting/operation_setting/general_setting.go
-          grep -Fq "applyFaviconToDom('/favicon.svg')" source/web/src/main.tsx
-          ! grep -Fq "M15 6v12a3 0" source/web/src/assets/logo.tsx
-          grep -Fq "<a href='/sign-in'" source/web/src/features/home/tokenway-landing.tsx
-
-      - name: Restore TokenWay homepage reference images
+                - name: Restore TokenWay homepage reference images
         shell: bash
         run: |
           set -Eeuo pipefail
