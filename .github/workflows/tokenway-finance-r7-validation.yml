@@ -76,13 +76,13 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Checkout pinned TokenWay homepage brand source
+      - name: Checkout pinned complete TokenWay validation and brand snapshot
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
           repository: shanghailaofashi001/tokenway-v11-dev
-          ref: ed919cdf9ed483ef0ff9344b65950cc5e090ee92
+          ref: d2494da77bc59b7edb4082bb2a594f24997b6ece
           token: ${{ secrets.TOKENWAY_SOURCE_READ_TOKEN }}
-          path: private-brand
+          path: private-validation
           fetch-depth: 1
           persist-credentials: false
 
@@ -93,10 +93,13 @@ jobs:
           test -d private/.tokenway-validation
           test -d private/.tokenway-patches
           cp -a private/.tokenway-validation .
+          cp -a private-validation/.tokenway-validation/. .tokenway-validation/
           cp -a private/.tokenway-patches .
           mkdir -p web/src/routes web/src/assets/tokenway-home
-          test -s private-brand/web/src/routes/docs.tsx\n          cp private-brand/web/src/routes/docs.tsx web/src/routes/docs.tsx
-          test -s private-brand/web/src/assets/tokenway-home/hero-scene.webp\n          cp private-brand/web/src/assets/tokenway-home/hero-scene.webp web/src/assets/tokenway-home/hero-scene.webp
+          test -s private-validation/web/src/routes/docs.tsx
+          cp private-validation/web/src/routes/docs.tsx web/src/routes/docs.tsx
+          test -s private-validation/web/src/assets/tokenway-home/hero-scene.webp
+          cp private-validation/web/src/assets/tokenway-home/hero-scene.webp web/src/assets/tokenway-home/hero-scene.webp
           test -s .tokenway-validation/R7-finance-migration.patch.b64
           test -s .tokenway-validation/apply-task-quota-persistence-guard.py
           echo "Private validation inputs restored; source remains runner-local."
