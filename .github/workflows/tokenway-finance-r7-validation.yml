@@ -76,6 +76,16 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
+      - name: Checkout pinned TokenWay homepage brand source
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          repository: shanghailaofashi001/tokenway-v11-dev
+          ref: ed919cdf9ed483ef0ff9344b65950cc5e090ee92
+          token: ${{ secrets.TOKENWAY_SOURCE_READ_TOKEN }}
+          path: private-brand
+          fetch-depth: 1
+          persist-credentials: false
+
       - name: Restore private build materials into ephemeral runner workspace
         shell: bash
         run: |
@@ -85,8 +95,8 @@ jobs:
           cp -a private/.tokenway-validation .
           cp -a private/.tokenway-patches .
           mkdir -p web/src/routes web/src/assets/tokenway-home
-          cp private/web/src/routes/docs.tsx web/src/routes/docs.tsx
-          cp private/web/src/assets/tokenway-home/hero-scene.webp web/src/assets/tokenway-home/hero-scene.webp
+          test -s private-brand/web/src/routes/docs.tsx\n          cp private-brand/web/src/routes/docs.tsx web/src/routes/docs.tsx
+          test -s private-brand/web/src/assets/tokenway-home/hero-scene.webp\n          cp private-brand/web/src/assets/tokenway-home/hero-scene.webp web/src/assets/tokenway-home/hero-scene.webp
           test -s .tokenway-validation/R7-finance-migration.patch.b64
           test -s .tokenway-validation/apply-task-quota-persistence-guard.py
           echo "Private validation inputs restored; source remains runner-local."
