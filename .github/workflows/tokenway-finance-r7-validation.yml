@@ -634,6 +634,30 @@ jobs:
               if not match:
                   raise SystemExit('R7 patch contains an unparseable file section')
               path = match.group(1)
+              if path == 'controller/plugin_native_e2e_test.go':
+                  target = Path(path)
+                  source = target.read_text(encoding='utf-8')
+                  for test_name in (
+                      'TestKlingNativeRouteSubmitPollSettleAndQuery',
+                      'TestDoubaoRelayedImageStreamSettlement',
+                  ):
+                      start_match = re.search(r'(?m)^func ' + re.escape(test_name) + r'\\(', source)
+                      if not start_match:
+                          raise SystemExit(f'{path}: missing fixture test {test_name}')
+                      next_match = re.search(r'(?m)^func ', source[start_match.end():])
+                      end = start_match.end() + next_match.start() if next_match else len(source)
+                      region = source[start_match.start():end]
+                      calls = list(re.finditer(r'database\\.AutoMigrate\\(([^)]*)\\)', region))
+                      if len(calls) != 1:
+                          raise SystemExit(f'{path}: expected one AutoMigrate call in {test_name}, found {len(calls)}')
+                      if 'model.WalletLedger{}' not in calls[0].group(1):
+                          call = calls[0].group(0)
+                          replacement_call = call[:-1] + ', &model.WalletLedger{})'
+                          region = region[:calls[0].start()] + replacement_call + region[calls[0].end():]
+                          source = source[:start_match.start()] + region + source[end:]
+                  target.write_text(source, encoding='utf-8')
+                  applied.append(path + '#wallet-ledger-migrations')
+                  continue
               temp.write_text(section, encoding='utf-8')
               check = subprocess.run(['git', 'apply', '--check', str(temp)], text=True, capture_output=True)
               if check.returncode == 0:
