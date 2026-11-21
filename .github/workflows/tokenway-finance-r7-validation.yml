@@ -522,7 +522,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          export GOPROXY=off GOSUMDB=off GOTOOLCHAIN=local GOMAXPROCS=1
+          export GOPROXY=off GOSUMDB=off GOTOOLCHAIN=local GOMAXPROCS=1 GOFLAGS="-mod=vendor -p=1"
           log_dir="$RUNNER_TEMP/tokenway-go-test-logs"
           mkdir -p "$log_dir"
           package_list="$RUNNER_TEMP/tokenway-root-packages.txt"
@@ -543,8 +543,10 @@ jobs:
               hash="$(printf '%s' "$pkg" | sha256sum | cut -c1-12)"
               logfile="$log_dir/root-w${worker}-${hash}.jsonl"
               echo "WORKER ${worker}: ${pkg}"
-              if ! mysql --protocol=TCP -h127.0.0.1 -uroot -ptokenway-test -e "DROP DATABASE IF EXISTS \`${mysql_db}\`; CREATE DATABASE \`${mysql_db}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" || \\
-                 ! PGPASSWORD=tokenway-test psql -h127.0.0.1 -Utokenway -d postgres -v ON_ERROR_STOP=1 -c "DROP DATABASE IF EXISTS \"${pg_db}\" WITH (FORCE)" -c "CREATE DATABASE \"${pg_db}\""; then
+              db_ok=1
+              mysql --protocol=TCP -h127.0.0.1 -uroot -ptokenway-test -e "DROP DATABASE IF EXISTS \`${mysql_db}\`; CREATE DATABASE \`${mysql_db}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" || db_ok=0
+              PGPASSWORD=tokenway-test psql -h127.0.0.1 -Utokenway -d postgres -v ON_ERROR_STOP=1 -c "DROP DATABASE IF EXISTS \"${pg_db}\" WITH (FORCE)" -c "CREATE DATABASE \"${pg_db}\"" || db_ok=0
+              if [ "$db_ok" -ne 1 ]; then
                 echo "FAIL: ${pkg} (isolated database provisioning)" | tee -a "$log_dir/root-failures.txt" "$log_dir/root-summary.txt"
                 continue
               fi
