@@ -490,27 +490,44 @@ jobs:
               if path == 'router/relay-router.go':
                   target = Path(path)
                   current = target.read_text(encoding='utf-8')
-                  missing = [
-                      imp for imp in (
-                          'github.com/QuantumNous/new-api/common',
-                          'github.com/QuantumNous/new-api/service',
-                      ) if f'"{imp}"' not in current
-                  ]
-                  if missing:
-                      anchor = '\t"strings"\n'
-                      if current.count(anchor) != 1:
-                          raise SystemExit('relay-router.go import anchor is ambiguous; refusing rewrite')
-                      current = current.replace(anchor, anchor + '\n' + ''.join(f'\t"{imp}"\n' for imp in missing), 1)
-                      target.write_text(current, encoding='utf-8')
-                  if hunks:
-                      hunks = hunks[1:]  # imports are handled idempotently above
-                  print('router markers: ' + ', '.join(
-                      f'{label}={marker in current}' for label, marker in (
-                          ('group-selection', 'func playgroundGroupSelection() gin.HandlerFunc {'),
-                          ('image-route', 'playgroundImageRouter.POST("/images/generations"'),
-                          ('video-route', 'playgroundVideoRouter.POST("/videos"'),
-                      )
-                  ))
+                  for imp in (
+                      'github.com/QuantumNous/new-api/common',
+                      'github.com/QuantumNous/new-api/service',
+                  ):
+                      if f'"{imp}"' not in current:
+                          anchor = '\t"strings"\n'
+                          if current.count(anchor) != 1:
+                              raise SystemExit('relay-router.go import anchor is ambiguous')
+                          current = current.replace(anchor, anchor + f'\n\t"{imp}"\n', 1)
+                  if len(hunks) < 3:
+                      raise SystemExit('relay-router.go patch does not contain the expected three hunks')
+                  def added(hunk):
+                      return '\n'.join(line[1:] for line in hunk.splitlines() if line.startswith('+') and not line.startswith('+++'))
+                  if 'func playgroundGroupSelection() gin.HandlerFunc {' not in current:
+                      helper = added(hunks[1])
+                      anchor = 'func SetRelayRouter(router *gin.Engine) {'
+                      if not helper or current.count(anchor) != 1:
+                          raise SystemExit('cannot safely insert playground group-selection middleware')
+                      current = current.replace(anchor, helper + '\n\n' + anchor, 1)
+                      applied.append(path + '#group-selection')
+                  else:
+                      already.append(path + '#group-selection')
+                  image_marker = 'playgroundImageRouter.POST("/images/generations"'
+                  video_marker = 'playgroundVideoRouter.POST("/videos"'
+                  has_image, has_video = image_marker in current, video_marker in current
+                  if has_image != has_video:
+                      raise SystemExit('relay-router.go has a partial image/video route pair; manual reconciliation required')
+                  if not has_image:
+                      routes = added(hunks[2])
+                      anchor = '\trelayV1Router := router.Group("/v1")'
+                      if not routes or current.count(anchor) != 1:
+                          raise SystemExit('cannot safely insert playground image/video routes')
+                      current = current.replace(anchor, routes + '\n' + anchor, 1)
+                      applied.append(path + '#image-video-routes')
+                  else:
+                      already.append(path + '#image-video-routes')
+                  target.write_text(current, encoding='utf-8')
+                  continue
               if not hunks:
                   already.append(path)
                   continue
