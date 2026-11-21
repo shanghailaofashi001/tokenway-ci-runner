@@ -412,7 +412,7 @@ jobs:
               source = (root / name).read_text(encoding='utf-8')
               sections = re.split(r'(?=^--- a/)', source, flags=re.MULTILINE)
               kept = [part for part in sections if not re.search(r'^--- a/web/src/test-setup[.]ts$', part, flags=re.MULTILINE)]
-              Path('/tmp' / name).write_text(''.join(kept), encoding='utf-8')
+              (Path('/tmp') / name).write_text(''.join(kept), encoding='utf-8')
           PY
           patch --batch --forward --dry-run -p1 < /tmp/TOKENWAY-CNY-DEFAULT-TEST-FIX.patch
           patch --batch --forward -p1 < /tmp/TOKENWAY-CNY-DEFAULT-TEST-FIX.patch
