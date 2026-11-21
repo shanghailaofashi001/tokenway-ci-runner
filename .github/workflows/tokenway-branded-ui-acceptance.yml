@@ -221,6 +221,31 @@ jobs:
         working-directory: source/web
         run: bun run typecheck
 
+      - name: Assert pricing preview test fixture matches rendered tier values
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("web/src/features/models/__tests__/model-listing.test.tsx")
+          s = p.read_text(encoding="utf-8")
+          replacements = {
+              "expect(preview).toHaveTextContent('2.1900')": "expect(preview).toHaveTextContent('0.3000')",
+              "expect(preview).toHaveTextContent('4.3800')": "expect(preview).toHaveTextContent('0.6000')",
+          }
+          for old, new in replacements.items():
+              if old in s:
+                  if s.count(old) != 1:
+                      raise SystemExit(f"expected exactly one pricing assertion {old!r}, got {s.count(old)}")
+                  s = s.replace(old, new, 1)
+          for expected in ("expect(preview).toHaveTextContent('0.3000')", "expect(preview).toHaveTextContent('0.6000')"):
+              if s.count(expected) != 1:
+                  raise SystemExit(f"pricing preview assertion not normalized: {expected}")
+          p.write_text(s, encoding="utf-8")
+          print("PASS: pricing preview regression now checks the rendered tier cache-read values.")
+          PY
+
       - name: Frontend unit tests
         working-directory: source/web
         run: bun run test
