@@ -110,7 +110,7 @@ jobs:
           # Keep tests deterministic after TokenWay's production CNY default:
           # test fixtures explicitly select USD where assertions expect USD,
           # and isolate persisted currency preferences between test cases.
-          for patch_file in TOKENWAY-CNY-TEST-IMPORT-CLEANUP.patch TOKENWAY-CNY-TEST-STATE-FIX.patch TOKENWAY-CNY-TEST-ISOLATION-FIX.patch; do
+          for patch_file in TOKENWAY-CNY-TEST-STATE-FIX.patch TOKENWAY-CNY-TEST-ISOLATION-FIX.patch; do
             patch_path="../private/.tokenway-validation/brand-h3/$patch_file"
             (cd source && patch --batch --forward --dry-run -p1 < "$patch_path")
             (cd source && patch --batch --forward -p1 < "$patch_path")

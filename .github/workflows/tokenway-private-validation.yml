@@ -210,8 +210,8 @@ jobs:
           grep -Fq "TEST_USD_CURRENCY_CONFIG" web/src/test-setup.ts
           test -s web/src/test-utils/currency.ts
           echo "PASS: CNY default test fixture is already included in the H3 reference patch"
-          patch --batch --forward --dry-run -p1 < ../private/.tokenway-validation/brand-h3/TOKENWAY-CNY-TEST-IMPORT-CLEANUP.patch
-          patch --batch --forward -p1 < ../private/.tokenway-validation/brand-h3/TOKENWAY-CNY-TEST-IMPORT-CLEANUP.patch
+          grep -Fq "TEST_USD_CURRENCY_CONFIG" web/src/features/usage-logs/components/__tests__/detail-preview.test.tsx
+          grep -Fq "TEST_USD_CURRENCY_CONFIG" web/src/features/usage-logs/components/__tests__/quota-adjustment.test.tsx
           patch --batch --forward --dry-run -p1 < ../private/.tokenway-validation/brand-h3/TOKENWAY-CNY-TEST-STATE-FIX.patch
           patch --batch --forward -p1 < ../private/.tokenway-validation/brand-h3/TOKENWAY-CNY-TEST-STATE-FIX.patch
           patch --batch --forward --dry-run -p1 < ../private/.tokenway-validation/brand-h3/TOKENWAY-CNY-TEST-ISOLATION-FIX.patch
