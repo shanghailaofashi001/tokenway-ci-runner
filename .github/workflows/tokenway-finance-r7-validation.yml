@@ -114,7 +114,7 @@ jobs:
           grep -Fq "accessTokenSessionRule" source/middleware/access_token_routes.go
           git -C source diff --check
           echo "Exact branded V11 source baseline assembled."
-      - name: Apply fail-closed S3 and H3 billing safety overlay
+      - name: Apply H3 fail-closed guard without duplicating the separately validated S3 layer
         working-directory: source
         shell: bash
         run: |
@@ -134,7 +134,20 @@ jobs:
           blocked = {
               'docs/TOKENWAY-AI-DEPLOYMENT.md',
               'plugins/hailuo_responses_test.go',
+              'service/task_artifact_store.go',
               'service/task_artifact_store_test.go',
+              'service/task_artifact_s3_test.go',
+              'service/task_artifact_retention.go',
+              'service/task_artifact_retention_test.go',
+              'service/task_artifact_retention_p1_test.go',
+              'setting/system_setting/task_artifact_store.go',
+              'setting/system_setting/task_artifact_store_test.go',
+              'model/task_artifact_retention.go',
+              'model/system_task.go',
+              'controller/video_proxy.go',
+              'controller/task_generic_test.go',
+              'controller/task_artifact_capture.go',
+              'controller/task_artifact_capture_test.go',
               'web/src/routes/docs.tsx',
           }
           sections = re.split(r'(?=^diff --git a/)', source, flags=re.MULTILINE)
@@ -148,13 +161,11 @@ jobs:
           PY
           patch --batch --forward --dry-run -p1 < /tmp/tokenway-s3-h3-safety.patch
           patch --batch --forward -p1 < /tmp/tokenway-s3-h3-safety.patch
-          python3 ../.tokenway-validation/brand-h3/apply-rc52-s3-config-fail-closed.py
           node --check plugins/tasks/hailuo/plugin.js
           grep -Fq 'h3_context_ir' plugins/tasks/hailuo/plugin.js
           grep -Fq 'video_regeneration' plugins/tasks/hailuo/plugin.js
           grep -Fq 'Context-IR is temporarily disabled' plugins/tasks/hailuo/plugin.js
-          grep -Fq 'An explicitly requested but invalid S3 configuration remains in S3 mode' setting/system_setting/task_artifact_store.go
-          echo "PASS: fail-closed S3/H3 safety overlay applied."
+          echo "PASS: H3 Context-IR fail-closed guard applied; S3 layer remains covered by its separate full validation."
 
       - name: Restore preserved TokenWay homepage media assets
         working-directory: source
@@ -289,45 +300,6 @@ jobs:
       - name: Guard task quota persistence for unpersisted billing fixtures
         working-directory: source
         run: python3 ../.tokenway-validation/apply-task-quota-persistence-guard.py
-
-      - name: Guard artifact downloads when explicit S3 storage is unavailable
-        working-directory: source
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 ../.tokenway-validation/brand-h3/apply-rc52-controller-artifact-fail-closed.py
-          grep -Fq 'TaskArtifactStoreFailClosed()' controller/task.go
-          grep -Fq 'TaskArtifactStoreFailClosed()' controller/video_proxy.go
-
-      - name: Guard runtime artifact persistence failures
-        working-directory: source
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 ../.tokenway-validation/brand-h3/apply-rc52-s3-runtime-write-fail-closed.py
-          python3 ../.tokenway-validation/brand-h3/apply-rc52-s3-runtime-range-safe.py
-          grep -Fq 'proxyTaskMediaWithArtifactUsingStore' controller/video_proxy.go
-          grep -Fq 'TestProxyTaskMediaFailsClosedWhenS3PersistFails' controller/task_generic_test.go
-
-      - name: Initialize S3 store after dotenv
-        working-directory: source
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 ../.tokenway-validation/brand-h3/apply-rc52-s3-env-load-order.py
-          grep -Fq 'service.InitTaskArtifactStore()' main.go
-          grep -Fq 'TestTaskArtifactStoreInitializesAfterDotEnvLoad' service/task_artifact_store_test.go
-          grep -Fq 'taskArtifactStoreInitMu sync.RWMutex' service/task_artifact_store.go
-
-      - name: Persist JSON ContentPath artifacts before serving
-        working-directory: source
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 ../.tokenway-validation/brand-h3/apply-rc52-s3-contentpath-fail-closed.py
-          grep -Fq 'persistTaskMediaContentPath(' controller/video_proxy.go
-          grep -Fq 'TestProxyTaskMediaContentPathPersistsBeforeServing' controller/task_generic_test.go
-          grep -Fq 'TestProxyTaskMediaContentPathFailsClosedWhenS3PersistFails' controller/task_generic_test.go
 
       - name: Set up isolated Go 1.26.10 toolchain
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
