@@ -458,6 +458,81 @@ jobs:
               raise SystemExit(f"expected exactly one makeTask fixture anchor, got {s.count(old)}")
           p.write_text(s.replace(old, new, 1), encoding="utf-8")
           print("Task billing test fixture now mirrors production InitTask pending state.")
+
+          # R7 subscription reservation and wallet-ledger tables must exist in the
+          # isolated SQLite fixtures that exercise real task settlement/refunds.
+          p = Path("service/task_billing_test.go")
+          s = p.read_text(encoding="utf-8")
+          old = """          &model.TaskTokenQuotaLedger{},
+          &model.User{},"""
+          new = """          &model.TaskTokenQuotaLedger{},
+          &model.SubscriptionPreConsumeRecord{},
+          &model.User{},"""
+          if s.count(old) != 1:
+              raise SystemExit(f"expected one service TestMain migration anchor, got {s.count(old)}")
+          s = s.replace(old, new, 1)
+          old = """          model.DB.Exec("DELETE FROM task_token_quota_ledgers")
+          model.DB.Exec("DELETE FROM users")"""
+          new = """          model.DB.Exec("DELETE FROM task_token_quota_ledgers")
+          model.DB.Exec("DELETE FROM subscription_pre_consume_records")
+          model.DB.Exec("DELETE FROM users")"""
+          if s.count(old) != 1:
+              raise SystemExit(f"expected one service cleanup anchor, got {s.count(old)}")
+          p.write_text(s.replace(old, new, 1), encoding="utf-8")
+          print("Service fixture now migrates and cleans subscription pre-consume records.")
+
+          p = Path("controller/relay_task_plugin_test.go")
+          s = p.read_text(encoding="utf-8")
+          old = "openTaskDialectDatabase(t, &model.User{}, &model.Channel{}, &model.Task{}, &model.Log{})"
+          new = """openTaskDialectDatabase(t,
+              &model.User{}, &model.Channel{}, &model.Task{}, &model.Log{}, &model.Option{},
+              &model.WalletLedger{}, &model.RequestBillingJournal{}, &model.RequestTokenQuotaLedger{},
+              &model.SubscriptionUsageLedger{}, &model.TaskSubscriptionBillingLedger{},
+              &model.TaskTokenQuotaLedger{}, &model.SubscriptionPreConsumeRecord{},
+          )"""
+          if s.count(old) != 1:
+              raise SystemExit(f"expected one immediate settlement fixture anchor, got {s.count(old)}")
+          p.write_text(s.replace(old, new, 1), encoding="utf-8")
+          print("Immediate task settlement fixture now migrates R7 options and ledger tables.")
+
+          p = Path("relay/relay_task_test.go")
+          s = p.read_text(encoding="utf-8")
+          old = "database.AutoMigrate(&model.Task{}, &model.User{}, &model.Log{})"
+          new = """database.AutoMigrate(
+              &model.Task{}, &model.User{}, &model.Log{}, &model.Option{},
+              &model.WalletLedger{}, &model.RequestBillingJournal{}, &model.RequestTokenQuotaLedger{},
+              &model.SubscriptionUsageLedger{}, &model.TaskSubscriptionBillingLedger{},
+              &model.TaskTokenQuotaLedger{}, &model.SubscriptionPreConsumeRecord{},
+          )"""
+          if s.count(old) != 1:
+              raise SystemExit(f"expected one realtime refund fixture anchor, got {s.count(old)}")
+          p.write_text(s.replace(old, new, 1), encoding="utf-8")
+          print("Realtime task refund fixture now migrates R7 wallet and billing ledger tables.")
+
+          # A successful durable settlement-plan write means billing is handled,
+          # even when the pre-consumed amount is intentionally retained unchanged.
+          p = Path("service/task_billing_test.go")
+          s = p.read_text(encoding="utf-8")
+          start = s.index("func TestSettle_TokenRecalcFallsBackToCompletionTokens")
+          end = s.index("\nfunc TestSettle_PerCallBilling_SkipsAdaptorAdjust", start)
+          block = s[start:end]
+          old = 'name: "neither token count skips recalc",\n\t\t\twantSettled:      false,'
+          new = 'name: "neither token count keeps pre-consume with durable plan",\n\t\t\twantSettled:      true,'
+          if block.count(old) != 1:
+              raise SystemExit("expected one no-token durable-plan expectation")
+          s = s[:start] + block.replace(old, new, 1) + s[end:]
+          for name, next_name in [
+              ("func TestSettle_PerCallBilling_SkipsAdaptorAdjust", "func TestSettle_PerCallBilling_SkipsTotalTokens"),
+              ("func TestSettle_PerCallBilling_SkipsTotalTokens", "func TestSettle_NonPerCallBilling_AppliesAdaptorAdjustment"),
+          ]:
+              start = s.index(name)
+              end = s.index("\n"+next_name, start)
+              block = s[start:end]
+              if block.count("assert.False(t, settled)") != 1:
+                  raise SystemExit(f"expected one settled assertion in {name}")
+              s = s[:start] + block.replace("assert.False(t, settled)", "assert.True(t, settled)", 1) + s[end:]
+          p.write_text(s, encoding="utf-8")
+          print("Task billing tests now assert durable-plan ownership while retaining quota invariants.")
           PY
           git diff --check
 
