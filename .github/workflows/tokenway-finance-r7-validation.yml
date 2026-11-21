@@ -468,6 +468,8 @@ jobs:
           new = """          &model.TaskTokenQuotaLedger{},
           &model.SubscriptionPreConsumeRecord{},
           &model.User{},"""
+          old = "\n".join(line[10:] if line.startswith("          ") else line for line in old.splitlines())
+          new = "\n".join(line[10:] if line.startswith("          ") else line for line in new.splitlines())
           if s.count(old) != 1:
               raise SystemExit(f"expected one service TestMain migration anchor, got {s.count(old)}")
           s = s.replace(old, new, 1)
@@ -476,6 +478,8 @@ jobs:
           new = """          model.DB.Exec("DELETE FROM task_token_quota_ledgers")
           model.DB.Exec("DELETE FROM subscription_pre_consume_records")
           model.DB.Exec("DELETE FROM users")"""
+          old = "\n".join(line[10:] if line.startswith("          ") else line for line in old.splitlines())
+          new = "\n".join(line[10:] if line.startswith("          ") else line for line in new.splitlines())
           if s.count(old) != 1:
               raise SystemExit(f"expected one service cleanup anchor, got {s.count(old)}")
           p.write_text(s.replace(old, new, 1), encoding="utf-8")
@@ -561,6 +565,7 @@ jobs:
           	return ts
           }
           """
+          old = "\n".join(line[10:] if line.startswith("          ") else line for line in old.splitlines()) + "\n"
           new = """package model
 
           import (
@@ -601,6 +606,7 @@ jobs:
           	return ts
           }
           """
+          new = "\n".join(line[10:] if line.startswith("          ") else line for line in new.splitlines()) + "\n"
           if s.count(old) != 1:
               raise SystemExit("expected exact original model/db_time.go implementation")
           p.write_text(s.replace(old, new, 1), encoding="utf-8")
