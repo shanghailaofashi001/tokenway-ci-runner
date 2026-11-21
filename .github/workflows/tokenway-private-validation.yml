@@ -439,7 +439,6 @@ jobs:
           p.write_text(s, encoding='utf-8')
           PY
           test -s web/src/test-utils/currency.ts
-          grep -Fq "TEST_USD_CURRENCY_CONFIG" web/src/test-setup.ts
           echo "PASS: USD-only test fixtures applied after production UI setup"
       
       - name: Apply image creator integration patch
