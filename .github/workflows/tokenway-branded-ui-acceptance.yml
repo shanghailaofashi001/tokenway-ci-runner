@@ -28,7 +28,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: shanghailaofashi001/tokenway-v11-dev
-          ref: e894063f2c59b8cbe5b9356929b0da6f115c1136
+          ref: ed919cdf9ed483ef0ff9344b65950cc5e090ee92
           token: ${{ secrets.TOKENWAY_SOURCE_READ_TOKEN }}
           path: private
           fetch-depth: 1
