@@ -465,17 +465,52 @@ jobs:
           grep -Fq "usdExchangeRate: 7.3" web/src/stores/system-config-store.ts
           echo "PASS: production CNY defaults and isolated USD test fixtures verified"
       
-      - name: Apply image creator integration patch
+      - name: Apply image creator integration patch idempotently
         working-directory: source
         shell: bash
         run: |
-          if git apply --recount ../.tokenway-validation/image-creator.patch >/tmp/tokenway-image-creator-patch.log 2>&1; then
-            echo "PASS: image creator integration patch"
-          else
-            echo "FAIL: image creator integration patch; sanitized git apply diagnostics:"
-            tail -n 20 /tmp/tokenway-image-creator-patch.log | sed -E 's#(/home/runner/[^ ]*)#<runner-path>#g; s#(gh[pousr]_[A-Za-z0-9_]+)#<redacted>#g'
-            exit 1
-          fi
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          import subprocess
+          patch_text = Path('../.tokenway-validation/image-creator.patch').read_text(encoding='utf-8')
+          sections = re.split(r'(?=^diff --git a/)', patch_text, flags=re.MULTILINE)
+          applied, already = [], []
+          temp = Path('/tmp/tokenway-image-creator-section.patch')
+          router_markers = (
+              'func playgroundGroupSelection() gin.HandlerFunc {',
+              'playgroundImageRouter.POST("/images/generations"',
+              'playgroundVideoRouter.POST("/videos"',
+          )
+          for section in sections:
+              if not section.startswith('diff --git a/'):
+                  continue
+              match = re.search(r'^diff --git a/(\S+) b/', section, flags=re.MULTILINE)
+              if not match:
+                  raise SystemExit('image creator patch contains an unparseable file section')
+              path = match.group(1)
+              if path == 'router/relay-router.go':
+                  current = Path(path).read_text(encoding='utf-8')
+                  if all(marker in current for marker in router_markers):
+                      already.append(path)
+                      continue
+              temp.write_text(section, encoding='utf-8')
+              check = subprocess.run(['git', 'apply', '--recount', '--check', str(temp)], text=True, capture_output=True)
+              if check.returncode == 0:
+                  subprocess.run(['git', 'apply', '--recount', str(temp)], check=True)
+                  applied.append(path)
+                  continue
+              reverse = subprocess.run(['git', 'apply', '--recount', '--reverse', '--check', str(temp)], text=True, capture_output=True)
+              if reverse.returncode == 0:
+                  already.append(path)
+                  continue
+              detail = (check.stderr or check.stdout or reverse.stderr or reverse.stdout).strip()
+              raise SystemExit(f'image creator patch conflict at {path}: {detail[:1200]}')
+          print(f'PASS: image creator patch sections applied={len(applied)} already-present={len(already)}')
+          print('Applied: ' + ', '.join(applied))
+          print('Already present: ' + ', '.join(already))
+          PY
 
       - name: Register image creator route tree
         working-directory: source
