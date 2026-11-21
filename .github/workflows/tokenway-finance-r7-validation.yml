@@ -19,12 +19,46 @@ jobs:
   validate:
     name: Assemble branded V11 source, apply R7, test all modules and frontend
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 120
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: tokenway-test
+          MYSQL_DATABASE: tokenway_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -ptokenway-test"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=18
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: tokenway
+          POSTGRES_PASSWORD: tokenway-test
+          POSTGRES_DB: tokenway_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U tokenway -d tokenway_test"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=18
     env:
       GOWORK: "off"
       GOTOOLCHAIN: "local"
       GOMAXPROCS: "1"
       GOFLAGS: "-p=1"
+      TEST_MYSQL_DSN: root:tokenway-test@tcp(127.0.0.1:3306)/tokenway_test?charset=utf8mb4&parseTime=True&loc=Local
+      TEST_POSTGRES_DSN: postgres://tokenway:tokenway-test@127.0.0.1:5432/tokenway_test?sslmode=disable
+      TEST_MYSQL_LOG_DSN: root:tokenway-test@tcp(127.0.0.1:3306)/tokenway_test?charset=utf8mb4&parseTime=True&loc=Local
+      TEST_POSTGRES_LOG_DSN: postgres://tokenway:tokenway-test@127.0.0.1:5432/tokenway_test?sslmode=disable
+      TEST_FIXED_MYSQL_DSN: root:tokenway-test@tcp(127.0.0.1:3306)/tokenway_test?charset=utf8mb4&parseTime=True&loc=Local
+      TEST_FIXED_MYSQL_LOG_DSN: root:tokenway-test@tcp(127.0.0.1:3306)/tokenway_test?charset=utf8mb4&parseTime=True&loc=Local
+      TEST_FIXED_POSTGRES_DSN: postgres://tokenway:tokenway-test@127.0.0.1:5432/tokenway_test?sslmode=disable
+      TEST_FIXED_POSTGRES_LOG_DSN: postgres://tokenway:tokenway-test@127.0.0.1:5432/tokenway_test?sslmode=disable
 
     steps:
       - name: Checkout public CI orchestrator
@@ -338,13 +372,34 @@ jobs:
           fi
           echo "Changed/new Go files are gofmt-clean."
 
-      - name: Run finance-specific regression tests
+      - name: Download and verify Go modules
+        working-directory: source
+        run: |
+          set -euo pipefail
+          go mod download
+          go mod verify
+          (cd relaykit && go mod download && go mod verify)
+          (cd tokenkit && go mod download && go mod verify)
+
+      - name: Run finance controller regression tests
         working-directory: source
         run: |
           set -euo pipefail
           mkdir -p web/dist
           printf '<!doctype html><html></html>\n' > web/dist/index.html
-          go test -v -timeout 3m ./controller ./model ./service -count=1 -run 'Test(NowPayments.*|GetNowPayments.*|ApplyWalletQuotaDelta.*|ApplyTaskWalletQuotaDelta.*|BackfillWalletOpeningBalances.*|TransferAffQuotaToQuota.*|LegacyUserQuotaHelpersAlwaysWriteWalletLedger|RecordWalletOpeningBalanceTxWritesOnlyOpeningLedger|UserCheckinCreditsWalletAndLedgerInOneTransaction|RedeemCreditsQuotaExactlyOnce|RedeemRejectsWalletOverflow|RequestBillingJournal.*|UnknownRequestOutcome.*|ApplySubscriptionUsageDelta.*|CleanupSubscriptionPreConsumeRecordsRetainsUnresolvedReservations|PostConsumeUserSubscriptionDeltaRejectsOverflowAndInvalidState|PreConsumeUserSubscription.*|RefundSubscriptionPreConsumeIsAtomicAndIdempotent|SettleSubscriptionPreConsumeIsIdempotentAndClosesRefundPath|SubscriptionExtraReserveIsTrackedAndRefundedAtomically|SubscriptionPreConsumeHeartbeatWinsStaleReview|SubscriptionPreConsumeReviewBlocksSettlementAndRefund|SubscriptionRefundEscapesRequestIDLikeWildcards|SubscriptionSettlementIntentCanBeRecovered|ApplyTaskSubscriptionQuotaDelta.*|TaskSubscriptionSettlementAtomicallyAdjustsTokenAndUsageCounters|BillingRecoveryUsesSingleCombinedScheduledHandler)'
+          go test -v -timeout 5m ./controller -count=1 -run 'Test(NowPayments.*|GetNowPayments.*|ApplyWalletQuotaDelta.*|ApplyTaskWalletQuotaDelta.*|BackfillWalletOpeningBalances.*|TransferAffQuotaToQuota.*|LegacyUserQuotaHelpersAlwaysWriteWalletLedger|RecordWalletOpeningBalanceTxWritesOnlyOpeningLedger|UserCheckinCreditsWalletAndLedgerInOneTransaction|RedeemCreditsQuotaExactlyOnce|RedeemRejectsWalletOverflow|RequestBillingJournal.*|UnknownRequestOutcome.*|ApplySubscriptionUsageDelta.*|CleanupSubscriptionPreConsumeRecordsRetainsUnresolvedReservations|PostConsumeUserSubscriptionDeltaRejectsOverflowAndInvalidState|PreConsumeUserSubscription.*|RefundSubscriptionPreConsumeIsAtomicAndIdempotent|SettleSubscriptionPreConsumeIsIdempotentAndClosesRefundPath|SubscriptionExtraReserveIsTrackedAndRefundedAtomically|SubscriptionPreConsumeHeartbeatWinsStaleReview|SubscriptionPreConsumeReviewBlocksSettlementAndRefund|SubscriptionRefundEscapesRequestIDLikeWildcards|SubscriptionSettlementIntentCanBeRecovered|ApplyTaskSubscriptionQuotaDelta.*|TaskSubscriptionSettlementAtomicallyAdjustsTokenAndUsageCounters|BillingRecoveryUsesSingleCombinedScheduledHandler)'
+
+      - name: Run finance model regression tests
+        working-directory: source
+        run: |
+          set -euo pipefail
+          go test -v -timeout 5m ./model -count=1 -run 'Test(NowPayments.*|GetNowPayments.*|ApplyWalletQuotaDelta.*|ApplyTaskWalletQuotaDelta.*|BackfillWalletOpeningBalances.*|TransferAffQuotaToQuota.*|LegacyUserQuotaHelpersAlwaysWriteWalletLedger|RecordWalletOpeningBalanceTxWritesOnlyOpeningLedger|UserCheckinCreditsWalletAndLedgerInOneTransaction|RedeemCreditsQuotaExactlyOnce|RedeemRejectsWalletOverflow|RequestBillingJournal.*|UnknownRequestOutcome.*|ApplySubscriptionUsageDelta.*|CleanupSubscriptionPreConsumeRecordsRetainsUnresolvedReservations|PostConsumeUserSubscriptionDeltaRejectsOverflowAndInvalidState|PreConsumeUserSubscription.*|RefundSubscriptionPreConsumeIsAtomicAndIdempotent|SettleSubscriptionPreConsumeIsIdempotentAndClosesRefundPath|SubscriptionExtraReserveIsTrackedAndRefundedAtomically|SubscriptionPreConsumeHeartbeatWinsStaleReview|SubscriptionPreConsumeReviewBlocksSettlementAndRefund|SubscriptionRefundEscapesRequestIDLikeWildcards|SubscriptionSettlementIntentCanBeRecovered|ApplyTaskSubscriptionQuotaDelta.*|TaskSubscriptionSettlementAtomicallyAdjustsTokenAndUsageCounters|BillingRecoveryUsesSingleCombinedScheduledHandler)'
+
+      - name: Run finance service regression tests
+        working-directory: source
+        run: |
+          set -euo pipefail
+          go test -v -timeout 5m ./service -count=1 -run 'Test(NowPayments.*|GetNowPayments.*|ApplyWalletQuotaDelta.*|ApplyTaskWalletQuotaDelta.*|BackfillWalletOpeningBalances.*|TransferAffQuotaToQuota.*|LegacyUserQuotaHelpersAlwaysWriteWalletLedger|RecordWalletOpeningBalanceTxWritesOnlyOpeningLedger|UserCheckinCreditsWalletAndLedgerInOneTransaction|RedeemCreditsQuotaExactlyOnce|RedeemRejectsWalletOverflow|RequestBillingJournal.*|UnknownRequestOutcome.*|ApplySubscriptionUsageDelta.*|CleanupSubscriptionPreConsumeRecordsRetainsUnresolvedReservations|PostConsumeUserSubscriptionDeltaRejectsOverflowAndInvalidState|PreConsumeUserSubscription.*|RefundSubscriptionPreConsumeIsAtomicAndIdempotent|SettleSubscriptionPreConsumeIsIdempotentAndClosesRefundPath|SubscriptionExtraReserveIsTrackedAndRefundedAtomically|SubscriptionPreConsumeHeartbeatWinsStaleReview|SubscriptionPreConsumeReviewBlocksSettlementAndRefund|SubscriptionRefundEscapesRequestIDLikeWildcards|SubscriptionSettlementIntentCanBeRecovered|ApplyTaskSubscriptionQuotaDelta.*|TaskSubscriptionSettlementAtomicallyAdjustsTokenAndUsageCounters|BillingRecoveryUsesSingleCombinedScheduledHandler)'
 
       - name: Vet root, relaykit, and tokenkit modules
         working-directory: source
