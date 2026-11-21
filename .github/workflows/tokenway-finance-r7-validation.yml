@@ -372,34 +372,60 @@ jobs:
           fi
           echo "Changed/new Go files are gofmt-clean."
 
-      - name: Download and verify root Go modules
-        working-directory: source
+      - name: Restore and vendor Go modules
+        id: go_vendor
         shell: bash
         run: |
-          set -euo pipefail
-          timeout 10m env GOPROXY=https://proxy.golang.org,direct go mod download
-          go mod verify
+          set -Eeuo pipefail
+          for d in source source/relaykit source/tokenkit; do
+            label="${d//\//-}"
+            log="/tmp/tokenway-vendor-${label}.log"
+            echo "===== Go module: ${d} ====="
+            rm -rf "${d}/vendor"
+            if (
+              cd "${d}"
+              export GOWORK=off GOFLAGS= GOTOOLCHAIN=local
+              echo "+ go mod download all"
+              go mod download all || { status=$?; echo "FAILED: go mod download all (${status})"; exit "${status}"; }
+              echo "+ go mod verify"
+              go mod verify || { status=$?; echo "FAILED: go mod verify (${status})"; exit "${status}"; }
+              echo "+ go mod vendor"
+              go mod vendor || { status=$?; echo "FAILED: go mod vendor (${status})"; exit "${status}"; }
+              test -s vendor/modules.txt || { echo "FAILED: vendor/modules.txt missing or empty after go mod vendor"; exit 1; }
+            ) >"${log}" 2>&1; then
+              echo "PASS: fresh vendor generated for ${d}"
+            else
+              status=$?
+              echo "FAIL: Go dependency restore/vendor for ${d} (exit ${status}). Diagnostics:"
+              tail -n 180 "${log}" | sed -E 's#(https?://)[^/@ ]+:[^/@ ]+@#\1<redacted>@#g; s#(gh[pousr]_[A-Za-z0-9_]+)#<redacted>#g; s#(Bearer )[A-Za-z0-9._~-]+#\1<redacted>#g'
+              exit "${status}"
+            fi
+          done
+          test -s source/vendor/modules.txt
 
-      - name: Download and verify relaykit Go modules
-        working-directory: source/relaykit
+      - name: Verify offline dependency graph
+        id: offline_graph
         shell: bash
         run: |
           set -euo pipefail
-          timeout 10m env GOPROXY=https://proxy.golang.org,direct go mod download
-          go mod verify
-
-      - name: Download and verify tokenkit Go modules
-        working-directory: source/tokenkit
-        shell: bash
-        run: |
-          set -euo pipefail
-          timeout 10m env GOPROXY=https://proxy.golang.org,direct go mod download
-          go mod verify
+          export GOPROXY=off GOSUMDB=off GOFLAGS="-mod=vendor -p=1" GOTOOLCHAIN=local
+          for d in source source/relaykit source/tokenkit; do
+            echo "===== Offline dependency graph: ${d} ====="
+            if (cd "${d}" && go list -deps -test ./... >/dev/null) 2>/tmp/tokenway-go-list.err; then
+              echo "PASS: offline dependency graph for ${d}"
+            else
+              status=$?
+              echo "FAIL: offline dependency graph for ${d} (exit ${status})"
+              tail -n 180 /tmp/tokenway-go-list.err
+              exit "${status}"
+            fi
+          done
 
       - name: Run finance controller regression tests
         working-directory: source
         run: |
           set -euo pipefail
+          export GOPROXY=off GOSUMDB=off GOFLAGS="-mod=vendor -p=1" GOTOOLCHAIN=local
           mkdir -p web/dist
           printf '<!doctype html><html></html>\n' > web/dist/index.html
           go test -v -timeout 5m ./controller -count=1 -run 'Test(NowPayments.*|GetNowPayments.*|ApplyWalletQuotaDelta.*|ApplyTaskWalletQuotaDelta.*|BackfillWalletOpeningBalances.*|TransferAffQuotaToQuota.*|LegacyUserQuotaHelpersAlwaysWriteWalletLedger|RecordWalletOpeningBalanceTxWritesOnlyOpeningLedger|UserCheckinCreditsWalletAndLedgerInOneTransaction|RedeemCreditsQuotaExactlyOnce|RedeemRejectsWalletOverflow|RequestBillingJournal.*|UnknownRequestOutcome.*|ApplySubscriptionUsageDelta.*|CleanupSubscriptionPreConsumeRecordsRetainsUnresolvedReservations|PostConsumeUserSubscriptionDeltaRejectsOverflowAndInvalidState|PreConsumeUserSubscription.*|RefundSubscriptionPreConsumeIsAtomicAndIdempotent|SettleSubscriptionPreConsumeIsIdempotentAndClosesRefundPath|SubscriptionExtraReserveIsTrackedAndRefundedAtomically|SubscriptionPreConsumeHeartbeatWinsStaleReview|SubscriptionPreConsumeReviewBlocksSettlementAndRefund|SubscriptionRefundEscapesRequestIDLikeWildcards|SubscriptionSettlementIntentCanBeRecovered|ApplyTaskSubscriptionQuotaDelta.*|TaskSubscriptionSettlementAtomicallyAdjustsTokenAndUsageCounters|BillingRecoveryUsesSingleCombinedScheduledHandler)'
@@ -408,12 +434,14 @@ jobs:
         working-directory: source
         run: |
           set -euo pipefail
+          export GOPROXY=off GOSUMDB=off GOFLAGS="-mod=vendor -p=1" GOTOOLCHAIN=local
           go test -v -timeout 5m ./model -count=1 -run 'Test(NowPayments.*|GetNowPayments.*|ApplyWalletQuotaDelta.*|ApplyTaskWalletQuotaDelta.*|BackfillWalletOpeningBalances.*|TransferAffQuotaToQuota.*|LegacyUserQuotaHelpersAlwaysWriteWalletLedger|RecordWalletOpeningBalanceTxWritesOnlyOpeningLedger|UserCheckinCreditsWalletAndLedgerInOneTransaction|RedeemCreditsQuotaExactlyOnce|RedeemRejectsWalletOverflow|RequestBillingJournal.*|UnknownRequestOutcome.*|ApplySubscriptionUsageDelta.*|CleanupSubscriptionPreConsumeRecordsRetainsUnresolvedReservations|PostConsumeUserSubscriptionDeltaRejectsOverflowAndInvalidState|PreConsumeUserSubscription.*|RefundSubscriptionPreConsumeIsAtomicAndIdempotent|SettleSubscriptionPreConsumeIsIdempotentAndClosesRefundPath|SubscriptionExtraReserveIsTrackedAndRefundedAtomically|SubscriptionPreConsumeHeartbeatWinsStaleReview|SubscriptionPreConsumeReviewBlocksSettlementAndRefund|SubscriptionRefundEscapesRequestIDLikeWildcards|SubscriptionSettlementIntentCanBeRecovered|ApplyTaskSubscriptionQuotaDelta.*|TaskSubscriptionSettlementAtomicallyAdjustsTokenAndUsageCounters|BillingRecoveryUsesSingleCombinedScheduledHandler)'
 
       - name: Run finance service regression tests
         working-directory: source
         run: |
           set -euo pipefail
+          export GOPROXY=off GOSUMDB=off GOFLAGS="-mod=vendor -p=1" GOTOOLCHAIN=local
           go test -v -timeout 5m ./service -count=1 -run 'Test(NowPayments.*|GetNowPayments.*|ApplyWalletQuotaDelta.*|ApplyTaskWalletQuotaDelta.*|BackfillWalletOpeningBalances.*|TransferAffQuotaToQuota.*|LegacyUserQuotaHelpersAlwaysWriteWalletLedger|RecordWalletOpeningBalanceTxWritesOnlyOpeningLedger|UserCheckinCreditsWalletAndLedgerInOneTransaction|RedeemCreditsQuotaExactlyOnce|RedeemRejectsWalletOverflow|RequestBillingJournal.*|UnknownRequestOutcome.*|ApplySubscriptionUsageDelta.*|CleanupSubscriptionPreConsumeRecordsRetainsUnresolvedReservations|PostConsumeUserSubscriptionDeltaRejectsOverflowAndInvalidState|PreConsumeUserSubscription.*|RefundSubscriptionPreConsumeIsAtomicAndIdempotent|SettleSubscriptionPreConsumeIsIdempotentAndClosesRefundPath|SubscriptionExtraReserveIsTrackedAndRefundedAtomically|SubscriptionPreConsumeHeartbeatWinsStaleReview|SubscriptionPreConsumeReviewBlocksSettlementAndRefund|SubscriptionRefundEscapesRequestIDLikeWildcards|SubscriptionSettlementIntentCanBeRecovered|ApplyTaskSubscriptionQuotaDelta.*|TaskSubscriptionSettlementAtomicallyAdjustsTokenAndUsageCounters|BillingRecoveryUsesSingleCombinedScheduledHandler)'
 
       - name: Vet root, relaykit, and tokenkit modules
