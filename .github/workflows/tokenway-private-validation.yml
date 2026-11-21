@@ -173,7 +173,7 @@ jobs:
           from pathlib import Path
           jobs = [
               ('../private/.tokenway-validation/brand-h3/TOKENWAY-AI-BRANDED-WEBSITE.patch', '--- a/setting/operation_setting/general_setting.go', '/tmp/tokenway-brand.patch'),
-              ('../private/.tokenway-validation/brand-h3/TOKENWAY-AI-REFERENCE-H3-READY.patch', '--- a/docs/TOKENWAY-AI-DEPLOYMENT.md', '/tmp/tokenway-h3.patch'),
+              ('../private/.tokenway-validation/brand-h3/TOKENWAY-AI-REFERENCE-H3-READY.patch', '--- a/plugins/builtin_plugins_test.go', '/tmp/tokenway-h3.patch'),
           ]
           for source, marker, destination in jobs:
               content = Path(source).read_text(encoding='utf-8')
