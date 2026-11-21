@@ -49,8 +49,8 @@ jobs:
     env:
       GOWORK: "off"
       GOTOOLCHAIN: "local"
-      GOMAXPROCS: "1"
-      GOFLAGS: "-p=1"
+      GOMAXPROCS: "2"
+      GOFLAGS: "-p=2"
       TEST_MYSQL_DSN: root:tokenway-test@tcp(127.0.0.1:3306)/tokenway_test?charset=utf8mb4&parseTime=True&loc=Local
       TEST_POSTGRES_DSN: postgres://tokenway:tokenway-test@127.0.0.1:5432/tokenway_test?sslmode=disable
       TEST_MYSQL_LOG_DSN: root:tokenway-test@tcp(127.0.0.1:3306)/tokenway_test?charset=utf8mb4&parseTime=True&loc=Local
@@ -462,13 +462,31 @@ jobs:
           (cd relaykit && go build ./...)
           (cd tokenkit && go build ./...)
 
-      - name: Run full Go test suites
+      - name: Run full Go test suites with bounded parallelism and live diagnostics
         working-directory: source
+        shell: bash
         run: |
-          set -euo pipefail
-          go test ./...
-          (cd relaykit && go test ./...)
-          (cd tokenkit && go test ./...)
+          set -Eeuo pipefail
+          export GOPROXY=off GOSUMDB=off GOFLAGS="-mod=vendor -p=2" GOTOOLCHAIN=local GOMAXPROCS=2
+          mkdir -p "$RUNNER_TEMP/tokenway-go-test-logs"
+          run_module() {
+            local module="$1"
+            local directory="$2"
+            local logfile="$RUNNER_TEMP/tokenway-go-test-logs/$module.jsonl"
+            echo "===== FULL GO TEST: $module (package parallelism=2, per-test-binary timeout=15m, module hard limit=20m) ====="
+            if (cd "$directory" && timeout --signal=TERM --kill-after=30s 20m go test -json -timeout 15m ./...) 2>&1 | tee "$logfile"; then
+              echo "PASS: full Go test suite $module"
+            else
+              local status=$?
+              echo "FAIL: full Go test suite $module (exit $status); last diagnostic lines:"
+              tail -n 160 "$logfile" || true
+              return "$status"
+            fi
+          }
+          run_module root .
+          run_module relaykit ./relaykit
+          run_module tokenkit ./tokenkit
+          echo "PASS: all three Go modules completed their full test suites."
 
       - name: Set up Bun 1.4.4
         shell: bash
