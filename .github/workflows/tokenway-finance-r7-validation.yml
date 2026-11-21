@@ -427,7 +427,17 @@ jobs:
           if block.count(old) != 1:
               raise SystemExit(f"expected exactly one subscription plan lookup block in transaction, got {block.count(old)}")
           block = block.replace(old, new, 1)
-          block = block.replace("subscription, err := CreateUserSubscriptionFromPlanTx(tx, order.UserId, plan, \"order\")", "subscription, createErr := CreateUserSubscriptionFromPlanTx(tx, order.UserId, &plan, \"order\")\\n          \\t\\tif createErr != nil {\\n          \\t\\t\\treturn createErr\\n          \\t\\t}", 1)
+          old = """subscription, err := CreateUserSubscriptionFromPlanTx(tx, order.UserId, plan, "order")
+          \\t\\tif err != nil {
+          \\t\\t\\treturn err
+          \\t\\t}"""
+          new = """subscription, createErr := CreateUserSubscriptionFromPlanTx(tx, order.UserId, &plan, "order")
+          \\t\\tif createErr != nil {
+          \\t\\t\\treturn createErr
+          \\t\\t}"""
+          if block.count(old) != 1:
+              raise SystemExit(f"expected exactly one subscription creation block in transaction, got {block.count(old)}")
+          block = block.replace(old, new, 1)
           p.write_text(s[:start] + block + s[end:], encoding="utf-8")
           print("Subscription completion now loads its plan through the active transaction.")
 
