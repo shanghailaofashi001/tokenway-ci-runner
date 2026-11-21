@@ -520,9 +520,11 @@ jobs:
           p = Path("service/task_billing_test.go")
           s = p.read_text(encoding="utf-8")
           start = s.index("func TestSettle_TokenRecalcFallsBackToCompletionTokens")
+          # This regression test is currently the final function in the pinned
+          # upstream file. Treat EOF as its boundary; do not require a successor.
           end = s.find("\\nfunc ", start + len("func TestSettle_TokenRecalcFallsBackToCompletionTokens"))
           if end < 0:
-              raise SystemExit("could not locate function boundary after token-recalc settlement test")
+              end = len(s)
           block = s[start:end]
           old = 'name: "neither token count skips recalc",\\n\\t\\t\\twantSettled:      false,'
           new = 'name: "neither token count keeps pre-consume with durable plan",\\n\\t\\t\\twantSettled:      true,'
