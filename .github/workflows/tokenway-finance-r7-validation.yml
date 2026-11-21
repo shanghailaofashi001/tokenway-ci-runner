@@ -376,7 +376,7 @@ jobs:
           if s.count(old) != 1:
               raise SystemExit(f"expected exactly one ManageUser fixture migration anchor, got {s.count(old)}")
           s = s.replace(old, new, 1)
-          old = """	ready := sync.WaitGroup{}
+          old = """	var ready sync.WaitGroup
           	ready.Add(2)
           	release := make(chan struct{})
           	require.NoError(t, db.Callback().Query().Before("gorm:query").Register("test:concurrent_quota_start", func(tx *gorm.DB) {
@@ -385,7 +385,7 @@ jobs:
           			<-release
           		}
           	}))"""
-          new = """	ready := sync.WaitGroup{}
+          new = """	var ready sync.WaitGroup
           	ready.Add(2)
           	release := make(chan struct{})
           	var queryStartMu sync.Mutex
