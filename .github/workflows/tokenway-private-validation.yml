@@ -192,6 +192,7 @@ jobs:
           base64 -d ../private/.tokenway-validation/brand-h3/TOKENWAY-RC52-S3-H3-SAFETY-FIX.patch.gz.b64 | gzip -dc > /tmp/tokenway-s3-h3-safety.patch
           python3 - <<'PY'
           from pathlib import Path
+          import re
           patch = Path('/tmp/tokenway-s3-h3-safety.patch')
           source = patch.read_text(encoding='utf-8')
           start = source.find('diff --git a/controller/task.go ')
@@ -200,7 +201,18 @@ jobs:
               if end < 0:
                   raise SystemExit('controller patch section has no following boundary')
               source = source[:start] + source[end:]
-          patch.write_text(source, encoding='utf-8')
+          # These sections are already supplied by the approved brand/H3 patch
+          # and deployment-file restore. Reapplying them creates reversed or
+          # conflicting hunks; retain the remaining S3 regression changes.
+          blocked = {'docs/TOKENWAY-AI-DEPLOYMENT.md', 'plugins/hailuo_responses_test.go'}
+          sections = re.split(r'(?=^--- a/)', source, flags=re.MULTILINE)
+          kept = []
+          for section in sections:
+              match = re.search(r'^--- a/([^\\r\\n]+)', section, flags=re.MULTILINE)
+              if match and match.group(1) in blocked:
+                  continue
+              kept.append(section)
+          patch.write_text(''.join(kept), encoding='utf-8')
           PY
           patch --batch --forward --dry-run -p1 < /tmp/tokenway-s3-h3-safety.patch
           patch --batch --forward -p1 < /tmp/tokenway-s3-h3-safety.patch
