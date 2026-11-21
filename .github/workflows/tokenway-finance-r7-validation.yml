@@ -261,6 +261,7 @@ jobs:
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
+          import re
           p = Path("model/nowpayments_test.go")
           s = p.read_text(encoding="utf-8")
           old = """\trefundedUser, refundedOrder := createNowPaymentsTestOrder(t, common.TopUpStatusPending, "refunded")
@@ -432,11 +433,12 @@ jobs:
           if block.count(old) != 1:
               raise SystemExit(f"expected exactly one subscription creation call in transaction, got {block.count(old)}")
           block = block.replace(old, new, 1)
-          pattern = r'(subscription, createErr := CreateUserSubscriptionFromPlanTx\\(tx, order.UserId, &plan, "order"\\))\\n[ \\t]*if err != nil \\{\\n[ \\t]*return err\\n[ \\t]*\\}'
-          replacement = r'\\1\\n\\t\\tif createErr != nil {\\n\\t\\t\\treturn createErr\\n\\t\\t}'
-          block, replaced = re.subn(pattern, replacement, block, count=1)
-          if replaced != 1:
-              raise SystemExit(f"expected one adjacent subscription error check to rename, got {replaced}")
+          pattern = r'(subscription, createErr := CreateUserSubscriptionFromPlanTx\(tx, order.UserId, &plan, "order"\))\n[ \t]*if err != nil \{\n[ \t]*return err\n[ \t]*\}'
+          match = re.search(pattern, block)
+          if match is None:
+              raise SystemExit("expected one adjacent subscription error check to rename")
+          replacement = match.group(1) + "\n\t\tif createErr != nil {\n\t\t\treturn createErr\n\t\t}"
+          block = block[:match.start()] + replacement + block[match.end():]
           p.write_text(s[:start] + block + s[end:], encoding="utf-8")
           print("Subscription completion now loads its plan through the active transaction.")
 
