@@ -70,7 +70,7 @@ jobs:
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
           repository: shanghailaofashi001/tokenway-v11-dev
-          ref: 187798217fe0991eec285a105f366ea478553864
+          ref: 128a8195693ef0ccfbcc33a69f6b2660680b898c
           token: ${{ secrets.TOKENWAY_SOURCE_READ_TOKEN }}
           path: private
           fetch-depth: 1
@@ -94,6 +94,7 @@ jobs:
           test -d private/.tokenway-patches
           cp -a private/.tokenway-validation .
           cp private/.tokenway-validation/apply-transactional-db-timestamp.py .tokenway-validation/apply-transactional-db-timestamp.py
+          cp private/.tokenway-validation/apply-payment-quota-error-compat.py .tokenway-validation/apply-payment-quota-error-compat.py
           cp -a private-validation/.tokenway-validation/. .tokenway-validation/
           cp -a private/.tokenway-patches .
           mkdir -p web/src/routes web/src/assets/tokenway-home
@@ -276,6 +277,7 @@ jobs:
           set -euo pipefail
           python3 ../.tokenway-validation/apply-finance-regression-fixtures.py
           python3 ../.tokenway-validation/apply-transactional-db-timestamp.py
+          python3 ../.tokenway-validation/apply-payment-quota-error-compat.py
           git diff --check
 
       - name: Guard task quota persistence for unpersisted billing fixtures
@@ -476,6 +478,19 @@ jobs:
               echo "FAIL: $pkg (exit $status)" | tee -a "$log_dir/failures.txt" "$log_dir/summary.txt"
               echo "---- targeted failure diagnostics: $pkg ----"
               grep -E '"Action":"fail"|--- FAIL:|^FAIL|panic:|Error Trace:|Error:|no such table|database is locked|timed out|deadlock' "$logfile" | tail -n 100 || tail -n 100 "$logfile"
+          if [[ "$pkg" == "github.com/QuantumNous/new-api/router" ]]; then
+            python3 - "$logfile" <<'PY'
+          import json, sys
+          target = "TestAccessTokenRouteRulesCoverEveryDashboardRoute"
+          for line in open(sys.argv[1], encoding="utf-8"):
+              try:
+                  event = json.loads(line)
+              except json.JSONDecodeError:
+                  continue
+              if event.get("Test") == target and event.get("Action") == "output":
+                  print("ROUTE-ASSERTION:", event.get("Output", "").rstrip())
+          PY
+          fi
               failed=1
             fi
           done
