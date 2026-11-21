@@ -404,16 +404,44 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          patch --batch --forward --dry-run -p1 < ../private/.tokenway-validation/brand-h3/TOKENWAY-CNY-DEFAULT-TEST-FIX.patch
-          patch --batch --forward -p1 < ../private/.tokenway-validation/brand-h3/TOKENWAY-CNY-DEFAULT-TEST-FIX.patch
-          patch --batch --forward --dry-run -p1 < ../private/.tokenway-validation/brand-h3/TOKENWAY-CNY-TEST-STATE-FIX.patch
-          patch --batch --forward -p1 < ../private/.tokenway-validation/brand-h3/TOKENWAY-CNY-TEST-STATE-FIX.patch
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          root = Path('../private/.tokenway-validation/brand-h3')
+          for name in ('TOKENWAY-CNY-DEFAULT-TEST-FIX.patch', 'TOKENWAY-CNY-TEST-STATE-FIX.patch'):
+              source = (root / name).read_text(encoding='utf-8')
+              sections = re.split(r'(?=^--- a/)', source, flags=re.MULTILINE)
+              kept = [part for part in sections if not re.search(r'^--- a/web/src/test-setup[.]ts$', part, flags=re.MULTILINE)]
+              Path('/tmp' / name).write_text(''.join(kept), encoding='utf-8')
+          PY
+          patch --batch --forward --dry-run -p1 < /tmp/TOKENWAY-CNY-DEFAULT-TEST-FIX.patch
+          patch --batch --forward -p1 < /tmp/TOKENWAY-CNY-DEFAULT-TEST-FIX.patch
+          patch --batch --forward --dry-run -p1 < /tmp/TOKENWAY-CNY-TEST-STATE-FIX.patch
+          patch --batch --forward -p1 < /tmp/TOKENWAY-CNY-TEST-STATE-FIX.patch
           patch --batch --forward --dry-run -p1 < ../private/.tokenway-validation/brand-h3/TOKENWAY-CNY-TEST-ISOLATION-FIX.patch
           patch --batch --forward -p1 < ../private/.tokenway-validation/brand-h3/TOKENWAY-CNY-TEST-ISOLATION-FIX.patch
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('web/src/test-setup.ts')
+          s = p.read_text(encoding='utf-8')
+          import_line = "import { usePricingPreferencesStore } from '@/stores/pricing-preferences-store'\\n"
+          anchor = "import { DEFAULT_CURRENCY_CONFIG, useSystemConfigStore } from '@/stores/system-config-store'\\n"
+          if import_line not in s:
+              if anchor not in s:
+                  raise SystemExit('pricing preference store import anchor missing')
+              s = s.replace(anchor, import_line + anchor, 1)
+          reset = "  usePricingPreferencesStore.setState({ currency: 'USD' })\\n"
+          before = "beforeEach(() => {\\n"
+          if reset not in s:
+              if s.count(before) != 1:
+                  raise SystemExit('test setup beforeEach anchor is not unique')
+              s = s.replace(before, before + reset, 1)
+          p.write_text(s, encoding='utf-8')
+          PY
           test -s web/src/test-utils/currency.ts
           grep -Fq "TEST_USD_CURRENCY_CONFIG" web/src/test-setup.ts
           echo "PASS: USD-only test fixtures applied after production UI setup"
-
+      
       - name: Apply image creator integration patch
         working-directory: source
         shell: bash
