@@ -70,7 +70,7 @@ jobs:
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
           repository: shanghailaofashi001/tokenway-v11-dev
-          ref: d75720ea06c69a6a33a2b2d80eb8d4d876aa8dd1
+          ref: 187798217fe0991eec285a105f366ea478553864
           token: ${{ secrets.TOKENWAY_SOURCE_READ_TOKEN }}
           path: private
           fetch-depth: 1
