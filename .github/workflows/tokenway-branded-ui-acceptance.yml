@@ -295,11 +295,6 @@ jobs:
               raise SystemExit(1)
           print('PASS: no new lint errors in changed frontend files versus the exact upstream baseline')
           PY
-, part, flags=re.MULTILINE)]
-          Path('/tmp/tokenway-cny-default-tests.patch').write_text(''.join(kept), encoding='utf-8')
-          PY
-          patch --batch --forward --dry-run -p1 -d source < /tmp/tokenway-cny-default-tests.patch
-          patch --batch --forward -p1 -d source < /tmp/tokenway-cny-default-tests.patch
           # The UI follow-up already installs the shared USD test setup.
           # Apply the remaining state fixes without replaying its test-setup hunk.
           python3 - <<'PY'
