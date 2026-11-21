@@ -205,10 +205,10 @@ jobs:
           # and deployment-file restore. Reapplying them creates reversed or
           # conflicting hunks; retain the remaining S3 regression changes.
           blocked = {'docs/TOKENWAY-AI-DEPLOYMENT.md', 'plugins/hailuo_responses_test.go'}
-          sections = re.split(r'(?=^--- a/)', source, flags=re.MULTILINE)
+          sections = re.split(r'(?=^diff --git a/)', source, flags=re.MULTILINE)
           kept = []
           for section in sections:
-              match = re.search(r'^--- a/([^\\r\\n]+)', section, flags=re.MULTILINE)
+              match = re.search(r'^diff --git a/(\\S+) b/', section, flags=re.MULTILINE)
               if match and match.group(1) in blocked:
                   continue
               kept.append(section)
