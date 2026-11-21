@@ -219,11 +219,9 @@ jobs:
           python3 ../private/.tokenway-validation/brand-h3/apply-rc52-s3-config-fail-closed.py
           patch --batch --forward --dry-run -p1 < ../private/.tokenway-validation/brand-h3/TOKENWAY-FRONTEND-TYPECHECK-FIX.patch
           patch --batch --forward -p1 < ../private/.tokenway-validation/brand-h3/TOKENWAY-FRONTEND-TYPECHECK-FIX.patch
-          grep -Fq "TEST_USD_CURRENCY_CONFIG" web/src/test-setup.ts
-          test -s web/src/test-utils/currency.ts
-          echo "PASS: CNY default test fixture is already included in the H3 reference patch"
-          grep -Fq "TEST_USD_CURRENCY_CONFIG" web/src/features/usage-logs/components/__tests__/detail-preview.test.tsx
-          grep -Fq "TEST_USD_CURRENCY_CONFIG" web/src/features/usage-logs/components/__tests__/quota-adjustment.test.tsx
+          patch --batch --forward --dry-run -p1 < ../private/.tokenway-validation/brand-h3/TOKENWAY-CNY-DEFAULT-TEST-FIX.patch
+          patch --batch --forward -p1 < ../private/.tokenway-validation/brand-h3/TOKENWAY-CNY-DEFAULT-TEST-FIX.patch
+          echo "PASS: shared USD test fixture helper and imports applied; production default remains CNY"
           patch --batch --forward --dry-run -p1 < ../private/.tokenway-validation/brand-h3/TOKENWAY-CNY-TEST-STATE-FIX.patch
           patch --batch --forward -p1 < ../private/.tokenway-validation/brand-h3/TOKENWAY-CNY-TEST-STATE-FIX.patch
           patch --batch --forward --dry-run -p1 < ../private/.tokenway-validation/brand-h3/TOKENWAY-CNY-TEST-ISOLATION-FIX.patch
