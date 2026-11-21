@@ -51,6 +51,7 @@ jobs:
       GOTOOLCHAIN: "local"
       GOMAXPROCS: "2"
       GOFLAGS: "-p=2"
+      # The tagged follow-up push reruns only router; workflow_dispatch remains the complete suite.
       TOKENWAY_ROUTER_ONLY: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[router-only]') }}
       TEST_MYSQL_DSN: root:tokenway-test@tcp(127.0.0.1:3306)/tokenway_test?charset=utf8mb4&parseTime=True&loc=Local
       TEST_POSTGRES_DSN: postgres://tokenway:tokenway-test@127.0.0.1:5432/tokenway_test?sslmode=disable
@@ -106,6 +107,8 @@ jobs:
           cp private-validation/web/src/assets/tokenway-home/hero-scene.webp web/src/assets/tokenway-home/hero-scene.webp
           test -s .tokenway-validation/R7-finance-migration.patch.b64
           test -s .tokenway-validation/apply-task-quota-persistence-guard.py
+          test -s .tokenway-validation/apply-nowpayments-access-token-rules.py
+          python3 -m py_compile .tokenway-validation/apply-nowpayments-access-token-rules.py
           test -s .tokenway-validation/apply-transactional-db-timestamp.py
           echo "Private validation inputs restored; source remains runner-local."
 
