@@ -865,13 +865,13 @@ jobs:
           )
           echo "PASS: exact tested source packaged; ZIP, manifest and validation report generated."
 
-      - name: Upload validated first-launch source package
+      - name: Confirm source package remains runner-local
         if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: TOKENWAY-RC52-FIRST-LAUNCH-VALIDATED
-          path: release-output/*
-          if-no-files-found: error
-          retention-days: 30
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s release-output/TOKENWAY-RC52-FIRST-LAUNCH-VALIDATED.zip
+          test -s release-output/TOKENWAY-RC52-FIRST-LAUNCH-VALIDATED.zip.sha256
+          echo "PASS: validated source package exists only in the ephemeral runner workspace; no public artifact is uploaded."
 
 # Manual validation refresh: force the pinned Go 1.26.10 full validation workflow to run.
