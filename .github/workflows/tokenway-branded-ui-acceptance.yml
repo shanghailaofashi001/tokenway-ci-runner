@@ -107,6 +107,194 @@ jobs:
           fi
           (cd source && python3 ../private/.tokenway-validation/brand-h3/apply-tokenway-ui-followup.py)
           (cd source && python3 ../private/.tokenway-validation/apply-tokenway-brand-runtime-fix.py)
+          # Restore shared USD test fixtures/imports without replaying test-setup.ts.
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          source = Path('private/.tokenway-validation/brand-h3/TOKENWAY-CNY-DEFAULT-TEST-FIX.patch').read_text(encoding='utf-8')
+          sections = re.split(r'(?=^--- a/)', source, flags=re.MULTILINE)
+          kept = [part for part in sections if not re.search(r'^--- a/web/src/test-setup[.]ts          # The UI follow-up already installs the shared USD test setup.
+          # Apply the remaining state fixes without replaying its test-setup hunk.
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          nl = chr(10)
+          p = Path('source/web/src/test-setup.ts')
+          s = p.read_text(encoding='utf-8')
+          import_line = "import { usePricingPreferencesStore } from '@/stores/pricing-preferences-store'" + nl
+          anchor = "import { DEFAULT_CURRENCY_CONFIG, useSystemConfigStore } from '@/stores/system-config-store'" + nl
+          if import_line not in s:
+              if anchor not in s:
+                  raise SystemExit('test setup currency import anchor missing')
+              s = s.replace(anchor, anchor + import_line, 1)
+          reset_line = "  usePricingPreferencesStore.setState({ currency: 'USD' })" + nl
+          if reset_line not in s:
+              before = "beforeEach(() => {" + nl
+              if s.count(before) != 1:
+                  raise SystemExit('test setup beforeEach anchor is not unique')
+              s = s.replace(before, before + reset_line, 1)
+          p.write_text(s, encoding='utf-8')
+          patch = Path('private/.tokenway-validation/brand-h3/TOKENWAY-CNY-TEST-STATE-FIX.patch')
+          parts = re.split(r'(?=^--- a/)', patch.read_text(encoding='utf-8'), flags=re.MULTILINE)
+          patch.write_text(''.join(part for part in parts if not re.search(r'^--- a/web/src/test-setup[.]ts', part, flags=re.MULTILINE)), encoding='utf-8')
+          PY
+          patch --batch --forward --dry-run -p1 -d source < private/.tokenway-validation/brand-h3/TOKENWAY-CNY-TEST-STATE-FIX.patch
+          patch --batch --forward -p1 -d source < private/.tokenway-validation/brand-h3/TOKENWAY-CNY-TEST-STATE-FIX.patch
+          patch_path="private/.tokenway-validation/brand-h3/TOKENWAY-CNY-TEST-ISOLATION-FIX.patch"
+          patch --batch --forward --dry-run -p1 -d source < "$patch_path"
+          patch --batch --forward -p1 -d source < "$patch_path"
+          install -D -m 0644 private/web/src/routes/docs.tsx source/web/src/routes/docs.tsx
+          grep -Fq "createFileRoute('/docs')" source/web/src/routes/docs.tsx
+          grep -Fq "TokenWayPublicLayout" source/web/src/routes/docs.tsx
+          grep -Fq "changeLanguage('zhCN')" source/web/src/features/home/tokenway-landing.tsx
+          ! grep -Fq "changeLanguage('zh-CN')" source/web/src/features/home/tokenway-landing.tsx
+          grep -Fq "AI Audio Creation" source/web/src/features/home/tokenway-landing.tsx
+          grep -Fq "to='/docs'" source/web/src/features/home/tokenway-landing.tsx
+          ! grep -Fq "docs.newapi.pro" source/web/src/features/home/tokenway-landing.tsx
+          grep -Fq 'DocsLink:                   "/docs",' source/setting/operation_setting/general_setting.go
+          grep -Fq "applyFaviconToDom('/favicon.svg')" source/web/src/main.tsx
+          ! grep -Fq "M15 6v12a3 0" source/web/src/assets/logo.tsx
+          grep -Fq "<a href='/sign-in'" source/web/src/features/home/tokenway-landing.tsx
+
+      - name: Restore TokenWay homepage reference images
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          import base64, re
+          from pathlib import Path
+          html = Path('private/.tokenway-validation/brand-h3/TOKENWAY-AI-REFERENCE-H3-READY-PREVIEW.html').read_text(encoding='utf-8')
+          images = re.findall(r"""data:image/webp;base64,([^"']+)""", html)
+          names = ['hero-scene.webp','brand-mark.webp','gpt.webp','claude.webp','gemini.webp','grok.webp','mistral.webp','deepseek.webp','kimi.webp','qwen.webp','doubao.webp','minimax.webp','glm.webp','image-art.webp','video-art.webp','audio-art.webp']
+          if len(images) != 17:
+              raise SystemExit(f'Expected 17 embedded WebP references, found {len(images)}')
+          target = Path('source/web/public/tokenway-home')
+          target.mkdir(parents=True, exist_ok=True)
+          for name, encoded in zip(names, images):
+              data = base64.b64decode(encoded, validate=True)
+              if not data.startswith(b'RIFF') or data[8:12] != b'WEBP':
+                  raise SystemExit(f'Invalid WebP payload: {name}')
+              (target / name).write_bytes(data)
+          for name in names:
+              if not (target / name).is_file() or (target / name).stat().st_size < 1000:
+                  raise SystemExit(f'Missing or truncated image: {name}')
+          source_assets = Path('source/web/src/assets/tokenway-home')
+          source_assets.mkdir(parents=True, exist_ok=True)
+          (source_assets / 'hero-scene.webp').write_bytes((target / 'hero-scene.webp').read_bytes())
+          print('PASS: 16 branded homepage images restored and verified')
+          PY
+
+      - name: Generate route tree and production build
+        working-directory: source/web
+        run: bun run build
+
+      - name: Verify generated docs route registration
+        working-directory: source/web
+        run: |
+          grep -Fq "./routes/docs" src/routeTree.gen.ts
+          grep -Fq "'/docs'" src/routeTree.gen.ts
+
+      - name: Frontend typecheck
+        working-directory: source/web
+        run: bun run typecheck
+
+      - name: Frontend unit tests
+        working-directory: source/web
+        run: bun run test
+
+      - name: Frontend changed-file lint (upstream baseline delta)
+        working-directory: source/web
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          import collections
+          import json
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          root = Path.cwd()
+          baseline = json.loads(Path('/tmp/tokenway-upstream-lint.json').read_text())
+
+          result = subprocess.run(
+              ['./node_modules/.bin/oxlint', '-c', '.oxlintrc.json', '--format', 'json', '.'],
+              cwd=root, text=True, capture_output=True,
+          )
+          if result.returncode not in (0, 1):
+              print(result.stderr)
+              raise SystemExit(f'Oxlint execution failed: {result.returncode}')
+          try:
+              current = json.loads(result.stdout)
+          except json.JSONDecodeError as exc:
+              print(result.stdout[-8000:])
+              print(result.stderr[-4000:])
+              raise SystemExit(f'Oxlint did not return valid JSON: {exc}')
+
+          def relative(path):
+              value = str(path).replace('\\', '/')
+              for marker in ('/source/web/', '/tokenway-upstream-baseline/web/'):
+                  if marker in value:
+                      value = value.rsplit(marker, 1)[1]
+              if value.startswith('./'):
+                  value = value[2:]
+              if value.startswith('web/'):
+                  value = value[4:]
+              return value
+
+          changed = set()
+          for command in (
+              ['git', '-C', '..', 'diff', '--name-only', '--', 'web/src'],
+              ['git', '-C', '..', 'ls-files', '--others', '--exclude-standard', '--', 'web/src'],
+          ):
+              output = subprocess.run(command, text=True, capture_output=True, check=True).stdout
+              changed.update(
+                  relative(line) for line in output.splitlines()
+                  if line.endswith(('.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'))
+              )
+
+          if not changed:
+              raise SystemExit('No changed frontend source files detected; refusing an empty lint check')
+
+          def counts(report, severity):
+              counter = collections.Counter()
+              for item in report.get('diagnostics', []):
+                  if item.get('severity') != severity:
+                      continue
+                  file = relative(item.get('filename', ''))
+                  if file in changed:
+                      counter[(file, item.get('code', ''), item.get('message', ''))] += 1
+              return counter
+
+          base_errors = counts(baseline, 'error')
+          now_errors = counts(current, 'error')
+          base_warnings = counts(baseline, 'warning')
+          now_warnings = counts(current, 'warning')
+
+          introduced = []
+          for key, amount in now_errors.items():
+              delta = amount - base_errors[key]
+              if delta > 0:
+                  introduced.extend([key] * delta)
+
+          warning_delta = sum(max(0, amount - base_warnings[key]) for key, amount in now_warnings.items())
+          total_errors = sum(item.get('severity') == 'error' for item in current.get('diagnostics', []))
+          total_warnings = sum(item.get('severity') == 'warning' for item in current.get('diagnostics', []))
+          print(f'Checked {len(changed)} changed frontend files')
+          print(f'Full pinned-source lint: {total_errors} errors, {total_warnings} warnings')
+          print(f'New warnings in changed frontend files: {warning_delta}')
+          if introduced:
+              print('New lint errors introduced by this candidate:')
+              for file, code, message in introduced:
+                  print(f' - {file}: {code}: {message}')
+              raise SystemExit(1)
+          print('PASS: no new lint errors in changed frontend files versus the exact upstream baseline')
+          PY
+, part, flags=re.MULTILINE)]
+          Path('/tmp/tokenway-cny-default-tests.patch').write_text(''.join(kept), encoding='utf-8')
+          PY
+          patch --batch --forward --dry-run -p1 -d source < /tmp/tokenway-cny-default-tests.patch
+          patch --batch --forward -p1 -d source < /tmp/tokenway-cny-default-tests.patch
           # The UI follow-up already installs the shared USD test setup.
           # Apply the remaining state fixes without replaying its test-setup hunk.
           python3 - <<'PY'
