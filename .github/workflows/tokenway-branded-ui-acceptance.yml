@@ -112,24 +112,25 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           import re
+          nl = chr(10)
           p = Path('source/web/src/test-setup.ts')
           s = p.read_text(encoding='utf-8')
-          import_line = "import { usePricingPreferencesStore } from '@/stores/pricing-preferences-store'\\n"
-          anchor = "import { DEFAULT_CURRENCY_CONFIG, useSystemConfigStore } from '@/stores/system-config-store'\\n"
+          import_line = "import { usePricingPreferencesStore } from '@/stores/pricing-preferences-store'" + nl
+          anchor = "import { DEFAULT_CURRENCY_CONFIG, useSystemConfigStore } from '@/stores/system-config-store'" + nl
           if import_line not in s:
               if anchor not in s:
                   raise SystemExit('test setup currency import anchor missing')
               s = s.replace(anchor, anchor + import_line, 1)
-          reset_line = "  usePricingPreferencesStore.setState({ currency: 'USD' })\\n"
+          reset_line = "  usePricingPreferencesStore.setState({ currency: 'USD' })" + nl
           if reset_line not in s:
-              before = "beforeEach(() => {\\n"
+              before = "beforeEach(() => {" + nl
               if s.count(before) != 1:
                   raise SystemExit('test setup beforeEach anchor is not unique')
               s = s.replace(before, before + reset_line, 1)
           p.write_text(s, encoding='utf-8')
           patch = Path('private/.tokenway-validation/brand-h3/TOKENWAY-CNY-TEST-STATE-FIX.patch')
           parts = re.split(r'(?=^--- a/)', patch.read_text(encoding='utf-8'), flags=re.MULTILINE)
-          patch.write_text(''.join(part for part in parts if not re.search(r'^--- a/web/src/test-setup\\.ts', part, flags=re.MULTILINE)), encoding='utf-8')
+          patch.write_text(''.join(part for part in parts if not re.search(r'^--- a/web/src/test-setup[.]ts', part, flags=re.MULTILINE)), encoding='utf-8')
           PY
           patch --batch --forward --dry-run -p1 -d source < private/.tokenway-validation/brand-h3/TOKENWAY-CNY-TEST-STATE-FIX.patch
           patch --batch --forward -p1 -d source < private/.tokenway-validation/brand-h3/TOKENWAY-CNY-TEST-STATE-FIX.patch
