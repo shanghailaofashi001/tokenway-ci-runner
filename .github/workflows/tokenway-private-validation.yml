@@ -219,13 +219,6 @@ jobs:
           python3 ../private/.tokenway-validation/brand-h3/apply-rc52-s3-config-fail-closed.py
           patch --batch --forward --dry-run -p1 < ../private/.tokenway-validation/brand-h3/TOKENWAY-FRONTEND-TYPECHECK-FIX.patch
           patch --batch --forward -p1 < ../private/.tokenway-validation/brand-h3/TOKENWAY-FRONTEND-TYPECHECK-FIX.patch
-          patch --batch --forward --dry-run -p1 < ../private/.tokenway-validation/brand-h3/TOKENWAY-CNY-DEFAULT-TEST-FIX.patch
-          patch --batch --forward -p1 < ../private/.tokenway-validation/brand-h3/TOKENWAY-CNY-DEFAULT-TEST-FIX.patch
-          echo "PASS: shared USD test fixture helper and imports applied; production default remains CNY"
-          patch --batch --forward --dry-run -p1 < ../private/.tokenway-validation/brand-h3/TOKENWAY-CNY-TEST-STATE-FIX.patch
-          patch --batch --forward -p1 < ../private/.tokenway-validation/brand-h3/TOKENWAY-CNY-TEST-STATE-FIX.patch
-          patch --batch --forward --dry-run -p1 < ../private/.tokenway-validation/brand-h3/TOKENWAY-CNY-TEST-ISOLATION-FIX.patch
-          patch --batch --forward -p1 < ../private/.tokenway-validation/brand-h3/TOKENWAY-CNY-TEST-ISOLATION-FIX.patch
           python3 - <<'PY'
           from pathlib import Path
           import base64, re
@@ -405,6 +398,21 @@ jobs:
           grep -Fq '"Playground": "AI聊天"' web/src/i18n/locales/zh.json
           grep -Fq 'DocsLink:                   "/docs"' setting/operation_setting/general_setting.go
           echo "PASS: TokenWay UI interaction and AI Chat follow-up"
+
+      - name: Apply deterministic USD test fixtures after UI setup
+        working-directory: source
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          patch --batch --forward --dry-run -p1 < ../private/.tokenway-validation/brand-h3/TOKENWAY-CNY-DEFAULT-TEST-FIX.patch
+          patch --batch --forward -p1 < ../private/.tokenway-validation/brand-h3/TOKENWAY-CNY-DEFAULT-TEST-FIX.patch
+          patch --batch --forward --dry-run -p1 < ../private/.tokenway-validation/brand-h3/TOKENWAY-CNY-TEST-STATE-FIX.patch
+          patch --batch --forward -p1 < ../private/.tokenway-validation/brand-h3/TOKENWAY-CNY-TEST-STATE-FIX.patch
+          patch --batch --forward --dry-run -p1 < ../private/.tokenway-validation/brand-h3/TOKENWAY-CNY-TEST-ISOLATION-FIX.patch
+          patch --batch --forward -p1 < ../private/.tokenway-validation/brand-h3/TOKENWAY-CNY-TEST-ISOLATION-FIX.patch
+          test -s web/src/test-utils/currency.ts
+          grep -Fq "TEST_USD_CURRENCY_CONFIG" web/src/test-setup.ts
+          echo "PASS: USD-only test fixtures applied after production UI setup"
 
       - name: Apply image creator integration patch
         working-directory: source
