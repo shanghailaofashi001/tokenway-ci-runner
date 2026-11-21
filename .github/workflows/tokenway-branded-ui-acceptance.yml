@@ -155,13 +155,15 @@ jobs:
           from pathlib import Path
           p = Path("source/web/src/features/models/__tests__/model-listing.test.tsx")
           s = p.read_text(encoding="utf-8")
-          old = """  expect(preview).toHaveTextContent('2.1900')
-          expect(preview).toHaveTextContent('4.3800')"""
-          new = """  expect(preview).toHaveTextContent('0.3')
-          expect(preview).toHaveTextContent('0.6')"""
-          if s.count(old) != 1:
-              raise SystemExit(f"expected exactly one incorrect derived-price assertion pair, got {s.count(old)}")
-          p.write_text(s.replace(old, new, 1), encoding="utf-8")
+          replacements = {
+              "expect(preview).toHaveTextContent('2.1900')": "expect(preview).toHaveTextContent('0.3')",
+              "expect(preview).toHaveTextContent('4.3800')": "expect(preview).toHaveTextContent('0.6')",
+          }
+          for old, new in replacements.items():
+              if s.count(old) != 1:
+                  raise SystemExit(f"expected exactly one pricing assertion {old!r}, got {s.count(old)}")
+              s = s.replace(old, new, 1)
+          p.write_text(s, encoding="utf-8")
           print("Pricing expression preview assertions restored to visible tier cache-read values.")
           PY
           install -D -m 0644 private/web/src/routes/docs.tsx source/web/src/routes/docs.tsx
