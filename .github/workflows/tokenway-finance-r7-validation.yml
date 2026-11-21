@@ -463,30 +463,28 @@ jobs:
           # isolated SQLite fixtures that exercise real task settlement/refunds.
           p = Path("service/task_billing_test.go")
           s = p.read_text(encoding="utf-8")
-          if "&model.SubscriptionPreConsumeRecord{}" not in s:
-              old = """          &model.TaskTokenQuotaLedger{},
-          &model.User{},"""
-              new = """          &model.TaskTokenQuotaLedger{},
-          &model.SubscriptionPreConsumeRecord{},
-          &model.User{},"""
-              old = "\n".join(line[10:] if line.startswith("          ") else line for line in old.splitlines())
-              new = "\n".join(line[10:] if line.startswith("          ") else line for line in new.splitlines())
-              if s.count(old) != 1:
-                  raise SystemExit(f"expected one service TestMain migration anchor, got {s.count(old)}")
-              s = s.replace(old, new, 1)
+          # Inspect only TestMain's AutoMigrate argument list; references elsewhere
+          # in the file (for example cleanup) do not prove the table is migrated.
+          test_main = s.index("func TestMain(")
+          migrate = s.index("AutoMigrate(", test_main)
+          migrate_end = s.index(")", migrate)
+          migrate_block = s[migrate:migrate_end]
+          if "&model.SubscriptionPreConsumeRecord{}" not in migrate_block:
+              user_model = s.find("&model.User{}", migrate, migrate_end)
+              if user_model < 0:
+                  raise SystemExit("could not locate service TestMain AutoMigrate user model insertion point")
+              s = s[:user_model] + "&model.SubscriptionPreConsumeRecord{},\n\t\t" + s[user_model:]
           if 'DELETE FROM subscription_pre_consume_records' not in s:
-              old = """          model.DB.Exec("DELETE FROM task_token_quota_ledgers")
-          model.DB.Exec("DELETE FROM users")"""
-              new = """          model.DB.Exec("DELETE FROM task_token_quota_ledgers")
-          model.DB.Exec("DELETE FROM subscription_pre_consume_records")
-          model.DB.Exec("DELETE FROM users")"""
-              old = "\n".join(line[10:] if line.startswith("          ") else line for line in old.splitlines())
-              new = "\n".join(line[10:] if line.startswith("          ") else line for line in new.splitlines())
-              if s.count(old) != 1:
-                  raise SystemExit(f"expected one service cleanup anchor, got {s.count(old)}")
-              s = s.replace(old, new, 1)
+              cleanup = s.index("func cleanupTaskBillingTestData")
+              cleanup_end = s.find("\n}", cleanup)
+              cleanup_block = s[cleanup:cleanup_end]
+              user_delete = cleanup_block.find('model.DB.Exec("DELETE FROM users")')
+              if user_delete < 0:
+                  raise SystemExit("could not locate service task billing cleanup insertion point")
+              absolute = cleanup + user_delete
+              s = s[:absolute] + 'model.DB.Exec("DELETE FROM subscription_pre_consume_records")\n\t\t' + s[absolute:]
           p.write_text(s, encoding="utf-8")
-          print("Service fixture already includes, or now adds, subscription pre-consume migration and cleanup.")
+          print("Service TestMain migration and cleanup now verify the exact subscription pre-consume table scope.")
 
           p = Path("controller/relay_task_plugin_test.go")
           s = p.read_text(encoding="utf-8")
