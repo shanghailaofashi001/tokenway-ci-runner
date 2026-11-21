@@ -478,11 +478,6 @@ jobs:
           sections = re.split(r'(?=^diff --git a/)', patch_text, flags=re.MULTILINE)
           applied, already = [], []
           temp = Path('/tmp/tokenway-image-creator-section.patch')
-          router_markers = (
-              'func playgroundGroupSelection() gin.HandlerFunc {',
-              'playgroundImageRouter.POST("/images/generations"',
-              'playgroundVideoRouter.POST("/videos"',
-          )
           for section in sections:
               if not section.startswith('diff --git a/'):
                   continue
@@ -490,24 +485,26 @@ jobs:
               if not match:
                   raise SystemExit('image creator patch contains an unparseable file section')
               path = match.group(1)
-              if path == 'router/relay-router.go':
-                  current = Path(path).read_text(encoding='utf-8')
-                  if all(marker in current for marker in router_markers):
-                      already.append(path)
+              parts = re.split(r'(?=^@@ )', section, flags=re.MULTILINE)
+              header, hunks = parts[0], parts[1:]
+              if not hunks:
+                  hunks = [section]
+                  header = ''
+              for number, hunk in enumerate(hunks, 1):
+                  candidate = header + hunk
+                  temp.write_text(candidate, encoding='utf-8')
+                  check = subprocess.run(['git', 'apply', '--recount', '--check', str(temp)], text=True, capture_output=True)
+                  if check.returncode == 0:
+                      subprocess.run(['git', 'apply', '--recount', str(temp)], check=True)
+                      applied.append(f'{path}#hunk{number}')
                       continue
-              temp.write_text(section, encoding='utf-8')
-              check = subprocess.run(['git', 'apply', '--recount', '--check', str(temp)], text=True, capture_output=True)
-              if check.returncode == 0:
-                  subprocess.run(['git', 'apply', '--recount', str(temp)], check=True)
-                  applied.append(path)
-                  continue
-              reverse = subprocess.run(['git', 'apply', '--recount', '--reverse', '--check', str(temp)], text=True, capture_output=True)
-              if reverse.returncode == 0:
-                  already.append(path)
-                  continue
-              detail = (check.stderr or check.stdout or reverse.stderr or reverse.stdout).strip()
-              raise SystemExit(f'image creator patch conflict at {path}: {detail[:1200]}')
-          print(f'PASS: image creator patch sections applied={len(applied)} already-present={len(already)}')
+                  reverse = subprocess.run(['git', 'apply', '--recount', '--reverse', '--check', str(temp)], text=True, capture_output=True)
+                  if reverse.returncode == 0:
+                      already.append(f'{path}#hunk{number}')
+                      continue
+                  detail = (check.stderr or check.stdout or reverse.stderr or reverse.stdout).strip()
+                  raise SystemExit(f'image creator patch conflict at {path} hunk {number}: {detail[:1200]}')
+          print(f'PASS: image creator patch hunks applied={len(applied)} already-present={len(already)}')
           print('Applied: ' + ', '.join(applied))
           print('Already present: ' + ', '.join(already))
           PY
