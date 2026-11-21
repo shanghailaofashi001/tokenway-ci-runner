@@ -70,7 +70,7 @@ jobs:
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
           repository: shanghailaofashi001/tokenway-v11-dev
-          ref: 44e971a210ec21a16b31b6a0f967d6a5511886c2
+          ref: f11dc2a75125c84fc696c5e1dca1d76c0aa4fe1e
           token: ${{ secrets.TOKENWAY_SOURCE_READ_TOKEN }}
           path: private
           fetch-depth: 1
@@ -93,6 +93,7 @@ jobs:
           test -d private/.tokenway-validation
           test -d private/.tokenway-patches
           cp -a private/.tokenway-validation .
+          cp private/.tokenway-validation/apply-transactional-db-timestamp.py .tokenway-validation/apply-transactional-db-timestamp.py
           cp -a private-validation/.tokenway-validation/. .tokenway-validation/
           cp -a private/.tokenway-patches .
           mkdir -p web/src/routes web/src/assets/tokenway-home
@@ -102,6 +103,7 @@ jobs:
           cp private-validation/web/src/assets/tokenway-home/hero-scene.webp web/src/assets/tokenway-home/hero-scene.webp
           test -s .tokenway-validation/R7-finance-migration.patch.b64
           test -s .tokenway-validation/apply-task-quota-persistence-guard.py
+          test -s .tokenway-validation/apply-transactional-db-timestamp.py
           echo "Private validation inputs restored; source remains runner-local."
 
       - name: Checkout pinned New API source
@@ -273,6 +275,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 ../.tokenway-validation/apply-finance-regression-fixtures.py
+          python3 ../.tokenway-validation/apply-transactional-db-timestamp.py
           git diff --check
 
       - name: Guard task quota persistence for unpersisted billing fixtures
