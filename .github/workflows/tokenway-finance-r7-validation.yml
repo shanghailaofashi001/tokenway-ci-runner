@@ -545,7 +545,7 @@ jobs:
         run: |
           set -euo pipefail
           base64 -d ../.tokenway-validation/R7-finance-migration.patch.b64 > /tmp/R7-finance-migration.patch
-          printf '%s  %s\\n' '8bf448cd959ed08902b274e0c35aa6efd3cac6ae9d2b5fa27e91a6842d2ebb86' '/tmp/R7-finance-migration.patch' | sha256sum -c -
+          printf '%s  %s\n' '8bf448cd959ed08902b274e0c35aa6efd3cac6ae9d2b5fa27e91a6842d2ebb86' '/tmp/R7-finance-migration.patch' | sha256sum -c -
           python3 - <<'PY'
           from pathlib import Path
           import re
@@ -557,7 +557,7 @@ jobs:
           for section in sections:
               if not section.startswith('diff --git a/'):
                   continue
-              match = re.search(r'^diff --git a/(\\S+) b/', section, flags=re.MULTILINE)
+              match = re.search(r'^diff --git a/(\S+) b/', section, flags=re.MULTILINE)
               if not match:
                   raise SystemExit('R7 patch contains an unparseable file section')
               path = match.group(1)
