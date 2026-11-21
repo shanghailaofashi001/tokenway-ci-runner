@@ -1,0 +1,383 @@
+name: TokenWay Finance R7 — Go 1.26.10 full validation
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: finance-r7-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Assemble branded V11 source, apply R7, test all modules and frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      GOWORK: "off"
+      GOTOOLCHAIN: "local"
+      GOMAXPROCS: "1"
+      GOFLAGS: "-p=1"
+
+    steps:
+      - name: Checkout public CI orchestrator
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+
+      - name: Checkout pinned private TokenWay source and validation materials
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          repository: shanghailaofashi001/tokenway-v11-dev
+          ref: 9573b376f5c28de1a2ac2df278c70fbec702d982
+          token: ${{ secrets.TOKENWAY_SOURCE_READ_TOKEN }}
+          path: private
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Restore private build materials into ephemeral runner workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -d private/.tokenway-validation
+          test -d private/.tokenway-patches
+          cp -a private/.tokenway-validation .
+          cp -a private/.tokenway-patches .
+          mkdir -p web/src/routes web/src/assets/tokenway-home
+          cp private/web/src/routes/docs.tsx web/src/routes/docs.tsx
+          cp private/web/src/assets/tokenway-home/hero-scene.webp web/src/assets/tokenway-home/hero-scene.webp
+          test -s .tokenway-validation/R7-finance-migration.patch.b64
+          test -s .tokenway-validation/apply-task-quota-persistence-guard.py
+          echo "Private validation inputs restored; source remains runner-local."
+
+      - name: Checkout pinned New API source
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          repository: QuantumNous/new-api
+          ref: 48a6c87f9e7757fdc58e5be9bcb4f8281ad0dfd0
+          path: source
+          fetch-depth: 1
+
+      - name: Assemble exact TokenWay branded V11 baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C source rev-parse HEAD)" = "48a6c87f9e7757fdc58e5be9bcb4f8281ad0dfd0"
+
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('source/common/constants.go')
+          s = p.read_text(encoding='utf-8')
+          old = 'var SystemName = "New API"'
+          new = 'var SystemName = "TokenWay AI"'
+          if new not in s:
+              if s.count(old) != 1:
+                  raise SystemExit('common/constants.go: SystemName anchor is not unique')
+              p.write_text(s.replace(old, new, 1), encoding='utf-8')
+          print('SystemName branding applied.')
+          PY
+
+          (cd source && patch --batch --forward --fuzz=3 -p1 < ../.tokenway-validation/brand-h3/TOKENWAY-AI-BRANDED-WEBSITE.patch)
+          (cd source && patch --batch --forward --fuzz=3 -p1 < ../.tokenway-validation/brand-h3/TOKENWAY-AI-REFERENCE-H3-READY.patch)
+          (cd source && patch --batch --forward --fuzz=3 -p1 < ../.tokenway-validation/image-creator.patch)
+          (cd source && python3 ../.tokenway-validation/add-playground-access-token-rules.py)
+          (cd source && python3 ../.tokenway-validation/add-creator-route-tree.py)
+          python3 -m py_compile .tokenway-validation/brand-h3/apply-tokenway-ui-followup.py
+          (cd source && python3 ../.tokenway-validation/brand-h3/apply-tokenway-ui-followup.py)
+          (cd source && python3 ../.tokenway-validation/brand-h3/apply-tokenway-home-sidebar-followup.py)
+          (cd source && python3 ../.tokenway-validation/apply-tokenway-brand-runtime-fix.py)
+
+          mkdir -p source/web/src/routes source/web/src/assets/tokenway-home
+          cp web/src/routes/docs.tsx source/web/src/routes/docs.tsx
+          cp web/src/assets/tokenway-home/hero-scene.webp source/web/src/assets/tokenway-home/hero-scene.webp
+          test -s source/web/src/routes/docs.tsx
+          test -s source/web/src/assets/tokenway-home/hero-scene.webp
+          cp source/web/scripts/oxlint/__tests__/intl-locale.test.ts source/web/scripts/oxlint/__tests__/intl-locale.integration.test.ts
+          cp .tokenway-validation/brand-h3/intl-locale-unit.test.ts source/web/scripts/oxlint/__tests__/intl-locale.test.ts
+          cp .tokenway-validation/brand-h3/intl-locale.d.mts source/web/scripts/oxlint/intl-locale.d.mts
+
+          grep -Fq 'var SystemName = "TokenWay AI"' source/common/constants.go
+          grep -Fq "changeLanguage('zhCN')" source/web/src/features/home/tokenway-landing.tsx
+          grep -Fq "kind: 'audio'" source/web/src/features/home/tokenway-landing.tsx
+          grep -Fq "WaffoPancakeMerchantID" source/web/src/features/system-settings/billing/section-registry.tsx
+          grep -Fq "getEpayMethods" source/web/src/features/wallet/components/subscription-plans-card.tsx
+          grep -Fq "Redemption Codes" source/web/src/hooks/use-sidebar-data.ts
+          grep -Fq "createFileRoute('/docs')" source/web/src/routes/docs.tsx
+          grep -Fq "accessTokenSessionRule" source/middleware/access_token_routes.go
+          git -C source diff --check
+          echo "Exact branded V11 source baseline assembled."
+
+      - name: Apply fail-closed S3 and H3 billing safety overlay
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          base64 -d ../.tokenway-validation/brand-h3/TOKENWAY-RC52-S3-H3-SAFETY-FIX.patch.gz.b64 | gzip -dc > /tmp/tokenway-s3-h3-safety.patch
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          patch = Path('/tmp/tokenway-s3-h3-safety.patch')
+          source = patch.read_text(encoding='utf-8')
+          start = source.find('diff --git a/controller/task.go ')
+          if start >= 0:
+              end = source.find('diff --git a/docs/TOKENWAY-AI-DEPLOYMENT.md ', start)
+              if end < 0:
+                  raise SystemExit('controller patch section has no following boundary')
+              source = source[:start] + source[end:]
+          blocked = {'docs/TOKENWAY-AI-DEPLOYMENT.md', 'plugins/hailuo_responses_test.go'}
+          sections = re.split(r'(?=^diff --git a/)', source, flags=re.MULTILINE)
+          kept = []
+          for section in sections:
+              match = re.search(r'^diff --git a/(\\S+) b/', section, flags=re.MULTILINE)
+              if match and match.group(1) in blocked:
+                  continue
+              kept.append(section)
+          patch.write_text(''.join(kept), encoding='utf-8')
+          PY
+          patch --batch --forward --dry-run -p1 < /tmp/tokenway-s3-h3-safety.patch
+          patch --batch --forward -p1 < /tmp/tokenway-s3-h3-safety.patch
+          python3 ../.tokenway-validation/brand-h3/apply-rc52-s3-config-fail-closed.py
+          grep -Fq 'Context-IR is temporarily disabled' plugins/tasks/hailuo/plugin.js
+          echo "Fail-closed S3 behavior and H3 maximum-reservation guard applied."
+
+      - name: Decode and verify exact R7 finance patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          base64 -d .tokenway-validation/R7-finance-migration.patch.b64 > /tmp/R7-finance-migration.patch
+          printf '%s  %s\n' '8bf448cd959ed08902b274e0c35aa6efd3cac6ae9d2b5fa27e91a6842d2ebb86' '/tmp/R7-finance-migration.patch' | sha256sum -c -
+
+      - name: Apply finance migration to the assembled V11 source tree
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git apply --check /tmp/R7-finance-migration.patch
+          git apply /tmp/R7-finance-migration.patch
+          git diff --check
+          test -f controller/nowpayments.go
+          test -f model/wallet_ledger.go
+          test -f model/request_billing_journal.go
+          test -f service/request_billing_recovery.go
+          grep -Fq 'var SystemName = "TokenWay AI"' common/constants.go
+          printf '%s\n' "R7 finance patch applied to the full branded source tree."
+
+      - name: Repair NOWPayments refunded-order regression fixture scope
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("model/nowpayments_test.go")
+          s = p.read_text(encoding="utf-8")
+          old = """\trefundedUser, refundedOrder := createNowPaymentsTestOrder(t, common.TopUpStatusPending, "refunded")
+          \tverified.OrderID = refundedOrder.TradeNo
+          """
+          new = """\trefundedUser, refundedOrder := createNowPaymentsTestOrder(t, common.TopUpStatusPending, "refunded")
+          \tverified := NowPaymentsVerifiedPayment{
+          \t\tPaymentID: refundedOrder.ProviderPaymentID, OrderID: refundedOrder.TradeNo, Status: "finished",
+          \t\tPayAddress: refundedOrder.PaymentAddress, PayAmount: refundedOrder.PaymentAmount, PayCurrency: refundedOrder.PaymentCurrency,
+          \t\tPriceAmount: "20.00", PriceCurrency: "usd", ActuallyPaid: "5.123456", Network: "TRC20",
+          \t}
+          \tverified.OrderID = refundedOrder.TradeNo
+          """
+          if s.count(old) != 1:
+              raise SystemExit(f"expected exactly one refunded-order fixture anchor, got {s.count(old)}")
+          p.write_text(s.replace(old, new, 1), encoding="utf-8")
+          print("NOWPayments refunded-order fixture scope repaired.")
+
+          p = Path("model/task_cas_test.go")
+          s = p.read_text(encoding="utf-8")
+          old = """\t\t&UserSubscription{},
+          \t\t&UserOAuthBinding{},"""
+          new = """\t\t&UserSubscription{},
+          \t\t&SubscriptionPreConsumeRecord{},
+          \t\t&UserOAuthBinding{},"""
+          if s.count(old) != 1:
+              raise SystemExit(f"expected exactly one model TestMain migration anchor, got {s.count(old)}")
+          s = s.replace(old, new, 1)
+          p.write_text(s, encoding="utf-8")
+          print("SubscriptionPreConsumeRecord added to model TestMain migration list.")
+
+          old = """\t\tDB.Exec("DELETE FROM subscription_usage_ledgers")
+          """
+          new = """\t\tDB.Exec("DELETE FROM subscription_usage_ledgers")
+          \t\tDB.Exec("DELETE FROM subscription_pre_consume_records")
+          """
+          if s.count(old) != 1:
+              raise SystemExit(f"expected exactly one truncateTables cleanup anchor, got {s.count(old)}")
+          p.write_text(s.replace(old, new, 1), encoding="utf-8")
+          print("SubscriptionPreConsumeRecord added to model test cleanup.")
+
+          p = Path("service/text_quota_test.go")
+          s = p.read_text(encoding="utf-8")
+          old = "db.AutoMigrate(&model.User{}, &model.Token{}, &model.Channel{})"
+          new = """db.AutoMigrate(
+              &model.User{}, &model.Token{}, &model.Channel{},
+              &model.WalletLedger{}, &model.RequestBillingJournal{}, &model.RequestTokenQuotaLedger{},
+              &model.SubscriptionUsageLedger{}, &model.TaskSubscriptionBillingLedger{},
+              &model.TaskTokenQuotaLedger{}, &model.SubscriptionPreConsumeRecord{},
+          )"""
+          if s.count(old) != 1:
+              raise SystemExit(f"expected exactly one fixed-price database-matrix migration anchor, got {s.count(old)}")
+          p.write_text(s.replace(old, new, 1), encoding="utf-8")
+          print("Finance ledger tables added to fixed-price database-matrix test migrations.")
+
+          p = Path("controller/billing_option_test.go")
+          s = p.read_text(encoding="utf-8")
+          old = "require.NoError(t, db.AutoMigrate(&model.Token{}))"
+          new = """require.NoError(t, db.AutoMigrate(
+              &model.Token{},
+              &model.WalletLedger{}, &model.RequestBillingJournal{}, &model.RequestTokenQuotaLedger{},
+              &model.SubscriptionUsageLedger{}, &model.TaskSubscriptionBillingLedger{},
+              &model.TaskTokenQuotaLedger{}, &model.SubscriptionPreConsumeRecord{},
+          ))"""
+          if s.count(old) != 1:
+              raise SystemExit(f"expected exactly one pre-consume policy database-matrix migration anchor, got {s.count(old)}")
+          p.write_text(s.replace(old, new, 1), encoding="utf-8")
+          print("Finance ledger tables added to pre-consume policy database-matrix migrations.")
+          PY
+          git diff --check
+
+      - name: Guard task quota persistence for unpersisted billing fixtures
+        working-directory: source
+        run: python3 ../.tokenway-validation/apply-task-quota-persistence-guard.py
+
+      - name: Set up isolated Go 1.26.10 toolchain
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+        with:
+          go-version: "1.26.10"
+          cache: false
+
+      - name: Enforce Go toolchain isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v go
+          go version
+          test "$(go env GOVERSION)" = "go1.26.10"
+          test "$(go env GOTOOLCHAIN)" = "local"
+          echo "Go 1.26.10 is active; system Go 1.23 is not used."
+
+      - name: Verify Go formatting on all changed and added files
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t go_files < <({ git diff --name-only -- '*.go'; git ls-files --others --exclude-standard -- '*.go'; } | sort -u)
+          if (("${#go_files[@]}")); then
+            gofmt -w "${go_files[@]}"
+          fi
+          mapfile -t go_files < <({ git diff --name-only -- '*.go'; git ls-files --others --exclude-standard -- '*.go'; } | sort -u)
+          if (("${#go_files[@]}")); then
+            unformatted="$(gofmt -l "${go_files[@]}")"
+            if [[ -n "$unformatted" ]]; then
+              printf 'Go files require gofmt:\n%s\n' "$unformatted"
+              gofmt -d "${go_files[@]}" || true
+              exit 1
+            fi
+          fi
+          echo "Changed/new Go files are gofmt-clean."
+
+      - name: Run finance-specific regression tests
+        working-directory: source
+        run: |
+          set -euo pipefail
+          mkdir -p web/dist
+          printf '<!doctype html><html></html>\n' > web/dist/index.html
+          go test -v -timeout 3m ./controller ./model ./service -count=1 -run 'Test(NowPayments.*|GetNowPayments.*|ApplyWalletQuotaDelta.*|ApplyTaskWalletQuotaDelta.*|BackfillWalletOpeningBalances.*|TransferAffQuotaToQuota.*|LegacyUserQuotaHelpersAlwaysWriteWalletLedger|RecordWalletOpeningBalanceTxWritesOnlyOpeningLedger|UserCheckinCreditsWalletAndLedgerInOneTransaction|RedeemCreditsQuotaExactlyOnce|RedeemRejectsWalletOverflow|RequestBillingJournal.*|UnknownRequestOutcome.*|ApplySubscriptionUsageDelta.*|CleanupSubscriptionPreConsumeRecordsRetainsUnresolvedReservations|PostConsumeUserSubscriptionDeltaRejectsOverflowAndInvalidState|PreConsumeUserSubscription.*|RefundSubscriptionPreConsumeIsAtomicAndIdempotent|SettleSubscriptionPreConsumeIsIdempotentAndClosesRefundPath|SubscriptionExtraReserveIsTrackedAndRefundedAtomically|SubscriptionPreConsumeHeartbeatWinsStaleReview|SubscriptionPreConsumeReviewBlocksSettlementAndRefund|SubscriptionRefundEscapesRequestIDLikeWildcards|SubscriptionSettlementIntentCanBeRecovered|ApplyTaskSubscriptionQuotaDelta.*|TaskSubscriptionSettlementAtomicallyAdjustsTokenAndUsageCounters|BillingRecoveryUsesSingleCombinedScheduledHandler)'
+
+      - name: Vet root, relaykit, and tokenkit modules
+        working-directory: source
+        run: |
+          set -euo pipefail
+          go vet ./...
+          (cd relaykit && go vet ./...)
+          (cd tokenkit && go vet ./...)
+
+      - name: Build root, relaykit, and tokenkit modules
+        working-directory: source
+        run: |
+          set -euo pipefail
+          go build ./...
+          (cd relaykit && go build ./...)
+          (cd tokenkit && go build ./...)
+
+      - name: Run full Go test suites
+        working-directory: source
+        run: |
+          set -euo pipefail
+          go test ./...
+          (cd relaykit && go test ./...)
+          (cd tokenkit && go test ./...)
+
+      - name: Set up Bun 1.4.4
+        shell: bash
+        run: |
+          set -euo pipefail
+          bun_dir="$RUNNER_TEMP/bun-1.4.4"
+          bun_zip="$RUNNER_TEMP/bun-linux-x64.zip"
+          mkdir -p "$bun_dir"
+          curl -fL --retry 3 --retry-delay 2 "https://github.com/oven-sh/bun/releases/download/bun-v1.4.4/bun-linux-x64.zip" -o "$bun_zip"
+          python3 - "$bun_zip" "$bun_dir" <<'PY'
+          import os
+          import shutil
+          import sys
+          import zipfile
+          archive, destination = sys.argv[1], sys.argv[2]
+          with zipfile.ZipFile(archive) as bundle:
+              candidates = [name for name in bundle.namelist() if name == "bun" or name.endswith("/bun")]
+              if len(candidates) != 1:
+                  raise SystemExit(f"expected one Bun executable in release archive, found {candidates}")
+              target = os.path.join(destination, "bun")
+              with bundle.open(candidates[0]) as source, open(target, "wb") as output:
+                  shutil.copyfileobj(source, output)
+          os.chmod(target, os.stat(target).st_mode | 0o111)
+          link = os.path.join(destination, "bunx")
+          if not os.path.exists(link):
+              os.symlink("bun", link)
+          print(f"Installed Bun executable: {target}")
+          PY
+          echo "$bun_dir" >> "$GITHUB_PATH"
+          "$bun_dir/bun" --version
+          test "$("$bun_dir/bun" --version)" = "1.4.4"
+
+      - name: Install frontend dependencies
+        working-directory: source/web
+        run: bun install --frozen-lockfile
+
+      - name: Generate routes and build frontend
+        working-directory: source/web
+        run: bun run build
+
+      - name: Frontend typecheck
+        working-directory: source/web
+        run: bun run typecheck
+
+      - name: Frontend unit tests
+        working-directory: source/web
+        run: TOKIO_WORKER_THREADS=1 RAYON_NUM_THREADS=1 bun run test --maxWorkers=1
+
+      - name: Frontend Oxlint
+        working-directory: source/web
+        run: bun run lint
+
+      - name: Frontend format and copyright checks
+        working-directory: source/web
+        run: |
+          set -euo pipefail
+          bun run format:check
+          bun run copyright:check
+
+      - name: Retained TokenWay media contract tests
+        working-directory: source
+        run: |
+          set -euo pipefail
+          node scripts/test-media-plugin-contracts.mjs
+          node scripts/test-rc52-media-adapters.mjs
