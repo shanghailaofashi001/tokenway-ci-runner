@@ -416,14 +416,18 @@ jobs:
           start = s.index("func CompleteSubscriptionOrder(")
           end = s.index("\nfunc upsertSubscriptionTopUpTx", start)
           block = s[start:end]
-          old = "plan, err := GetSubscriptionPlanById(order.PlanId)"
+          old = """plan, err := GetSubscriptionPlanById(order.PlanId)
+          		if err != nil {
+          			return err
+          		}"""
           new = """var plan SubscriptionPlan
           		if err := tx.First(&plan, order.PlanId).Error; err != nil {
           			return err
           		}"""
           if block.count(old) != 1:
-              raise SystemExit(f"expected exactly one subscription plan lookup in transaction, got {block.count(old)}")
+              raise SystemExit(f"expected exactly one subscription plan lookup block in transaction, got {block.count(old)}")
           block = block.replace(old, new, 1)
+          block = block.replace("CreateUserSubscriptionFromPlanTx(tx, order.UserId, plan, \"order\")", "CreateUserSubscriptionFromPlanTx(tx, order.UserId, &plan, \"order\")", 1)
           p.write_text(s[:start] + block + s[end:], encoding="utf-8")
           print("Subscription completion now loads its plan through the active transaction.")
 
