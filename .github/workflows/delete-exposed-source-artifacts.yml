@@ -1,0 +1,49 @@
+name: Delete exposed source artifacts
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/delete-exposed-source-artifacts.yml"
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  delete-exposed-artifacts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Delete the identified public source artifacts
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const ids = [
+              14340454977,
+              14220734773,
+              14205805996,
+              14205910078,
+              14201207289,
+              14199017172,
+              14197193520,
+              14194650635,
+              14168121695,
+            ];
+            for (const artifact_id of ids) {
+              try {
+                await github.rest.actions.deleteArtifact({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  artifact_id,
+                });
+                core.info(`Deleted artifact ${artifact_id}`);
+              } catch (error) {
+                if (error.status === 404) {
+                  core.info(`Artifact ${artifact_id} was already absent`);
+                } else {
+                  throw error;
+                }
+              }
+            }
