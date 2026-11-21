@@ -487,9 +487,33 @@ jobs:
               path = match.group(1)
               parts = re.split(r'(?=^@@ )', section, flags=re.MULTILINE)
               header, hunks = parts[0], parts[1:]
+              if path == 'router/relay-router.go':
+                  target = Path(path)
+                  current = target.read_text(encoding='utf-8')
+                  missing = [
+                      imp for imp in (
+                          'github.com/QuantumNous/new-api/common',
+                          'github.com/QuantumNous/new-api/service',
+                      ) if f'"{imp}"' not in current
+                  ]
+                  if missing:
+                      anchor = '\t"strings"\n'
+                      if current.count(anchor) != 1:
+                          raise SystemExit('relay-router.go import anchor is ambiguous; refusing rewrite')
+                      current = current.replace(anchor, anchor + '\n' + ''.join(f'\t"{imp}"\n' for imp in missing), 1)
+                      target.write_text(current, encoding='utf-8')
+                  if hunks:
+                      hunks = hunks[1:]  # imports are handled idempotently above
+                  print('router markers: ' + ', '.join(
+                      f'{label}={marker in current}' for label, marker in (
+                          ('group-selection', 'func playgroundGroupSelection() gin.HandlerFunc {'),
+                          ('image-route', 'playgroundImageRouter.POST("/images/generations"'),
+                          ('video-route', 'playgroundVideoRouter.POST("/videos"'),
+                      )
+                  ))
               if not hunks:
-                  hunks = [section]
-                  header = ''
+                  already.append(path)
+                  continue
               for number, hunk in enumerate(hunks, 1):
                   candidate = header + hunk
                   temp.write_text(candidate, encoding='utf-8')
