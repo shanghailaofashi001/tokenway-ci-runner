@@ -113,7 +113,12 @@ jobs:
           import re
           source = Path('private/.tokenway-validation/brand-h3/TOKENWAY-CNY-DEFAULT-TEST-FIX.patch').read_text(encoding='utf-8')
           sections = re.split(r'(?=^--- a/)', source, flags=re.MULTILINE)
-          kept = [part for part in sections if not re.search(r'^--- a/web/src/test-setup[.]ts          # The UI follow-up already installs the shared USD test setup.
+          kept = [part for part in sections if not re.search(r'^--- a/web/src/test-setup[.]ts', part, flags=re.MULTILINE)]
+          Path('/tmp/tokenway-cny-default-test-fix.patch').write_text(''.join(kept), encoding='utf-8')
+          PY
+          patch --batch --forward --dry-run -p1 -d source < /tmp/tokenway-cny-default-test-fix.patch
+          patch --batch --forward -p1 -d source < /tmp/tokenway-cny-default-test-fix.patch
+          # The UI follow-up already installs the shared USD test setup.
           # Apply the remaining state fixes without replaying its test-setup hunk.
           python3 - <<'PY'
           from pathlib import Path
