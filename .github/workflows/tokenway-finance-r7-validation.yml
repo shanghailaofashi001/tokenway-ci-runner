@@ -329,6 +329,23 @@ jobs:
               raise SystemExit(f"expected exactly one pre-consume policy database-matrix migration anchor, got {s.count(old)}")
           p.write_text(s.replace(old, new, 1), encoding="utf-8")
           print("Finance ledger tables added to pre-consume policy database-matrix migrations.")
+
+          # Newly created task fixtures must carry the same pending billing marker
+          # that model.InitTask writes in production. Without it, terminal success
+          # cannot persist its durable settlement plan (CAS requires pending).
+          p = Path("service/task_billing_test.go")
+          s = p.read_text(encoding="utf-8")
+          old = """func makeTask(userId, channelId, quota, tokenId int, billingSource string, subscriptionId int) *model.Task {
+          	return &model.Task{
+          		TaskID:"""
+          new = """func makeTask(userId, channelId, quota, tokenId int, billingSource string, subscriptionId int) *model.Task {
+          	return &model.Task{
+          		BillingState: model.TaskBillingStatePending,
+          		TaskID:"""
+          if s.count(old) != 1:
+              raise SystemExit(f"expected exactly one makeTask fixture anchor, got {s.count(old)}")
+          p.write_text(s.replace(old, new, 1), encoding="utf-8")
+          print("Task billing test fixture now mirrors production InitTask pending state.")
           PY
           git diff --check
 
