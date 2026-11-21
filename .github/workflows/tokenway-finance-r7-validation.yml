@@ -408,6 +408,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          mkdir -p source/web/dist
+          printf '<!doctype html><html></html>\n' > source/web/dist/index.html
           export GOPROXY=off GOSUMDB=off GOFLAGS="-mod=vendor -p=1" GOTOOLCHAIN=local
           for d in source source/relaykit source/tokenkit; do
             echo "===== Offline dependency graph: ${d} ====="
