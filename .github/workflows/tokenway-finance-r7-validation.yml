@@ -641,13 +641,13 @@ jobs:
                       'TestKlingNativeRouteSubmitPollSettleAndQuery',
                       'TestDoubaoRelayedImageStreamSettlement',
                   ):
-                      start_match = re.search(r'(?m)^func ' + re.escape(test_name) + r'\\(', source)
+                      start_match = re.search(r'(?m)^func ' + re.escape(test_name) + r'\(', source)
                       if not start_match:
                           raise SystemExit(f'{path}: missing fixture test {test_name}')
                       next_match = re.search(r'(?m)^func ', source[start_match.end():])
                       end = start_match.end() + next_match.start() if next_match else len(source)
                       region = source[start_match.start():end]
-                      calls = list(re.finditer(r'database\\.AutoMigrate\\(([^)]*)\\)', region))
+                      calls = list(re.finditer(r'database\.AutoMigrate\(([^)]*)\)', region))
                       if len(calls) != 1:
                           raise SystemExit(f'{path}: expected one AutoMigrate call in {test_name}, found {len(calls)}')
                       if 'model.WalletLedger{}' not in calls[0].group(1):
