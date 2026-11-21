@@ -615,7 +615,11 @@ jobs:
           p = Path("model/subscription.go")
           s = p.read_text(encoding="utf-8")
           start = s.index("func CreateUserSubscriptionFromPlanTx(")
-          end = s.index("\nfunc refreshSubscriptionUserGroupCache", start)
+          # Use the next top-level function boundary instead of assuming a
+          # particular neighboring function name in the pinned upstream source.
+          end = s.find("\nfunc ", start + len("func CreateUserSubscriptionFromPlanTx("))
+          if end < 0:
+              raise SystemExit("could not locate function boundary after CreateUserSubscriptionFromPlanTx")
           block = s[start:end]
           if block.count("nowUnix := GetDBTimestamp()") != 1:
               raise SystemExit("expected one transaction-scoped subscription timestamp lookup")
