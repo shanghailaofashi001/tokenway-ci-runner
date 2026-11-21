@@ -340,7 +340,7 @@ jobs:
               raise SystemExit(1)
           print('PASS: no new lint errors in changed frontend files versus the exact upstream baseline')
           PY
-                - name: Restore TokenWay homepage reference images
+      - name: Restore TokenWay homepage reference images
         shell: bash
         run: |
           set -Eeuo pipefail
