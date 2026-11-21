@@ -207,8 +207,9 @@ jobs:
           python3 ../private/.tokenway-validation/brand-h3/apply-rc52-s3-config-fail-closed.py
           patch --batch --forward --dry-run -p1 < ../private/.tokenway-validation/brand-h3/TOKENWAY-FRONTEND-TYPECHECK-FIX.patch
           patch --batch --forward -p1 < ../private/.tokenway-validation/brand-h3/TOKENWAY-FRONTEND-TYPECHECK-FIX.patch
-          patch --batch --forward --dry-run -p1 < ../private/.tokenway-validation/brand-h3/TOKENWAY-CNY-DEFAULT-TEST-FIX.patch
-          patch --batch --forward -p1 < ../private/.tokenway-validation/brand-h3/TOKENWAY-CNY-DEFAULT-TEST-FIX.patch
+          grep -Fq "TEST_USD_CURRENCY_CONFIG" web/src/test-setup.ts
+          test -s web/src/test-utils/currency.ts
+          echo "PASS: CNY default test fixture is already included in the H3 reference patch"
           patch --batch --forward --dry-run -p1 < ../private/.tokenway-validation/brand-h3/TOKENWAY-CNY-TEST-IMPORT-CLEANUP.patch
           patch --batch --forward -p1 < ../private/.tokenway-validation/brand-h3/TOKENWAY-CNY-TEST-IMPORT-CLEANUP.patch
           patch --batch --forward --dry-run -p1 < ../private/.tokenway-validation/brand-h3/TOKENWAY-CNY-TEST-STATE-FIX.patch

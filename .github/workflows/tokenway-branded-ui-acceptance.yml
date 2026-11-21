@@ -111,7 +111,7 @@ jobs:
           # test fixtures explicitly select USD where assertions expect USD,
           # and isolate persisted currency preferences between test cases.
           for patch_file in \
-            TOKENWAY-CNY-DEFAULT-TEST-FIX.patch \
+ \
             TOKENWAY-CNY-TEST-IMPORT-CLEANUP.patch \
             TOKENWAY-CNY-TEST-STATE-FIX.patch \
             TOKENWAY-CNY-TEST-ISOLATION-FIX.patch; do
