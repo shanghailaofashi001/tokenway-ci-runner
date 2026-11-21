@@ -422,6 +422,32 @@ jobs:
           patch --batch --forward -p1 < ../private/.tokenway-validation/brand-h3/TOKENWAY-CNY-TEST-ISOLATION-FIX.patch
           python3 - <<'PY'
           from pathlib import Path
+          p = Path('web/src/features/models/__tests__/model-listing.test.tsx')
+          s = p.read_text(encoding='utf-8')
+          old_expression = """  const expression =
+              '(len <= 200000 ? tier("standard", p * 3 + c * 15 + cr * 0.3) : tier("long", p * 6 + c * 22.5 + cr * 0.6)) * (header("x-priority") == "high" ? 2 : 1)'
+          """
+          new_expression = """  const base =
+              'hour("UTC") < 12 ? (len < 1000 ? tier("first", p * 4 + c * 12) : tier("cheaper", p * 2 + c * 6)) : tier("night", p * 1 + c * 3)'
+            const expression = `(${base}) * (header("x-priority") == "high" ? 2 : 1)`
+          """
+          if s.count(old_expression) != 1:
+              raise SystemExit("model listing expression fixture anchor is not unique")
+          s = s.replace(old_expression, new_expression, 1)
+          old_assertions = """  expect(preview).toHaveTextContent('standard')
+            expect(preview).toHaveTextContent('long')
+            expect(preview).toHaveTextContent('2.1900')
+            expect(preview).toHaveTextContent('4.3800')"""
+          new_assertions = """  expect(preview).toHaveTextContent('first')
+            expect(preview).toHaveTextContent('cheaper')
+            expect(preview).toHaveTextContent('night')"""
+          if s.count(old_assertions) != 1:
+              raise SystemExit("model listing expression preview assertions are not unique")
+          s = s.replace(old_assertions, new_assertions, 1)
+          p.write_text(s, encoding='utf-8')
+          PY
+          python3 - <<'PY'
+          from pathlib import Path
           p = Path('web/src/test-setup.ts')
           s = p.read_text(encoding='utf-8')
           import_line = "import { usePricingPreferencesStore } from '@/stores/pricing-preferences-store'\n"
