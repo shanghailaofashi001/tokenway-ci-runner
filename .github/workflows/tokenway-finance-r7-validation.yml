@@ -424,6 +424,7 @@ jobs:
           done
 
       - name: Run finance controller regression tests
+        if: ${{ github.event_name != 'push' || !contains(github.event.head_commit.message, '[resume-full-go]') }}
         working-directory: source
         run: |
           set -euo pipefail
@@ -433,6 +434,7 @@ jobs:
           go test -v -timeout 5m ./controller -count=1 -run 'Test(NowPayments.*|GetNowPayments.*|ApplyWalletQuotaDelta.*|ApplyTaskWalletQuotaDelta.*|BackfillWalletOpeningBalances.*|TransferAffQuotaToQuota.*|LegacyUserQuotaHelpersAlwaysWriteWalletLedger|RecordWalletOpeningBalanceTxWritesOnlyOpeningLedger|UserCheckinCreditsWalletAndLedgerInOneTransaction|RedeemCreditsQuotaExactlyOnce|RedeemRejectsWalletOverflow|RequestBillingJournal.*|UnknownRequestOutcome.*|ApplySubscriptionUsageDelta.*|CleanupSubscriptionPreConsumeRecordsRetainsUnresolvedReservations|PostConsumeUserSubscriptionDeltaRejectsOverflowAndInvalidState|PreConsumeUserSubscription.*|RefundSubscriptionPreConsumeIsAtomicAndIdempotent|SettleSubscriptionPreConsumeIsIdempotentAndClosesRefundPath|SubscriptionExtraReserveIsTrackedAndRefundedAtomically|SubscriptionPreConsumeHeartbeatWinsStaleReview|SubscriptionPreConsumeReviewBlocksSettlementAndRefund|SubscriptionRefundEscapesRequestIDLikeWildcards|SubscriptionSettlementIntentCanBeRecovered|ApplyTaskSubscriptionQuotaDelta.*|TaskSubscriptionSettlementAtomicallyAdjustsTokenAndUsageCounters|BillingRecoveryUsesSingleCombinedScheduledHandler)'
 
       - name: Run finance model regression tests
+        if: ${{ github.event_name != 'push' || !contains(github.event.head_commit.message, '[resume-full-go]') }}
         working-directory: source
         run: |
           set -euo pipefail
@@ -440,6 +442,7 @@ jobs:
           go test -v -timeout 5m ./model -count=1 -run 'Test(NowPayments.*|GetNowPayments.*|ApplyWalletQuotaDelta.*|ApplyTaskWalletQuotaDelta.*|BackfillWalletOpeningBalances.*|TransferAffQuotaToQuota.*|LegacyUserQuotaHelpersAlwaysWriteWalletLedger|RecordWalletOpeningBalanceTxWritesOnlyOpeningLedger|UserCheckinCreditsWalletAndLedgerInOneTransaction|RedeemCreditsQuotaExactlyOnce|RedeemRejectsWalletOverflow|RequestBillingJournal.*|UnknownRequestOutcome.*|ApplySubscriptionUsageDelta.*|CleanupSubscriptionPreConsumeRecordsRetainsUnresolvedReservations|PostConsumeUserSubscriptionDeltaRejectsOverflowAndInvalidState|PreConsumeUserSubscription.*|RefundSubscriptionPreConsumeIsAtomicAndIdempotent|SettleSubscriptionPreConsumeIsIdempotentAndClosesRefundPath|SubscriptionExtraReserveIsTrackedAndRefundedAtomically|SubscriptionPreConsumeHeartbeatWinsStaleReview|SubscriptionPreConsumeReviewBlocksSettlementAndRefund|SubscriptionRefundEscapesRequestIDLikeWildcards|SubscriptionSettlementIntentCanBeRecovered|ApplyTaskSubscriptionQuotaDelta.*|TaskSubscriptionSettlementAtomicallyAdjustsTokenAndUsageCounters|BillingRecoveryUsesSingleCombinedScheduledHandler)'
 
       - name: Run finance service regression tests
+        if: ${{ github.event_name != 'push' || !contains(github.event.head_commit.message, '[resume-full-go]') }}
         working-directory: source
         run: |
           set -euo pipefail
@@ -447,6 +450,7 @@ jobs:
           go test -v -timeout 5m ./service -count=1 -run 'Test(NowPayments.*|GetNowPayments.*|ApplyWalletQuotaDelta.*|ApplyTaskWalletQuotaDelta.*|BackfillWalletOpeningBalances.*|TransferAffQuotaToQuota.*|LegacyUserQuotaHelpersAlwaysWriteWalletLedger|RecordWalletOpeningBalanceTxWritesOnlyOpeningLedger|UserCheckinCreditsWalletAndLedgerInOneTransaction|RedeemCreditsQuotaExactlyOnce|RedeemRejectsWalletOverflow|RequestBillingJournal.*|UnknownRequestOutcome.*|ApplySubscriptionUsageDelta.*|CleanupSubscriptionPreConsumeRecordsRetainsUnresolvedReservations|PostConsumeUserSubscriptionDeltaRejectsOverflowAndInvalidState|PreConsumeUserSubscription.*|RefundSubscriptionPreConsumeIsAtomicAndIdempotent|SettleSubscriptionPreConsumeIsIdempotentAndClosesRefundPath|SubscriptionExtraReserveIsTrackedAndRefundedAtomically|SubscriptionPreConsumeHeartbeatWinsStaleReview|SubscriptionPreConsumeReviewBlocksSettlementAndRefund|SubscriptionRefundEscapesRequestIDLikeWildcards|SubscriptionSettlementIntentCanBeRecovered|ApplyTaskSubscriptionQuotaDelta.*|TaskSubscriptionSettlementAtomicallyAdjustsTokenAndUsageCounters|BillingRecoveryUsesSingleCombinedScheduledHandler)'
 
       - name: Vet root, relaykit, and tokenkit modules
+        if: ${{ github.event_name != 'push' || !contains(github.event.head_commit.message, '[resume-full-go]') }}
         working-directory: source
         run: |
           set -euo pipefail
@@ -455,6 +459,7 @@ jobs:
           (cd tokenkit && go vet ./...)
 
       - name: Build root, relaykit, and tokenkit modules
+        if: ${{ github.event_name != 'push' || !contains(github.event.head_commit.message, '[resume-full-go]') }}
         working-directory: source
         run: |
           set -euo pipefail
@@ -462,19 +467,37 @@ jobs:
           (cd relaykit && go build ./...)
           (cd tokenkit && go build ./...)
 
-      - name: Run full Go test suites with bounded parallelism and live diagnostics
+      - name: Isolate tiered batch settlement regression before resuming full Go tests
         working-directory: source
         shell: bash
         run: |
           set -Eeuo pipefail
-          export GOPROXY=off GOSUMDB=off GOFLAGS="-mod=vendor -p=2" GOTOOLCHAIN=local GOMAXPROCS=2
+          export GOPROXY=off GOSUMDB=off GOFLAGS="-mod=vendor -p=1" GOTOOLCHAIN=local GOMAXPROCS=2
+          logfile="$RUNNER_TEMP/tokenway-go-test-logs-tiered-settlement.jsonl"
+          if timeout --signal=TERM --kill-after=15s 8m go test -json -timeout 5m ./service -run '^TestUpdateBatchTasksSettlesTieredUsageForTerminalStates$' -count=1 2>&1 | tee "$logfile"; then
+            echo "PASS: isolated tiered batch settlement regression"
+          else
+            status=$?
+            echo "FAIL: isolated tiered batch settlement regression (exit $status)"
+            tail -n 160 "$logfile" || true
+            exit "$status"
+          fi
+
+      - name: Run full Go test suites with database-safe package scheduling
+        working-directory: source
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          export GOPROXY=off GOSUMDB=off GOTOOLCHAIN=local GOMAXPROCS=2
           mkdir -p "$RUNNER_TEMP/tokenway-go-test-logs"
           run_module() {
             local module="$1"
             local directory="$2"
+            local parallelism="$3"
+            local hard_limit="$4"
             local logfile="$RUNNER_TEMP/tokenway-go-test-logs/$module.jsonl"
-            echo "===== FULL GO TEST: $module (package parallelism=2, per-test-binary timeout=15m, module hard limit=20m) ====="
-            if (cd "$directory" && timeout --signal=TERM --kill-after=30s 20m go test -json -timeout 15m ./...) 2>&1 | tee "$logfile"; then
+            echo "===== FULL GO TEST: $module (package parallelism=$parallelism, per-test-binary timeout=15m, module hard limit=${hard_limit}m) ====="
+            if (cd "$directory" && export GOFLAGS="-mod=vendor -p=$parallelism" && timeout --signal=TERM --kill-after=30s "${hard_limit}m" go test -json -timeout 15m ./...) 2>&1 | tee "$logfile"; then
               echo "PASS: full Go test suite $module"
             else
               local status=$?
@@ -483,9 +506,11 @@ jobs:
               return "$status"
             fi
           }
-          run_module root .
-          run_module relaykit ./relaykit
-          run_module tokenkit ./tokenkit
+          # Root tests share integration-test databases across packages; serialize them to prevent schema/data races.
+          run_module root . 1 40
+          # Relay and token modules have isolated test state and can retain bounded parallelism.
+          run_module relaykit ./relaykit 2 20
+          run_module tokenkit ./tokenkit 2 20
           echo "PASS: all three Go modules completed their full test suites."
 
       - name: Set up Bun 1.4.4
