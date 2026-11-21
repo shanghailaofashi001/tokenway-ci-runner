@@ -378,7 +378,7 @@ jobs:
           done
 
       - name: Run finance controller regression tests
-        if: ${{ github.event_name != 'push' || !contains(github.event.head_commit.message, '[resume-full-go]') }}
+        if: ${{ env.TOKENWAY_ROUTER_ONLY != 'true' && (github.event_name != 'push' || !contains(github.event.head_commit.message, '[resume-full-go]')) }}
         working-directory: source
         run: |
           set -euo pipefail
@@ -388,7 +388,7 @@ jobs:
           go test -v -timeout 5m ./controller -count=1 -run 'Test(NowPayments.*|GetNowPayments.*|ApplyWalletQuotaDelta.*|ApplyTaskWalletQuotaDelta.*|BackfillWalletOpeningBalances.*|TransferAffQuotaToQuota.*|LegacyUserQuotaHelpersAlwaysWriteWalletLedger|RecordWalletOpeningBalanceTxWritesOnlyOpeningLedger|UserCheckinCreditsWalletAndLedgerInOneTransaction|RedeemCreditsQuotaExactlyOnce|RedeemRejectsWalletOverflow|RequestBillingJournal.*|UnknownRequestOutcome.*|ApplySubscriptionUsageDelta.*|CleanupSubscriptionPreConsumeRecordsRetainsUnresolvedReservations|PostConsumeUserSubscriptionDeltaRejectsOverflowAndInvalidState|PreConsumeUserSubscription.*|RefundSubscriptionPreConsumeIsAtomicAndIdempotent|SettleSubscriptionPreConsumeIsIdempotentAndClosesRefundPath|SubscriptionExtraReserveIsTrackedAndRefundedAtomically|SubscriptionPreConsumeHeartbeatWinsStaleReview|SubscriptionPreConsumeReviewBlocksSettlementAndRefund|SubscriptionRefundEscapesRequestIDLikeWildcards|SubscriptionSettlementIntentCanBeRecovered|ApplyTaskSubscriptionQuotaDelta.*|TaskSubscriptionSettlementAtomicallyAdjustsTokenAndUsageCounters|BillingRecoveryUsesSingleCombinedScheduledHandler)'
 
       - name: Run finance model regression tests
-        if: ${{ github.event_name != 'push' || !contains(github.event.head_commit.message, '[resume-full-go]') }}
+        if: ${{ env.TOKENWAY_ROUTER_ONLY != 'true' && (github.event_name != 'push' || !contains(github.event.head_commit.message, '[resume-full-go]')) }}
         working-directory: source
         run: |
           set -euo pipefail
@@ -396,7 +396,7 @@ jobs:
           go test -v -timeout 5m ./model -count=1 -run 'Test(NowPayments.*|GetNowPayments.*|ApplyWalletQuotaDelta.*|ApplyTaskWalletQuotaDelta.*|BackfillWalletOpeningBalances.*|TransferAffQuotaToQuota.*|LegacyUserQuotaHelpersAlwaysWriteWalletLedger|RecordWalletOpeningBalanceTxWritesOnlyOpeningLedger|UserCheckinCreditsWalletAndLedgerInOneTransaction|RedeemCreditsQuotaExactlyOnce|RedeemRejectsWalletOverflow|RequestBillingJournal.*|UnknownRequestOutcome.*|ApplySubscriptionUsageDelta.*|CleanupSubscriptionPreConsumeRecordsRetainsUnresolvedReservations|PostConsumeUserSubscriptionDeltaRejectsOverflowAndInvalidState|PreConsumeUserSubscription.*|RefundSubscriptionPreConsumeIsAtomicAndIdempotent|SettleSubscriptionPreConsumeIsIdempotentAndClosesRefundPath|SubscriptionExtraReserveIsTrackedAndRefundedAtomically|SubscriptionPreConsumeHeartbeatWinsStaleReview|SubscriptionPreConsumeReviewBlocksSettlementAndRefund|SubscriptionRefundEscapesRequestIDLikeWildcards|SubscriptionSettlementIntentCanBeRecovered|ApplyTaskSubscriptionQuotaDelta.*|TaskSubscriptionSettlementAtomicallyAdjustsTokenAndUsageCounters|BillingRecoveryUsesSingleCombinedScheduledHandler)'
 
       - name: Run finance service regression tests
-        if: ${{ github.event_name != 'push' || !contains(github.event.head_commit.message, '[resume-full-go]') }}
+        if: ${{ env.TOKENWAY_ROUTER_ONLY != 'true' && (github.event_name != 'push' || !contains(github.event.head_commit.message, '[resume-full-go]')) }}
         working-directory: source
         run: |
           set -euo pipefail
@@ -404,7 +404,7 @@ jobs:
           go test -v -timeout 5m ./service -count=1 -run 'Test(NowPayments.*|GetNowPayments.*|ApplyWalletQuotaDelta.*|ApplyTaskWalletQuotaDelta.*|BackfillWalletOpeningBalances.*|TransferAffQuotaToQuota.*|LegacyUserQuotaHelpersAlwaysWriteWalletLedger|RecordWalletOpeningBalanceTxWritesOnlyOpeningLedger|UserCheckinCreditsWalletAndLedgerInOneTransaction|RedeemCreditsQuotaExactlyOnce|RedeemRejectsWalletOverflow|RequestBillingJournal.*|UnknownRequestOutcome.*|ApplySubscriptionUsageDelta.*|CleanupSubscriptionPreConsumeRecordsRetainsUnresolvedReservations|PostConsumeUserSubscriptionDeltaRejectsOverflowAndInvalidState|PreConsumeUserSubscription.*|RefundSubscriptionPreConsumeIsAtomicAndIdempotent|SettleSubscriptionPreConsumeIsIdempotentAndClosesRefundPath|SubscriptionExtraReserveIsTrackedAndRefundedAtomically|SubscriptionPreConsumeHeartbeatWinsStaleReview|SubscriptionPreConsumeReviewBlocksSettlementAndRefund|SubscriptionRefundEscapesRequestIDLikeWildcards|SubscriptionSettlementIntentCanBeRecovered|ApplyTaskSubscriptionQuotaDelta.*|TaskSubscriptionSettlementAtomicallyAdjustsTokenAndUsageCounters|BillingRecoveryUsesSingleCombinedScheduledHandler)'
 
       - name: Vet root, relaykit, and tokenkit modules
-        if: ${{ github.event_name != 'push' || !contains(github.event.head_commit.message, '[resume-full-go]') }}
+        if: ${{ env.TOKENWAY_ROUTER_ONLY != 'true' && (github.event_name != 'push' || !contains(github.event.head_commit.message, '[resume-full-go]')) }}
         working-directory: source
         run: |
           set -euo pipefail
@@ -413,7 +413,7 @@ jobs:
           (cd tokenkit && go vet ./...)
 
       - name: Build root, relaykit, and tokenkit modules
-        if: ${{ github.event_name != 'push' || !contains(github.event.head_commit.message, '[resume-full-go]') }}
+        if: ${{ env.TOKENWAY_ROUTER_ONLY != 'true' && (github.event_name != 'push' || !contains(github.event.head_commit.message, '[resume-full-go]')) }}
         working-directory: source
         run: |
           set -euo pipefail
