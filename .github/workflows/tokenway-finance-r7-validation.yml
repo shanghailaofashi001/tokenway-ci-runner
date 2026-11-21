@@ -475,14 +475,15 @@ jobs:
                   raise SystemExit("could not locate service TestMain AutoMigrate user model insertion point")
               s = s[:user_model] + "&model.SubscriptionPreConsumeRecord{},\n\t\t" + s[user_model:]
           if 'DELETE FROM subscription_pre_consume_records' not in s:
-              cleanup = s.index("func cleanupTaskBillingTestData")
-              cleanup_end = s.find("\n}", cleanup)
-              cleanup_block = s[cleanup:cleanup_end]
-              user_delete = cleanup_block.find('model.DB.Exec("DELETE FROM users")')
+              # The fixture cleanup is a t.Cleanup callback (not a named
+              # cleanupTaskBillingTestData function). Anchor on its actual
+              # user-table deletion and insert immediately before it.
+              user_delete = s.find('model.DB.Exec("DELETE FROM users")')
               if user_delete < 0:
-                  raise SystemExit("could not locate service task billing cleanup insertion point")
-              absolute = cleanup + user_delete
-              s = s[:absolute] + 'model.DB.Exec("DELETE FROM subscription_pre_consume_records")\n\t\t' + s[absolute:]
+                  raise SystemExit("could not locate service fixture user-table cleanup anchor")
+              line_start = s.rfind("\n", 0, user_delete) + 1
+              indent = s[line_start:user_delete]
+              s = s[:line_start] + indent + 'model.DB.Exec("DELETE FROM subscription_pre_consume_records")\n' + s[line_start:]
           p.write_text(s, encoding="utf-8")
           print("Service TestMain migration and cleanup now verify the exact subscription pre-consume table scope.")
 
