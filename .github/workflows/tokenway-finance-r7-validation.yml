@@ -133,7 +133,7 @@ jobs:
           sections = re.split(r'(?=^diff --git a/)', source, flags=re.MULTILINE)
           kept = []
           for section in sections:
-              match = re.search(r'^diff --git a/(\\S+) b/', section, flags=re.MULTILINE)
+              match = re.search(r'^diff --git a/(\S+) b/', section, flags=re.MULTILINE)
               if match and match.group(1) in blocked:
                   continue
               kept.append(section)
