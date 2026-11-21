@@ -451,7 +451,7 @@ jobs:
             echo "FAIL: image creator integration patch; sanitized git apply diagnostics:"
             tail -n 20 /tmp/tokenway-image-creator-patch.log | sed -E 's#(/home/runner/[^ ]*)#<runner-path>#g; s#(gh[pousr]_[A-Za-z0-9_]+)#<redacted>#g'
             echo "DIAGNOSTIC: current router imports and route declarations"
-            sed -n '1,125p' source/router/relay-router.go
+            sed -n '1,125p' router/relay-router.go
             echo "DIAGNOSTIC: patch context"
             sed -n '/diff --git a\/router\/relay-router.go/,/diff --git/p' ../.tokenway-validation/image-creator.patch | head -n 70
             exit 1
