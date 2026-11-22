@@ -340,4 +340,38 @@ jobs:
               raise SystemExit(1)
           print('PASS: no new lint errors in changed frontend files versus the exact upstream baseline')
           PY
+
+      - name: Verify Playground is renamed to AI Chat in user-facing navigation
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          root = Path('web/src')
+          files = [p for p in root.rglob('*') if p.is_file() and p.suffix in {'.ts','.tsx','.js','.jsx','.json'}]
+          hits = []
+          nav_hits = []
+          legacy_nav = []
+          for path in files:
+              try:
+                  text = path.read_text(encoding='utf-8')
+              except (UnicodeDecodeError, OSError):
+                  continue
+              if 'AI聊天' in text:
+                  hits.append(str(path))
+                  if any(token in str(path).lower() for token in ('sidebar','navigation','locale','i18n','translation')):
+                      nav_hits.append(str(path))
+              if path.name == 'use-sidebar-data.ts' and ('Playground' in text or '游乐场' in text):
+                  legacy_nav.append(str(path))
+          if not hits:
+              raise SystemExit('FAIL: no AI聊天 label found in frontend source')
+          if not nav_hits:
+              raise SystemExit('FAIL: AI聊天 exists, but no navigation/locale source contains the user-facing label')
+          if legacy_nav:
+              raise SystemExit('FAIL: legacy Playground label remains in sidebar navigation: ' + ', '.join(legacy_nav))
+          print('PASS: AI聊天 label is present in navigation/locale source; no legacy Playground label in sidebar data.')
+          print('AI聊天 source files: ' + ', '.join(nav_hits[:10]))
+          PY
+
 # parallel verification trigger 2026-11-23
