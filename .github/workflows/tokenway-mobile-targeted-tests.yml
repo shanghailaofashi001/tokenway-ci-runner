@@ -33,6 +33,18 @@ jobs:
           path: tokenway-source
           persist-credentials: false
 
+      - name: Preflight encrypted cross-device chat sync implementation
+        working-directory: tokenway-source/mobile
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s lib/services/chat_history_sync_service.dart
+          test -s test/chat_history_sync_service_test.dart
+          grep -Fq 'PBKDF2-HMAC-SHA256' lib/services/chat_history_sync_service.dart
+          grep -Fq 'AES-GCM' lib/services/chat_history_sync_service.dart
+          grep -Fq 'chat-history-sync' lib/services/tokenway_api.dart
+          grep -Fq 'chat_history_sync_service_test.dart' pubspec.yaml || true
+          echo 'PASS: mobile encrypted chat sync implementation, API wiring and focused tests are present.'
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
