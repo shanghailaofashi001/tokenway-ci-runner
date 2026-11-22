@@ -74,7 +74,7 @@ jobs:
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
           repository: shanghailaofashi001/tokenway-v11-dev
-          ref: 74a7c8125b47461f4c493413d5bae729346c3508
+          ref: d1dd4edb3c7491f3e8b786dd455920d2e0fc5dd4
           token: ${{ secrets.TOKENWAY_SOURCE_READ_TOKEN }}
           path: private
           fetch-depth: 1
@@ -698,5 +698,5 @@ jobs:
         working-directory: source
         run: |
           set -euo pipefail
-          node scripts/test-media-plugin-contracts.mjs
-          node scripts/test-rc52-media-adapters.mjs
+          node ../private/.tokenway-validation/test-media-plugin-contracts.mjs
+          node ../private/.tokenway-validation/test-rc52-media-adapters.mjs
