@@ -57,6 +57,8 @@ jobs:
           test -s ios/Runner/Info.plist
           grep -q 'TokenWay AI' android/app/src/main/AndroidManifest.xml
           grep -q 'TokenWay AI' ios/Runner/Info.plist
+          grep -Fq "Image.asset('assets/brand-mark.webp', width: 176" lib/screens/dashboard_screen.dart
+          grep -Fq "Image.asset('assets/brand-mark.webp', width: 236" lib/screens/dashboard_screen.dart
           if [[ -f android/build.gradle.kts ]]; then grep -Fq 'webview_flutter_android' android/build.gradle.kts; else grep -Fq 'webview_flutter_android' android/build.gradle; fi
           ! grep -Fq '\\n' android/build.gradle.kts 2>/dev/null || exit 1
           ! grep -Fq '\\n' android/build.gradle 2>/dev/null || exit 1
