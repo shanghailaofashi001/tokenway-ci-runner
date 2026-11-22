@@ -90,6 +90,7 @@ jobs:
         run: |
           grep -Fq 'void dispatchEvent()' lib/services/tokenway_api.dart
           grep -Fq 'if (pending.isNotEmpty) consumeLine(pending)' lib/services/tokenway_api.dart
+          grep -Fq "scrollUntilVisible(find.text('热门模型')" test/dashboard_test.dart
           grep -Fq "ProfileScreen(api: widget.api, language: widget.language)" lib/screens/dashboard_screen.dart
           grep -Fq 'initialTab: 1' lib/screens/dashboard_screen.dart
           grep -Fq 'initialTab: 2' lib/screens/dashboard_screen.dart
