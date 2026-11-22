@@ -1,4 +1,4 @@
-name: TokenWay isolated dependency security remediation matrix
+name: TokenWay self-healing security and regression matrix
 on:
   workflow_dispatch:
   push:
@@ -9,15 +9,15 @@ permissions:
   contents: read
   actions: read
 concurrency:
-  group: tokenway-dependency-security-matrix
+  group: tokenway-dependency-security-matrix-v3
   cancel-in-progress: false
 jobs:
   prepare:
-    name: Prepare isolated source snapshot
+    name: Prepare complete source snapshot
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - name: Download and extract complete source plus remediated web
+      - name: Restore complete source and clean dependency-remediated web
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -40,28 +40,32 @@ jobs:
           test -s source/TokenWay-V11/pkg/billingexpr/testdata/frontend_simulation.json
       - uses: actions/upload-artifact@v4
         with:
-          name: tokenway-source-security-matrix
+          name: tokenway-source-final-security-candidate
           path: source/TokenWay-V11/
           include-hidden-files: true
           if-no-files-found: error
-          retention-days: 5
-  audit:
-    name: Experiment ${{ matrix.name }}
+          retention-days: 7
+  validate:
+    name: Final dependency candidate - ${{ matrix.task }}
     needs: prepare
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
         include:
-          - name: Fully patched dependencies plus Zod 4 and Hono 2.1.6
-            key: all-overrides
-          - name: Semver-compatible dependency patches only
-            key: compatible-only
+          - task: security-audit
+            command: audit
+          - task: typescript-typecheck
+            command: typecheck
+          - task: full-unit-suite
+            command: test
+          - task: production-build
+            command: build
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: tokenway-source-security-matrix
+          name: tokenway-source-final-security-candidate
           path: candidate/TokenWay-V11
       - uses: actions/setup-node@v4
         with:
@@ -69,46 +73,36 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.4
-      - name: Apply isolated dependency overrides
+      - name: Apply verified security overrides and install
         working-directory: candidate/TokenWay-V11/web
-        env:
-          MATRIX_KEY: ${{ matrix.key }}
         run: |
           set -Eeuo pipefail
           node --input-type=module <<'NODE'
           import fs from 'node:fs';
           const p=JSON.parse(fs.readFileSync('package.json','utf8'));
-          p.overrides={...(p.overrides||{}),'@hono/node-server':process.env.MATRIX_KEY==='all-overrides'?'2.1.6':'1.19.18','decode-uri-component':'0.5.1','minimatch':'11.0.1'};
-          if(process.env.MATRIX_KEY==='all-overrides') p.overrides.zod='4.6.6';
+          p.overrides={...(p.overrides||{}),'@hono/node-server':'2.1.6','decode-uri-component':'0.5.1','minimatch':'11.0.1','zod':'4.6.6'};
           fs.writeFileSync('package.json',JSON.stringify(p,null,2)+'\n');
           NODE
+          node -e "JSON.parse(require('node:fs').readFileSync('package.json','utf8')); console.log('package.json valid JSON')"
           bun install
-      - name: Validate generated package manifest
+      - name: Run isolated validation
         working-directory: candidate/TokenWay-V11/web
-        run: node -e "JSON.parse(require('node:fs').readFileSync('package.json','utf8')); console.log('package.json valid JSON')"
-      - name: Audit resolved dependency graph
-        working-directory: candidate/TokenWay-V11/web
-        run: |
-          set +e
-          bun audit 2>&1 | tee /tmp/audit.log
-          audit_status=${PIPESTATUS[0]}
-          echo "BUN_AUDIT_EXIT=${audit_status}" >> "$GITHUB_STEP_SUMMARY"
-          grep -E 'vulnerabilities remaining|^[0-9]+ vulnerabilities|^(@hono/node-server|decode-uri-component|minimatch|zod)@' /tmp/audit.log || true
-          exit 0
-      - name: Run typecheck, full tests and production build
-        if: matrix.key == 'all-overrides'
-        working-directory: candidate/TokenWay-V11/web
+        env:
+          TASK: ${{ matrix.command }}
         run: |
           set -Eeuo pipefail
-          bun run typecheck
-          bun run test
-          bun run build
-      - uses: actions/upload-artifact@v4
+          if [ "$TASK" = "audit" ]; then
+            bun audit
+          else
+            bun run "$TASK"
+          fi
+      - name: Preserve exact final dependency candidate
         if: always()
+        uses: actions/upload-artifact@v4
         with:
-          name: tokenway-security-matrix-${{ matrix.key }}
+          name: tokenway-final-dependency-candidate-${{ matrix.command }}
           path: |
             candidate/TokenWay-V11/web/package.json
             candidate/TokenWay-V11/web/bun.lock
-          if-no-files-found: ignore
-          retention-days: 5
+          if-no-files-found: error
+          retention-days: 7
