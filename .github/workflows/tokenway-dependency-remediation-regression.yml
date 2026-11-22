@@ -26,13 +26,10 @@ jobs:
           curl --fail --show-error --location -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/14766199131/zip" -o /tmp/dependency-preview.zip
           unzip -tq /tmp/dependency-preview.zip
           unzip -q /tmp/dependency-preview.zip -d candidate/TokenWay-V11/web
-          curl --fail --show-error --location -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/14741328440/zip" -o /tmp/original-source.zip
-          unzip -tq /tmp/original-source.zip
-          mkdir -p original/artifact original/source
-          unzip -q /tmp/original-source.zip -d original/artifact
-          source_archive="$(find original/artifact -type f \( -name '*.tar.gz' -o -name '*.tgz' \) -print -quit)"
-          test -n "$source_archive"
-          tar -xzf "$source_archive" -C original/source
+          mkdir -p original/source candidate/TokenWay-V11/pkg/billingexpr/testdata
+          git clone --depth 1 --branch main https://github.com/shanghailaofashi001/tokenway-v11-dev.git /tmp/tokenway-source
+          cp /tmp/tokenway-source/pkg/billingexpr/testdata/frontend_simulation.json candidate/TokenWay-V11/pkg/billingexpr/testdata/frontend_simulation.json
+          test -s candidate/TokenWay-V11/pkg/billingexpr/testdata/frontend_simulation.json
           fixture="$(find original/source -path '*/pkg/billingexpr/testdata/frontend_simulation.json' -type f -print -quit)"
           test -n "$fixture"
           mkdir -p candidate/TokenWay-V11/pkg/billingexpr/testdata
