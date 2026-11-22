@@ -295,29 +295,6 @@ jobs:
         working-directory: source
         run: python3 ../.tokenway-validation/apply-task-quota-persistence-guard.py
 
-      - name: Format changed frontend files with protected headers
-        working-directory: source/web
-        shell: bash
-        run: |
-          set -euo pipefail
-          mapfile -t format_files < <(
-            {
-              git -C .. diff --name-only --diff-filter=ACMRT HEAD -- web
-              git -C .. ls-files --others --exclude-standard
-            } | awk '/^web\/.*\.(cjs|cts|css|html|js|jsx|json|md|mjs|mts|ts|tsx|yaml|yml)$/ {
-              sub(/^web\//, "")
-              print
-            }' | sort -u
-          )
-          if [ "${#format_files[@]}" -eq 0 ]; then
-            echo "No changed frontend files require formatting."
-          else
-            printf 'Formatting %s changed frontend files only\n' "${#format_files[@]}"
-            node ../../.tokenway-validation/format-changed-with-protected-headers.mjs --write "${format_files[@]}"
-            node ../../.tokenway-validation/format-changed-with-protected-headers.mjs --check "${format_files[@]}"
-          fi
-
-
       - name: Set up isolated Go 1.26.10 toolchain
         if: ${{ env.TOKENWAY_LINT_ONLY != 'true' }}
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
@@ -601,6 +578,29 @@ jobs:
       - name: Install frontend dependencies
         working-directory: source/web
         run: bun install --frozen-lockfile
+
+      - name: Format changed frontend files with protected headers
+        working-directory: source/web
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t format_files < <(
+            {
+              git -C .. diff --name-only --diff-filter=ACMRT HEAD -- web
+              git -C .. ls-files --others --exclude-standard
+            } | awk '/^web\/.*\.(cjs|cts|css|html|js|jsx|json|md|mjs|mts|ts|tsx|yaml|yml)$/ {
+              sub(/^web\//, "")
+              print
+            }' | sort -u
+          )
+          if [ "${#format_files[@]}" -eq 0 ]; then
+            echo "No changed frontend files require formatting."
+          else
+            printf 'Formatting %s changed frontend files only\n' "${#format_files[@]}"
+            node ../../.tokenway-validation/format-changed-with-protected-headers.mjs --write "${format_files[@]}"
+            node ../../.tokenway-validation/format-changed-with-protected-headers.mjs --check "${format_files[@]}"
+          fi
+
 
       - name: Generate routes and build frontend
         if: ${{ env.TOKENWAY_LINT_ONLY != 'true' }}
