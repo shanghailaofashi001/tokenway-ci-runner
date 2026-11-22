@@ -118,6 +118,15 @@ jobs:
           elif grep -Eqi 'SC1007|offline_graph.*duplicates|duplicates.*offline_graph' "$LOG"; then
             CLASSIFICATION="workflow-static-analysis"
             REASON="Known CI workflow lint defects matched an allowlisted deterministic repair rule; any change must pass actionlint and be proposed in a PR."
+          elif grep -Fq 'chat_history_sync_service_test.dart' "$LOG" && grep -Fq 'Does not exist' "$LOG"; then
+            CLASSIFICATION="missing-mobile-sync-test"
+            REASON="The mobile regression workflow references chat_history_sync_service_test.dart, but the checked-out source does not contain it. This encryption feature requires source review; no test is silently removed."
+          elif grep -Fq 'test -s lib/services/chat_history_sync_service.dart' "$LOG"; then
+            CLASSIFICATION="missing-mobile-sync-service"
+            REASON="The native mobile build expects chat_history_sync_service.dart, but the checked-out source is missing the module. End-to-end encryption code is not patched blindly."
+          elif grep -Fq 'grep -Fq "chat-history-sync" lib/services/tokenway_api.dart' "$LOG"; then
+            CLASSIFICATION="missing-mobile-sync-api"
+            REASON="The native build could not verify the chat-history-sync API route in the mobile client."
           elif grep -Fq 'PASS: encrypted chat sync DTO' "$LOG" && grep -Fq 'ChatHistorySync string' "$LOG"; then
             CLASSIFICATION="chat-sync-field-assertion"
             REASON="The encrypted chat-sync patch was applied, but the field-presence assertion used a literal single-space match against gofmt-aligned Go fields."
@@ -210,15 +219,16 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          title="CI triage: $RUN_NAME run $RUN_ID"
-          existing="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "$title in:title" --json number --jq '.[0].number // empty')"
-          if [ -n "$existing" ]; then
-            echo "Existing tracking issue: #$existing"
-            exit 0
-          fi
+          title="CI triage: $RUN_NAME [$CLASSIFICATION]"
+          existing="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "$title in:title" --json number,title | jq -r --arg title "$title" '.[] | select(.title == $title) | .number' | head -n 1)"
           jobs="$(jq -r '.jobs[] | select(.conclusion == "failure" or .conclusion == "cancelled" or .conclusion == "timed_out") | "- " + .name + ": " + (.conclusion // "unknown")' "$RUNNER_TEMP/tokenway-watchdog/jobs.json")"
-          body="$(printf 'The unattended watchdog detected a non-success run.\n\n- Workflow: %s\n- Run: %s\n- Conclusion: %s\n- Classification: %s\n- Diagnosis: %s\n- Run URL: %s\n\n## Failed jobs\n%s\n\n## Recovery policy\nOnly recognized transient infrastructure failures are retried, at most once. Source changes are not guessed or applied blindly. Finance, payment, settlement, authentication, security, secrets, and brand assets remain protected. Source/build/test failures are recorded for targeted root-cause repair; already-passed unrelated tests should not be repeated.\n' "$RUN_NAME" "$RUN_ID" "$RUN_CONCLUSION" "$CLASSIFICATION" "$REASON" "$RUN_URL" "${jobs:-No failed job summary available}")"
-          gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body"
+          body="$(printf 'The unattended watchdog detected a non-success run.\n\n- Workflow: %s\n- Run: %s\n- Conclusion: %s\n- Classification: %s\n- Diagnosis: %s\n- Run URL: %s\n\n## Failed jobs\n%s\n\n## Recovery policy\nOnly recognized transient infrastructure failures are retried, at most once. Deterministic allowlisted CI repairs are validated and proposed as draft PRs. Finance, payment, settlement, authentication, security, secrets, and brand assets are not changed blindly. Unknown or security-sensitive source failures require review; already-passed unrelated tests should not be repeated.\n' "$RUN_NAME" "$RUN_ID" "$RUN_CONCLUSION" "$CLASSIFICATION" "$REASON" "$RUN_URL" "${jobs:-No failed job summary available}")"
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" --body "$body"
+            echo "Appended run $RUN_ID to existing incident #$existing"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body"
+          fi
 
       - name: Publish watchdog result
         if: always()
