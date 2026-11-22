@@ -1,0 +1,66 @@
+name: TokenWay Mobile Source Archive
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/tokenway-mobile-source-archive.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tokenway-mobile-source-archive
+  cancel-in-progress: true
+
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout CI runner
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Checkout latest TokenWay Flutter application
+        uses: actions/checkout@v4
+        with:
+          repository: shanghailaofashi001/tokenway-v11-dev
+          ref: feat/flutter-mobile-app
+          token: ${{ secrets.TOKENWAY_SOURCE_READ_TOKEN }}
+          path: tokenway-mobile-source
+          persist-credentials: false
+
+      - name: Verify source package inputs
+        working-directory: tokenway-mobile-source/mobile
+        run: |
+          set -euo pipefail
+          test -s pubspec.yaml
+          test -s pubspec.lock
+          test -s lib/main.dart
+          test -s lib/screens/access_tokens_screen.dart
+          test -s lib/screens/chat_screen.dart
+          test -s lib/services/tokenway_api.dart
+          test -s scripts/bootstrap_platforms.sh
+          test -s assets/brand-mark.webp.b64
+
+      - name: Archive complete Flutter mobile source
+        run: |
+          set -euo pipefail
+          tar -czf "${RUNNER_TEMP}/TokenWay-Mobile-Source.tar.gz" \
+            --exclude='mobile/.dart_tool' \
+            --exclude='mobile/build' \
+            --exclude='mobile/.flutter-plugins' \
+            --exclude='mobile/.flutter-plugins-dependencies' \
+            -C tokenway-mobile-source mobile
+          sha256sum "${RUNNER_TEMP}/TokenWay-Mobile-Source.tar.gz"
+
+      - name: Upload TokenWay mobile source
+        uses: actions/upload-artifact@v4
+        with:
+          name: TokenWay-Mobile-Source
+          path: ${{ runner.temp }}/TokenWay-Mobile-Source.tar.gz
+          if-no-files-found: error
+          retention-days: 30
