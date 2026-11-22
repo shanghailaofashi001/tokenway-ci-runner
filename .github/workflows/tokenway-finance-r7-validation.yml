@@ -13,9 +13,9 @@ permissions:
   actions: read
 
 concurrency:
-  # Keep secure package assembly isolated from unrelated validation pushes.
-  group: finance-r7-validation-${{ github.ref }}-${{ contains(github.event.head_commit.message, '[package-only]') && 'package' || 'general' }}
-  cancel-in-progress: true
+  # Each run gets its own group: newer package pushes must never cancel an active source-package build.
+  group: finance-r7-validation-${{ github.ref }}-${{ github.run_id }}
+  cancel-in-progress: false
 
 jobs:
   validate:
