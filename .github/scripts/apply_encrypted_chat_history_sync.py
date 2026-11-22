@@ -209,4 +209,24 @@ func TestChatHistorySyncPayloadValidation(t *testing.T) {
     encoding="utf-8",
 )
 
+# The encrypted blob is a browser-session feature, not a personal API-token
+# capability. Explicitly classify both endpoints as session-only so PATs cannot
+# read or overwrite a user's cross-device encrypted history.
+access_rules = ROOT / "middleware/access_token_routes.go"
+access_rule_additions = (
+    '\t"GET /api/user/chat-history-sync": accessTokenSessionRule,\n'
+    '\t"PUT /api/user/chat-history-sync": accessTokenSessionRule,\n'
+)
+rules_source = access_rules.read_text(encoding="utf-8")
+for line in access_rule_additions.splitlines():
+    if line.strip() not in rules_source:
+        anchor = '\t"DELETE /api/user/self":                        accessTokenScopeRule("account_security:write"),\n'
+        if anchor not in rules_source:
+            raise SystemExit("middleware/access_token_routes.go: user self route anchor missing")
+        rules_source = rules_source.replace(anchor, anchor + line + "\n", 1)
+access_rules.write_text(rules_source, encoding="utf-8")
+for line in access_rule_additions.splitlines():
+    if rules_source.count(line.strip()) != 1:
+        raise SystemExit(f"middleware/access_token_routes.go: expected exactly one session rule: {line.strip()}")
+
 print("PASS: encrypted chat sync DTO, row-locked setting update, authenticated endpoints and payload validation tests applied.")
