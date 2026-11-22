@@ -129,6 +129,26 @@ jobs:
         working-directory: tokenway-source/mobile
         run: dart run scripts/prepare_brand_icon.dart
 
+      - name: Verify generated TokenWay icon crop and PNG dimensions
+        working-directory: tokenway-source/mobile
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq '64 / 60' scripts/prepare_brand_icon.dart
+          ! grep -Fq 'source.height * 1.2' scripts/prepare_brand_icon.dart
+          python3 - <<'PY'
+          from pathlib import Path
+          import struct
+
+          data = Path("assets/brand-icon.png").read_bytes()
+          if data[:8] != b"\\x89PNG\\r\\n\\x1a\\n":
+              raise SystemExit("Generated TokenWay app icon is not a PNG")
+          width, height = struct.unpack(">II", data[16:24])
+          if (width, height) != (512, 512):
+              raise SystemExit(f"Unexpected app icon dimensions: {width}x{height}")
+          print("Verified 512x512 app icon generated with the wordmark excluded from the T-symbol crop.")
+          PY
+
       - name: Generate Android and iOS launcher icons
         working-directory: tokenway-source/mobile
         run: dart run flutter_launcher_icons
@@ -136,6 +156,14 @@ jobs:
       - name: Audit generated iOS project without macOS/Xcode
         working-directory: tokenway-source/mobile
         run: python3 scripts/validate_ios_scaffold.py
+
+      - name: Analyze Flutter source
+        working-directory: tokenway-source/mobile
+        run: flutter analyze
+
+      - name: Run Flutter tests
+        working-directory: tokenway-source/mobile
+        run: flutter test
 
       - name: Cache Gradle
         uses: actions/cache@v4
@@ -180,6 +208,6 @@ jobs:
               sha: context.sha,
               state,
               context: 'tokenway/flutter-android',
-              description: 'Flutter analyze, tests and Android APK build',
+              description: 'Flutter analyze, tests, iOS static audit and Android APK build',
               target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
             });
