@@ -3956,3 +3956,5 @@ jobs:
 # Targeted Kuaipao-only regression follow-up trigger.
 
 # Root-cause fix: CNY is wallet base currency; EPay charges CNY directly and NOWPayments converts CNY to USD with USDExchangeRate.
+
+# Trigger independent YAML syntax guard after CNY targeted step repair.
