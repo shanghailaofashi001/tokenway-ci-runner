@@ -83,6 +83,9 @@ jobs:
           test -s lib/screens/task_history_screen.dart
           test -s lib/screens/profile_screen.dart
           grep -q 'ProfileScreen(api: widget.api' lib/screens/dashboard_screen.dart
+          grep -q '_imagePrompt' lib/screens/media_screen.dart
+          grep -q '_videoPrompt' lib/screens/media_screen.dart
+          grep -q "envelope['success'] == false" lib/screens/media_screen.dart
           grep -q 'tokenWayPageTheme' lib/screens/chat_screen.dart
           grep -q 'tokenWayPageTheme' lib/screens/media_screen.dart
           grep -q 'tokenWayPageTheme' lib/screens/wallet_screen.dart
