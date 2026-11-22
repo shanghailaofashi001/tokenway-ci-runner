@@ -701,3 +701,5 @@ jobs:
           set -euo pipefail
           node ../private/.tokenway-validation/test-media-plugin-contracts.mjs
           node ../private/.tokenway-validation/test-rc52-media-adapters.mjs
+
+# [resume-full-go] targeted package continuation marker
