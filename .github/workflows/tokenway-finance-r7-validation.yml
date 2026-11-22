@@ -74,7 +74,7 @@ jobs:
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
           repository: shanghailaofashi001/tokenway-v11-dev
-          ref: 27154d641c2dafc81b6f80896c0908125d31f546
+          ref: 0aa77cd9ce28a7b2425a7d6d3268e1fdb5c58710
           token: ${{ secrets.TOKENWAY_SOURCE_READ_TOKEN }}
           path: private
           fetch-depth: 1
@@ -101,6 +101,7 @@ jobs:
           cp private/.tokenway-validation/apply-payment-quota-error-compat.py .tokenway-validation/apply-payment-quota-error-compat.py
           cp private/.tokenway-validation/apply-nowpayments-access-token-rules.py .tokenway-validation/apply-nowpayments-access-token-rules.py
           cp -a private-validation/.tokenway-validation/. .tokenway-validation/
+          cp private/.tokenway-validation/apply-frontend-oxlint-fixes.py .tokenway-validation/apply-frontend-oxlint-fixes.py
           cp -a private/.tokenway-patches .
           mkdir -p web/src/routes web/src/assets/tokenway-home
           test -s private-validation/web/src/routes/docs.tsx
@@ -151,6 +152,7 @@ jobs:
           (cd source && python3 ../.tokenway-validation/brand-h3/apply-tokenway-ui-followup.py)
           (cd source && python3 ../.tokenway-validation/brand-h3/apply-tokenway-home-sidebar-followup.py)
           (cd source && python3 ../.tokenway-validation/apply-tokenway-brand-runtime-fix.py)
+          (cd source && python3 ../.tokenway-validation/apply-frontend-oxlint-fixes.py)
 
           mkdir -p source/web/src/routes source/web/src/assets/tokenway-home
           cp web/src/routes/docs.tsx source/web/src/routes/docs.tsx
@@ -616,7 +618,10 @@ jobs:
           else
             printf 'Linting %s changed/new frontend source files\n' "${#changed_files[@]}"
             printf '%s\n' "${changed_files[@]}"
-            bunx oxlint -c .oxlintrc.json --format agent "${changed_files[@]}"
+            echo '--- Creator route source context (diagnostic) ---'
+          if [ -f src/routes/_authenticated/creator/index.tsx ]; then nl -ba src/routes/_authenticated/creator/index.tsx | sed -n '1,45p'; else echo 'Creator route file missing'; fi
+          echo '--- end Creator route source context ---'
+          bunx oxlint -c .oxlintrc.json --format agent "${changed_files[@]}"
           fi
 
       - name: Frontend format and copyright checks
