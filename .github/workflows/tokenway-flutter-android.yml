@@ -135,6 +135,8 @@ jobs:
           test -s lib/screens/subscriptions_screen.dart
           test -s lib/screens/payment_webview_screen.dart
           test -s lib/services/chat_history_sync_service.dart
+          test -s test/chat_history_sync_service_test.dart
+          grep -Fq "PBKDF2-HMAC-SHA256" lib/services/chat_history_sync_service.dart
           grep -Fq "chat-history-sync" lib/services/tokenway_api.dart
           grep -Fq "video submission uses multipart form fields" test/tokenway_api_contract_test.dart
           grep -Fq "chat stream decodes split SSE events" test/tokenway_api_contract_test.dart
@@ -246,3 +248,5 @@ jobs:
 # Rebuild latest CNY EPay, NOWPayments USDT and subscription checkout modules.
 
 # Compile end-to-end encrypted cross-device chat sync support in native clients.
+
+# Require the end-to-end encrypted chat sync regression test in native builds.
