@@ -64,6 +64,7 @@ jobs:
           ! grep -Fq '\\n' android/build.gradle.kts 2>/dev/null || exit 1
           ! grep -Fq '\\n' android/build.gradle 2>/dev/null || exit 1
           test -s test/dashboard_test.dart
+          grep -Fq "import 'package:flutter/material.dart';" test/dashboard_test.dart
 
       - name: Resolve dependencies
         working-directory: tokenway-source/mobile
