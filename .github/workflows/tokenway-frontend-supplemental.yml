@@ -18,15 +18,15 @@ jobs:
     steps:
       - name: Download candidate and original artifacts
         env:
-          GH_TOKEN: \${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -Eeuo pipefail
           mkdir -p pair/candidate pair/original
-          curl --fail --show-error --location --retry 8 --retry-all-errors --retry-delay 4 -H "Authorization: Bearer \${GH_TOKEN}" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/\${GITHUB_REPOSITORY}/actions/artifacts/14765237398/zip" -o /tmp/candidate.zip
+          curl --fail --show-error --location --retry 8 --retry-all-errors --retry-delay 4 -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/14765237398/zip" -o /tmp/candidate.zip
           unzip -tq /tmp/candidate.zip
           unzip -q /tmp/candidate.zip -d pair/candidate
-          curl --fail --show-error --location --retry 8 --retry-all-errors --retry-delay 4 -H "Authorization: Bearer \${GH_TOKEN}" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/\${GITHUB_REPOSITORY}/actions/artifacts/14741328440/zip" -o /tmp/original
+          curl --fail --show-error --location --retry 8 --retry-all-errors --retry-delay 4 -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/14741328440/zip" -o /tmp/original
           if tar -tzf /tmp/original >/dev/null 2>&1; then
             tar -xzf /tmp/original -C pair/original
           else
@@ -105,7 +105,7 @@ jobs:
           PY
 
   supplemental:
-    name: \${{ matrix.label }}
+    name: ${{ matrix.label }}
     needs: prepare
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -135,7 +135,7 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: ~/.bun/install/cache
-          key: ubuntu-bun-supplemental-1.4.4-\${{ hashFiles('pair/candidate/TokenWay-V11/web/bun.lock') }}
+          key: ubuntu-bun-supplemental-1.4.4-${{ hashFiles('pair/candidate/TokenWay-V11/web/bun.lock') }}
           restore-keys: |
             ubuntu-bun-supplemental-1.4.4-
       - name: Install frozen dependencies
@@ -149,7 +149,7 @@ jobs:
         working-directory: pair/candidate/TokenWay-V11/web
         run: |
           set -Eeuo pipefail
-          case "\${{ matrix.command }}" in
+          case "${{ matrix.command }}" in
             format) bun run format:check ;;
             copyright) bun run copyright:check ;;
             audit) bun audit ;;
