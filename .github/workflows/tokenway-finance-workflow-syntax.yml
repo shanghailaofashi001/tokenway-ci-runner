@@ -1,0 +1,49 @@
+name: TokenWay Finance Workflow Syntax Guard
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/tokenway-finance-r7-validation.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate-workflow:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout CI repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Parse finance workflow YAML
+        run: |
+          set -euo pipefail
+          ruby -e 'require "yaml"; YAML.parse_file(".github/workflows/tokenway-finance-r7-validation.yml"); puts "PASS: finance workflow is valid YAML"'
+
+      - name: Check targeted CNY test step boundaries
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path(".github/workflows/tokenway-finance-r7-validation.yml")
+          text = p.read_text()
+          required = [
+              "      - name: Run targeted CNY wallet payment conversion regressions",
+              "      - name: Verify offline dependency graph",
+              "      - name: Run only migrated Kuaipao Go regressions",
+              "go test -v -timeout 3m ./controller -count=1 -run '^(TestGetNowPaymentsUSDPriceUsesWalletCurrencyExchangeRate|TestGetPayMoneyUsesCNYAsWalletBaseCurrency)$'",
+          ]
+          for marker in required:
+              if marker not in text:
+                  raise SystemExit(f"FAIL: missing workflow marker: {marker}")
+          start = text.index(required[0])
+          end = text.index(required[1], start)
+          block = text[start:end]
+          if "id: offline_graph" in block or "      - name:" in block[1:]:
+              raise SystemExit("FAIL: targeted CNY step boundary is malformed")
+          print("PASS: targeted CNY step and offline graph are separate workflow steps")
+          PY
