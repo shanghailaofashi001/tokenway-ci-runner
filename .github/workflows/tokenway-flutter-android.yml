@@ -127,6 +127,8 @@ jobs:
           grep -Fq "200," test/tokenway_api_contract_test.dart
           grep -Fq "task artifacts decode the backend success/data envelope" test/tokenway_api_contract_test.dart
           test -s lib/widgets/turnstile_challenge.dart
+          grep -Fq "_turnstileChallengeGeneration++" lib/screens/login_screen.dart
+          grep -Fq "ValueKey(_turnstileChallengeGeneration)" lib/screens/login_screen.dart
           grep -Fq "turnstileToken" lib/services/tokenway_api.dart
 
       - name: Resolve dependencies
