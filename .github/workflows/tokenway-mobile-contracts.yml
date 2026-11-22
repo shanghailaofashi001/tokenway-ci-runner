@@ -45,6 +45,8 @@ jobs:
           grep -Fq "'/api/user/self'" "$api"
           grep -Fq "'/api/user/models'" "$api"
           grep -Fq "'/pg/chat/completions'" "$api"
+          grep -Fq 'void dispatchEvent()' "$api"
+          grep -Fq 'if (pending.isNotEmpty) consumeLine(pending)' "$api"
           grep -Fq "'/api/user/topup/info'" "$api"
           grep -Fq "'/api/user/topup/self'" "$api"
           grep -Fq "'/api/user/auth/refresh'" "$api"
@@ -82,5 +84,8 @@ jobs:
           grep -Fq "'/v1/audio/speech'" "$api"
           grep -Fq "envelope['success'] == false" lib/screens/media_screen.dart
           test -s lib/screens/profile_screen.dart
+          grep -Fq 'tokenWayPageTheme()' lib/screens/profile_screen.dart
+          grep -Fq 'ProfileScreen(api: widget.api, language: widget.language)' lib/screens/dashboard_screen.dart
+          test -s test/dashboard_test.dart
           test -s assets/brand-mark.webp.b64
           echo "All TokenWay mobile API and security contracts passed."
