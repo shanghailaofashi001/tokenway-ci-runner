@@ -120,6 +120,9 @@ jobs:
           grep -Fq 'type topUpRequest struct' ../../backend-reference/controller/user.go
           grep -q "'/v1/images/generations'" lib/services/tokenway_api.dart
           grep -q "'/v1/videos'" lib/services/tokenway_api.dart
+          grep -Fq 'FormData.fromMap' lib/services/tokenway_api.dart
+          grep -Fq 'multipart/form-data' ../../backend-reference/docs/openapi/relay.json
+          grep -Fq 'ResponseType.bytes' lib/services/tokenway_api.dart
           grep -Fq '/v1/audio/speech' lib/services/tokenway_api.dart
           test -s lib/screens/login_screen.dart
           test -s lib/screens/chat_screen.dart
