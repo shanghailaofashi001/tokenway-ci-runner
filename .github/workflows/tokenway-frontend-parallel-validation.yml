@@ -1,0 +1,168 @@
+name: TokenWay V11 frontend parallel validation
+
+on:
+  push:
+    branches:
+      - tokenway-frontend-parallel-validation
+    paths:
+      - .github/workflows/tokenway-frontend-parallel-validation.yml
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: tokenway-frontend-parallel-validation
+  cancel-in-progress: true
+
+jobs:
+  prepare:
+    name: Prepare exact TokenWay source candidate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Download the preserved TokenWay V11 source artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: TokenWay-V11-Kuaipao-migrated.tar.gz
+          run-id: 44990994489
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          path: base-artifact
+
+      - name: Extract source and apply the homepage AI Chat entry
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -s base-artifact/TokenWay-V11-Kuaipao-migrated.tar.gz
+          mkdir -p candidate
+          tar -xzf base-artifact/TokenWay-V11-Kuaipao-migrated.tar.gz -C candidate
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path('candidate/TokenWay-V11/web/src/features/home/tokenway-landing.tsx')
+          s = p.read_text(encoding='utf-8')
+
+          old_import = "import { ArrowRight, AudioLines, Code2, Play, Rocket } from 'lucide-react'"
+          new_import = "import { ArrowRight, AudioLines, Code2, MessageCircle, Play, Rocket } from 'lucide-react'"
+          if old_import in s:
+              s = s.replace(old_import, new_import, 1)
+          elif new_import not in s:
+              raise SystemExit('Unexpected lucide-react import; refusing an unsafe patch')
+
+          for old, new in (
+              ("explore: '探索模型',\n        begin: '开始创作',",
+               "explore: '探索模型',\n        aiChat: 'AI聊天',\n        begin: '开始创作',"),
+              ("explore: 'Explore Models',\n        begin: 'Start Creating',",
+               "explore: 'Explore Models',\n        aiChat: 'AI Chat',\n        begin: 'Start Creating',"),
+          ):
+              if old in s:
+                  s = s.replace(old, new, 1)
+              elif new not in s:
+                  raise SystemExit(f'Expected language-label anchor not found: {old!r}')
+
+          creator_anchor = """              <Link
+                to='/creator'
+                className='inline-flex h-[60px] min-w-[212px] items-center justify-center gap-3 rounded-full border border-indigo-300/75 bg-[#091746]/65 px-8 text-[17px] font-bold text-white shadow-[inset_0_0_16px_rgba(114,104,255,0.08)] transition hover:bg-indigo-500/15'
+          """
+          chat_link = """              <Link
+                to='/playground'
+                className='inline-flex h-[60px] min-w-[212px] items-center justify-center gap-3 rounded-full border border-violet-300/75 bg-[linear-gradient(110deg,rgba(75,54,170,0.55),rgba(30,52,122,0.65))] px-8 text-[17px] font-bold text-white shadow-[inset_0_0_16px_rgba(139,92,246,0.12)] transition hover:bg-violet-500/20'
+              >
+                <MessageCircle className='size-5' />
+                {labels.aiChat}
+              </Link>
+          """
+          if "to='/playground'" not in s:
+              if s.count(creator_anchor) != 1:
+                  raise SystemExit('Creator CTA anchor is missing or ambiguous; refusing to patch')
+              s = s.replace(creator_anchor, chat_link + creator_anchor, 1)
+
+          required = (
+              "MessageCircle",
+              "aiChat: 'AI聊天'",
+              "aiChat: 'AI Chat'",
+              "to='/playground'",
+              "to='/pricing'",
+              "to='/creator'",
+          )
+          missing = [item for item in required if item not in s]
+          if missing:
+              raise SystemExit(f'Homepage AI Chat patch verification failed: {missing}')
+          p.write_text(s, encoding='utf-8')
+          print('PASS: bilingual AI Chat CTA added between Explore Models and Start Creating')
+          PY
+          test -s candidate/TokenWay-V11/web/package.json
+          test -s candidate/TokenWay-V11/web/bun.lock
+          test -s candidate/TokenWay-V11/web/src/routeTree.gen.ts
+
+      - name: Upload isolated source candidate for independent jobs
+        uses: actions/upload-artifact@v4
+        with:
+          name: tokenway-v11-frontend-candidate
+          path: candidate/
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 3
+
+  frontend:
+    name: Frontend ${{ matrix.label }}
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: typecheck
+            label: TypeScript typecheck
+            command: typecheck
+          - id: test
+            label: Unit tests
+            command: test
+          - id: lint
+            label: Oxlint
+            command: lint
+          - id: build
+            label: Production build
+            command: build
+    steps:
+      - name: Download isolated source candidate
+        uses: actions/download-artifact@v4
+        with:
+          name: tokenway-v11-frontend-candidate
+          path: candidate
+
+      - name: Set up Node.js 24.10.0
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.10.0
+
+      - name: Set up Bun 1.4.4
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+
+      - name: Cache Bun package downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ubuntu-bun-1.4.4-${{ hashFiles('candidate/TokenWay-V11/web/bun.lock') }}
+          restore-keys: |
+            ubuntu-bun-1.4.4-
+
+      - name: Verify toolchain and install frozen dependencies
+        working-directory: candidate/TokenWay-V11/web
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test "$(node --version)" = "v24.10.0"
+          test "$(bun --version)" = "1.4.4"
+          bun install --frozen-lockfile
+
+      - name: Run isolated frontend validation task
+        working-directory: candidate/TokenWay-V11/web
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          bun run "${{ matrix.command }}"
