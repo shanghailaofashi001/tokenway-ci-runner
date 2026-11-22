@@ -52,6 +52,7 @@ jobs:
         run: |
           bash -n scripts/bootstrap_platforms.sh
           bash scripts/bootstrap_platforms.sh
+          grep -Fq 'android.permission.INTERNET' android/app/src/main/AndroidManifest.xml
           if [[ -f android/build.gradle.kts ]]; then grep -Fq 'webview_flutter_android' android/build.gradle.kts; else grep -Fq 'webview_flutter_android' android/build.gradle; fi
 
       - name: Verify original TokenWay brand asset is retained
