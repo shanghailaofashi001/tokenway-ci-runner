@@ -33,9 +33,22 @@ jobs:
           text = p.read_text()
           required = [
               "      - name: Run targeted CNY wallet payment conversion regressions",
+              "      - name: Apply encrypted cross-device chat history sync backend",
               "      - name: Verify offline dependency graph",
               "      - name: Run only migrated Kuaipao Go regressions",
-              "go test -v -timeout 3m ./controller -count=1 -run '^(TestGetNowPaymentsUSDPriceUsesWalletCurrencyExchangeRate|TestGetPayMoneyUsesCNYAsWalletBaseCurrency)$'",
+              "go test -v -timeout 3m ./controller -count=1 -run '^(TestGetNowPaymentsUSDPriceUsesWalletCurrencyExchangeRate|TestGetPayMoneyUsesCNYAsWalletBaseCurrency|TestChatHistorySyncPayloadValidation)",
+          ]
+          for marker in required:
+              if marker not in text:
+                  raise SystemExit(f"FAIL: missing workflow marker: {marker}")
+          start = text.index(required[0])
+          end = text.index(required[1], start)
+          block = text[start:end]
+          if "id: offline_graph" in block or "      - name:" in block[1:]:
+              raise SystemExit("FAIL: targeted CNY step boundary is malformed")
+          print("PASS: targeted CNY step and offline graph are separate workflow steps")
+          PY
+",
           ]
           for marker in required:
               if marker not in text:
