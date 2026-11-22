@@ -77,7 +77,7 @@ jobs:
           grep -Fq "'/v1/images/generations'" "$api"
           grep -Fq "'/v1/videos'" "$api"
           grep -Fq "'/v1/audio/speech'" "$api"
-          grep -Fq "envelope['success'] == false" mobile-source/mobile/lib/screens/media_screen.dart
-          test -s mobile-source/mobile/lib/screens/profile_screen.dart
+          grep -Fq "envelope['success'] == false" lib/screens/media_screen.dart
+          test -s lib/screens/profile_screen.dart
           test -s assets/brand-mark.webp.b64
           echo "All TokenWay mobile API and security contracts passed."
