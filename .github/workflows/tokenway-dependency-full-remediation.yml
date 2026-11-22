@@ -50,19 +50,30 @@ jobs:
         run: |
           set -Eeuo pipefail
           bun install --frozen-lockfile
-      - name: Apply remediation strategy
+      - name: Apply remediation strategy (capture partial progress)
+        id: remediate
         working-directory: candidate/web
         run: |
-          set -Eeuo pipefail
-          ${{ matrix.command }}
+          set +e
+          ${{ matrix.command }} 2>&1 | tee ../../remediation-${{ matrix.key }}.log
+          repair_status=${PIPESTATUS[0]}
+          echo "REMEDIATION_EXIT=${repair_status}" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$repair_status" -ne 0 ]; then
+            echo "Remediation command returned non-zero; continue to audit and retain partial candidate evidence."
+            echo "partial=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "partial=false" >> "$GITHUB_OUTPUT"
+          fi
+          exit 0
       - name: Produce full audit report (do not hide remaining findings)
+        if: always()
         working-directory: candidate/web
         run: |
           set +e
           bun audit 2>&1 | tee ../../audit-${{ matrix.key }}.log
           audit_status=${PIPESTATUS[0]}
           echo "BUN_AUDIT_EXIT=${audit_status}" >> "$GITHUB_STEP_SUMMARY"
-          grep -E 'vulnerabilities remaining|^[0-9]+ vulnerabilities' ../../audit-${{ matrix.key }}.log | tee -a "$GITHUB_STEP_SUMMARY" || true
+          grep -E 'vulnerabilities remaining|^[0-9]+ vulnerabilities|^(@hono/node-server|decode-uri-component|minimatch|zod)@' ../../audit-${{ matrix.key }}.log | tee -a "$GITHUB_STEP_SUMMARY" || true
           exit 0
       - name: Upload isolated remediation candidate and audit evidence
         if: always()
@@ -72,6 +83,7 @@ jobs:
           path: |
             candidate/web/package.json
             candidate/web/bun.lock
+            remediation-${{ matrix.key }}.log
             audit-${{ matrix.key }}.log
           if-no-files-found: error
           retention-days: 7
