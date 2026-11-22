@@ -73,8 +73,8 @@ jobs:
           python3 ../.github/scripts/apply_encrypted_chat_history_sync.py
           gofmt -w relaykit/dto/user_settings.go model/user.go router/api-router.go middleware/access_token_routes.go controller/chat_history_sync.go controller/chat_history_sync_test.go router/access_token_scope_test.go
           git diff --check
-          grep -Fq '"GET /api/user/chat-history-sync": accessTokenSessionRule' middleware/access_token_routes.go
-          grep -Fq '"PUT /api/user/chat-history-sync": accessTokenSessionRule' middleware/access_token_routes.go
+          grep -Eq '"GET /api/user/chat-history-sync":[[:space:]]*accessTokenSessionRule' middleware/access_token_routes.go
+          grep -Eq '"PUT /api/user/chat-history-sync":[[:space:]]*accessTokenSessionRule' middleware/access_token_routes.go
 
       - name: Verify encrypted chat-sync access-token route coverage
         working-directory: source
