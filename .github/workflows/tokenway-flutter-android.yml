@@ -120,6 +120,11 @@ jobs:
           test -s lib/screens/profile_screen.dart
           test -s test/dashboard_test.dart
           grep -Fq "import 'package:flutter/material.dart';" test/dashboard_test.dart
+          test -s test/tokenway_api_contract_test.dart
+          grep -Fq "video submission uses multipart form fields" test/tokenway_api_contract_test.dart
+          grep -Fq "chat stream decodes split SSE events" test/tokenway_api_contract_test.dart
+          test -s lib/widgets/turnstile_challenge.dart
+          grep -Fq "turnstileToken" lib/services/tokenway_api.dart
 
       - name: Resolve dependencies
         working-directory: tokenway-source/mobile
