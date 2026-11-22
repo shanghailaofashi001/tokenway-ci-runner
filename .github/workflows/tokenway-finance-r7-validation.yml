@@ -602,12 +602,12 @@ jobs:
             } | sort -u
           )
 
-          if [ "\${#changed_files[@]}" -eq 0 ]; then
+          if [ "${#changed_files[@]}" -eq 0 ]; then
             echo "No changed frontend source files to lint."
           else
-            printf 'Linting %s changed/new frontend source files\\n' "\${#changed_files[@]}"
-            printf '%s\\n' "\${changed_files[@]}"
-            bunx oxlint -c .oxlintrc.json "\${changed_files[@]}"
+            printf 'Linting %s changed/new frontend source files\n' "${#changed_files[@]}"
+            printf '%s\n' "${changed_files[@]}"
+            bunx oxlint -c .oxlintrc.json "${changed_files[@]}"
           fi
 
       - name: Frontend format and copyright checks
