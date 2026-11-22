@@ -91,18 +91,18 @@ jobs:
               link_start = s.rfind("<Link", hero_start, creator)
               if link_start < 0:
                   raise SystemExit('Creator CTA Link element not found')
-              line_start = s.rfind("\\n", 0, link_start) + 1
+              line_start = s.rfind("\n", 0, link_start) + 1
               indent = s[line_start:link_start]
               if not indent.isspace():
                   raise SystemExit('Unexpected creator CTA indentation')
               chat_link = (
-                  indent + "<Link\\n"
-                  + indent + "  to='/playground'\\n"
-                  + indent + "  className='inline-flex h-[60px] min-w-[212px] items-center justify-center gap-3 rounded-full border border-violet-300/75 bg-[linear-gradient(110deg,rgba(75,54,170,0.55),rgba(30,52,122,0.65))] px-8 text-[17px] font-bold text-white shadow-[inset_0_0_16px_rgba(139,92,246,0.12)] transition hover:bg-violet-500/20'\\n"
-                  + indent + ">\\n"
-                  + indent + "  <MessageCircle className='size-5' />\\n"
-                  + indent + "  {labels.aiChat}\\n"
-                  + indent + "</Link>\\n"
+                  indent + "<Link\n"
+                  + indent + "  to='/playground'\n"
+                  + indent + "  className='inline-flex h-[60px] min-w-[212px] items-center justify-center gap-3 rounded-full border border-violet-300/75 bg-[linear-gradient(110deg,rgba(75,54,170,0.55),rgba(30,52,122,0.65))] px-8 text-[17px] font-bold text-white shadow-[inset_0_0_16px_rgba(139,92,246,0.12)] transition hover:bg-violet-500/20'\n"
+                  + indent + ">\n"
+                  + indent + "  <MessageCircle className='size-5' />\n"
+                  + indent + "  {labels.aiChat}\n"
+                  + indent + "</Link>\n"
               )
               s = s[:line_start] + chat_link + s[line_start:]
 
