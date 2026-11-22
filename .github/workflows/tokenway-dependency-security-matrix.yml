@@ -54,9 +54,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: Patch overrides plus Zod 4
+          - name: Full patched overrides plus Zod 4 and Hono 2
             key: all-overrides
-          - name: Patch overrides without Zod major override
+          - name: Patch overrides without Zod or Hono major upgrade
             key: compatible-only
     steps:
       - uses: actions/download-artifact@v4
@@ -78,11 +78,14 @@ jobs:
           node --input-type=module <<'NODE'
           import fs from 'node:fs';
           const p=JSON.parse(fs.readFileSync('package.json','utf8'));
-          p.overrides={...(p.overrides||{}),'@hono/node-server':'1.19.18','decode-uri-component':'0.5.1','minimatch':'11.0.1'};
+          p.overrides={...(p.overrides||{}),'@hono/node-server':process.env.MATRIX_KEY==='all-overrides'?'2.1.3':'1.19.18','decode-uri-component':'0.5.1','minimatch':'11.0.1'};
           if(process.env.MATRIX_KEY==='all-overrides') p.overrides.zod='4.6.6';
-          fs.writeFileSync('package.json',JSON.stringify(p,null,2)+'\\n');
+          fs.writeFileSync('package.json',JSON.stringify(p,null,2)+'\n');
           NODE
           bun install
+      - name: Validate generated package manifest
+        working-directory: candidate/TokenWay-V11/web
+        run: node -e "JSON.parse(require('node:fs').readFileSync('package.json','utf8')); console.log('package.json valid JSON')"
       - name: Audit resolved dependency graph
         working-directory: candidate/TokenWay-V11/web
         run: |
