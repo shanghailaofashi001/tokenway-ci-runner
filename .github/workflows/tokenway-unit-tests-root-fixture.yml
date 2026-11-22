@@ -28,12 +28,16 @@ jobs:
           unzip -q /tmp/remediated.zip -d candidate/TokenWay-V11/web
           rm -rf candidate/TokenWay-V11/web/node_modules
           curl --fail --show-error --location -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/14741328440/zip" -o /tmp/original-source.zip
-          unzip -tq /tmp/original-source.zip
-          unzip -q /tmp/original-source.zip -d /tmp/original-artifact
-          archive="$(find /tmp/original-artifact -type f \( -name '*.tar.gz' -o -name '*.tgz' \) -print -quit)"
-          test -n "$archive"
-          tar -tzf "$archive" >/dev/null
-          tar -xzf "$archive" -C original/source
+          if tar -tzf /tmp/original-source.zip >/dev/null 2>&1; then
+            tar -xzf /tmp/original-source.zip -C original/source
+          else
+            unzip -tq /tmp/original-source.zip
+            unzip -q /tmp/original-source.zip -d /tmp/original-artifact
+            archive="$(find /tmp/original-artifact -type f \\( -name '*.tar.gz' -o -name '*.tgz' \\) -print -quit)"
+            test -n "$archive"
+            tar -tzf "$archive" >/dev/null
+            tar -xzf "$archive" -C original/source
+          fi
           fixture="$(find original/source -path '*/pkg/billingexpr/testdata/frontend_simulation.json' -type f -print -quit)"
           test -n "$fixture"
           mkdir -p candidate/TokenWay-V11/pkg/billingexpr/testdata
