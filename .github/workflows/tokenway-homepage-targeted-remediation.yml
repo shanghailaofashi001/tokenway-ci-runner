@@ -45,6 +45,7 @@ jobs:
           ./node_modules/.bin/oxfmt --write src/features/home/tokenway-landing.tsx
           ./node_modules/.bin/oxfmt --check src/features/home/tokenway-landing.tsx
           ./node_modules/.bin/oxlint -c .oxlintrc.json src/features/home/tokenway-landing.tsx
+          rm -rf node_modules
       - uses: actions/upload-artifact@v4
         with:
           name: tokenway-v11-homepage-remediated
