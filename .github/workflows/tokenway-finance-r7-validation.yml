@@ -845,6 +845,19 @@ jobs:
         with:
           bun-version: "1.4.4"
 
+      - name: Download audited dependency artifact through GitHub CLI
+        if: ${{ success() && env.TOKENWAY_PACKAGE_ONLY == 'true' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          artifact="${RUNNER_TEMP}/tokenway-dependency-candidate.zip"
+          gh api --method GET "repos/${GITHUB_REPOSITORY}/actions/artifacts/14768211653/zip" --output "${artifact}"
+          test -s "${artifact}"
+          echo "Downloaded audited dependency artifact via authenticated GitHub CLI."
+          sha256sum "${artifact}"
+
       - name: Verify prior acceptance and package the validated TokenWay V11 source
         if: ${{ success() && env.TOKENWAY_PACKAGE_ONLY == 'true' }}
         shell: bash
@@ -976,13 +989,10 @@ jobs:
           print("VERIFIED: final dependency candidate matrix — all jobs passed")
 
           artifact_id = 14768211653
-          artifact_url = f"https://api.github.com/repos/{repository}/actions/artifacts/{artifact_id}/zip"
-          artifact_req = urllib.request.Request(
-              artifact_url,
-              headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"},
-          )
-          with urllib.request.urlopen(artifact_req, timeout=120) as response:
-              artifact_bytes = response.read()
+          artifact_path = Path(os.environ["RUNNER_TEMP"]) / "tokenway-dependency-candidate.zip"
+          if not artifact_path.is_file() or artifact_path.stat().st_size == 0:
+              raise SystemExit("Audited dependency artifact download is missing or empty.")
+          artifact_bytes = artifact_path.read_bytes()
           artifact_sha = hashlib.sha256(artifact_bytes).hexdigest()
           expected_artifact_sha = "c46bf6ae656fc8afc08464344b4f051cbdda975e6567103efbc37a1232b5da90"
           if artifact_sha != expected_artifact_sha:
@@ -1263,3 +1273,5 @@ jobs:
 # Package-only follow-up: all four pinned acceptance runs were independently re-verified.
 
 # Targeted Kuaipao regression rerun trigger; no full-suite rerun. [kuaipao-only]
+
+# Root-cause fix: use gh api to follow the signed artifact redirect, avoiding urllib's 401 on Azure Blob SAS.
