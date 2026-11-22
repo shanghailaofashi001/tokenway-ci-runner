@@ -54,6 +54,7 @@ jobs:
       # The tagged follow-up push reruns only router; workflow_dispatch remains the complete suite.
       TOKENWAY_ROUTER_ONLY: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[router-only]') }}
       TOKENWAY_FRONTEND_ONLY: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[frontend-only]') }}
+      TOKENWAY_LINT_ONLY: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[lint-only]') }}
       TEST_MYSQL_DSN: root:tokenway-test@tcp(127.0.0.1:3306)/tokenway_test?charset=utf8mb4&parseTime=True&loc=Local
       TEST_POSTGRES_DSN: postgres://tokenway:tokenway-test@127.0.0.1:5432/tokenway_test?sslmode=disable
       TEST_MYSQL_LOG_DSN: root:tokenway-test@tcp(127.0.0.1:3306)/tokenway_test?charset=utf8mb4&parseTime=True&loc=Local
@@ -292,12 +293,14 @@ jobs:
         run: python3 ../.tokenway-validation/apply-task-quota-persistence-guard.py
 
       - name: Set up isolated Go 1.26.10 toolchain
+        if: ${{ env.TOKENWAY_LINT_ONLY != 'true' }}
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
         with:
           go-version: "1.26.10"
           cache: false
 
       - name: Enforce Go toolchain isolation
+        if: ${{ env.TOKENWAY_LINT_ONLY != 'true' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -308,6 +311,7 @@ jobs:
           echo "Go 1.26.10 is active; system Go 1.23 is not used."
 
       - name: Verify Go formatting on all changed and added files
+        if: ${{ env.TOKENWAY_LINT_ONLY != 'true' }}
         working-directory: source
         shell: bash
         run: |
@@ -328,6 +332,7 @@ jobs:
           echo "Changed/new Go files are gofmt-clean."
 
       - name: Restore and vendor Go modules
+        if: ${{ env.TOKENWAY_LINT_ONLY != 'true' }}
         id: go_vendor
         shell: bash
         run: |
@@ -359,6 +364,7 @@ jobs:
           test -s source/vendor/modules.txt
 
       - name: Verify offline dependency graph
+        if: ${{ env.TOKENWAY_LINT_ONLY != 'true' }}
         id: offline_graph
         shell: bash
         run: |
@@ -379,7 +385,7 @@ jobs:
           done
 
       - name: Run finance controller regression tests
-        if: ${{ env.TOKENWAY_ROUTER_ONLY != 'true' && (github.event_name != 'push' || !contains(github.event.head_commit.message, '[resume-full-go]')) }}
+        if: ${{ env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && (github.event_name != 'push' || !contains(github.event.head_commit.message, '[resume-full-go]')) }}
         working-directory: source
         run: |
           set -euo pipefail
@@ -389,7 +395,7 @@ jobs:
           go test -v -timeout 5m ./controller -count=1 -run 'Test(NowPayments.*|GetNowPayments.*|ApplyWalletQuotaDelta.*|ApplyTaskWalletQuotaDelta.*|BackfillWalletOpeningBalances.*|TransferAffQuotaToQuota.*|LegacyUserQuotaHelpersAlwaysWriteWalletLedger|RecordWalletOpeningBalanceTxWritesOnlyOpeningLedger|UserCheckinCreditsWalletAndLedgerInOneTransaction|RedeemCreditsQuotaExactlyOnce|RedeemRejectsWalletOverflow|RequestBillingJournal.*|UnknownRequestOutcome.*|ApplySubscriptionUsageDelta.*|CleanupSubscriptionPreConsumeRecordsRetainsUnresolvedReservations|PostConsumeUserSubscriptionDeltaRejectsOverflowAndInvalidState|PreConsumeUserSubscription.*|RefundSubscriptionPreConsumeIsAtomicAndIdempotent|SettleSubscriptionPreConsumeIsIdempotentAndClosesRefundPath|SubscriptionExtraReserveIsTrackedAndRefundedAtomically|SubscriptionPreConsumeHeartbeatWinsStaleReview|SubscriptionPreConsumeReviewBlocksSettlementAndRefund|SubscriptionRefundEscapesRequestIDLikeWildcards|SubscriptionSettlementIntentCanBeRecovered|ApplyTaskSubscriptionQuotaDelta.*|TaskSubscriptionSettlementAtomicallyAdjustsTokenAndUsageCounters|BillingRecoveryUsesSingleCombinedScheduledHandler)'
 
       - name: Run finance model regression tests
-        if: ${{ env.TOKENWAY_ROUTER_ONLY != 'true' && (github.event_name != 'push' || !contains(github.event.head_commit.message, '[resume-full-go]')) }}
+        if: ${{ env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && (github.event_name != 'push' || !contains(github.event.head_commit.message, '[resume-full-go]')) }}
         working-directory: source
         run: |
           set -euo pipefail
@@ -397,7 +403,7 @@ jobs:
           go test -v -timeout 5m ./model -count=1 -run 'Test(NowPayments.*|GetNowPayments.*|ApplyWalletQuotaDelta.*|ApplyTaskWalletQuotaDelta.*|BackfillWalletOpeningBalances.*|TransferAffQuotaToQuota.*|LegacyUserQuotaHelpersAlwaysWriteWalletLedger|RecordWalletOpeningBalanceTxWritesOnlyOpeningLedger|UserCheckinCreditsWalletAndLedgerInOneTransaction|RedeemCreditsQuotaExactlyOnce|RedeemRejectsWalletOverflow|RequestBillingJournal.*|UnknownRequestOutcome.*|ApplySubscriptionUsageDelta.*|CleanupSubscriptionPreConsumeRecordsRetainsUnresolvedReservations|PostConsumeUserSubscriptionDeltaRejectsOverflowAndInvalidState|PreConsumeUserSubscription.*|RefundSubscriptionPreConsumeIsAtomicAndIdempotent|SettleSubscriptionPreConsumeIsIdempotentAndClosesRefundPath|SubscriptionExtraReserveIsTrackedAndRefundedAtomically|SubscriptionPreConsumeHeartbeatWinsStaleReview|SubscriptionPreConsumeReviewBlocksSettlementAndRefund|SubscriptionRefundEscapesRequestIDLikeWildcards|SubscriptionSettlementIntentCanBeRecovered|ApplyTaskSubscriptionQuotaDelta.*|TaskSubscriptionSettlementAtomicallyAdjustsTokenAndUsageCounters|BillingRecoveryUsesSingleCombinedScheduledHandler)'
 
       - name: Run finance service regression tests
-        if: ${{ env.TOKENWAY_ROUTER_ONLY != 'true' && (github.event_name != 'push' || !contains(github.event.head_commit.message, '[resume-full-go]')) }}
+        if: ${{ env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && (github.event_name != 'push' || !contains(github.event.head_commit.message, '[resume-full-go]')) }}
         working-directory: source
         run: |
           set -euo pipefail
@@ -405,7 +411,7 @@ jobs:
           go test -v -timeout 5m ./service -count=1 -run 'Test(NowPayments.*|GetNowPayments.*|ApplyWalletQuotaDelta.*|ApplyTaskWalletQuotaDelta.*|BackfillWalletOpeningBalances.*|TransferAffQuotaToQuota.*|LegacyUserQuotaHelpersAlwaysWriteWalletLedger|RecordWalletOpeningBalanceTxWritesOnlyOpeningLedger|UserCheckinCreditsWalletAndLedgerInOneTransaction|RedeemCreditsQuotaExactlyOnce|RedeemRejectsWalletOverflow|RequestBillingJournal.*|UnknownRequestOutcome.*|ApplySubscriptionUsageDelta.*|CleanupSubscriptionPreConsumeRecordsRetainsUnresolvedReservations|PostConsumeUserSubscriptionDeltaRejectsOverflowAndInvalidState|PreConsumeUserSubscription.*|RefundSubscriptionPreConsumeIsAtomicAndIdempotent|SettleSubscriptionPreConsumeIsIdempotentAndClosesRefundPath|SubscriptionExtraReserveIsTrackedAndRefundedAtomically|SubscriptionPreConsumeHeartbeatWinsStaleReview|SubscriptionPreConsumeReviewBlocksSettlementAndRefund|SubscriptionRefundEscapesRequestIDLikeWildcards|SubscriptionSettlementIntentCanBeRecovered|ApplyTaskSubscriptionQuotaDelta.*|TaskSubscriptionSettlementAtomicallyAdjustsTokenAndUsageCounters|BillingRecoveryUsesSingleCombinedScheduledHandler)'
 
       - name: Vet root, relaykit, and tokenkit modules
-        if: ${{ env.TOKENWAY_ROUTER_ONLY != 'true' && (github.event_name != 'push' || !contains(github.event.head_commit.message, '[resume-full-go]')) }}
+        if: ${{ env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && (github.event_name != 'push' || !contains(github.event.head_commit.message, '[resume-full-go]')) }}
         working-directory: source
         run: |
           set -euo pipefail
@@ -414,7 +420,7 @@ jobs:
           (cd tokenkit && go vet ./...)
 
       - name: Build root, relaykit, and tokenkit modules
-        if: ${{ env.TOKENWAY_ROUTER_ONLY != 'true' && (github.event_name != 'push' || !contains(github.event.head_commit.message, '[resume-full-go]')) }}
+        if: ${{ env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && (github.event_name != 'push' || !contains(github.event.head_commit.message, '[resume-full-go]')) }}
         working-directory: source
         run: |
           set -euo pipefail
@@ -423,7 +429,7 @@ jobs:
           (cd tokenkit && go build ./...)
 
       - name: Isolate tiered batch settlement regression before resuming full Go tests
-        if: ${{ github.event_name != 'push' || (!contains(github.event.head_commit.message, '[router-only]') && !contains(github.event.head_commit.message, '[frontend-only]')) }}
+        if: ${{ env.TOKENWAY_LINT_ONLY != 'true' && github.event_name != 'push' || (!contains(github.event.head_commit.message, '[router-only]') && !contains(github.event.head_commit.message, '[frontend-only]')) }}
         working-directory: source
         shell: bash
         run: |
@@ -440,7 +446,7 @@ jobs:
           fi
 
       - name: Resume failed Go packages only and finish remaining modules
-        if: ${{ github.event_name != 'push' || !contains(github.event.head_commit.message, '[frontend-only]') }}
+        if: ${{ env.TOKENWAY_LINT_ONLY != 'true' && github.event_name != 'push' || !contains(github.event.head_commit.message, '[frontend-only]') }}
         working-directory: source
         shell: bash
         run: |
@@ -571,14 +577,17 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Generate routes and build frontend
+        if: ${{ env.TOKENWAY_LINT_ONLY != 'true' }}
         working-directory: source/web
         run: bun run build
 
       - name: Frontend typecheck
+        if: ${{ env.TOKENWAY_LINT_ONLY != 'true' }}
         working-directory: source/web
         run: bun run typecheck
 
       - name: Frontend unit tests
+        if: ${{ env.TOKENWAY_LINT_ONLY != 'true' }}
         working-directory: source/web
         run: TOKIO_WORKER_THREADS=1 RAYON_NUM_THREADS=1 bun run test --maxWorkers=1
 
@@ -607,7 +616,7 @@ jobs:
           else
             printf 'Linting %s changed/new frontend source files\n' "${#changed_files[@]}"
             printf '%s\n' "${changed_files[@]}"
-            bunx oxlint -c .oxlintrc.json "${changed_files[@]}"
+            bunx oxlint -c .oxlintrc.json --format agent "${changed_files[@]}"
           fi
 
       - name: Frontend format and copyright checks
