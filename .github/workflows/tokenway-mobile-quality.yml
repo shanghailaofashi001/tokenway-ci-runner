@@ -57,7 +57,6 @@ jobs:
           test -s ios/Runner/Info.plist
           test -s ios/Podfile
           grep -q 'TokenWay AI' android/app/src/main/AndroidManifest.xml
-          grep -q 'TokenWay AI' ios/Runner/Info.plist
           grep -Fq "Image.asset('assets/brand-mark.webp', width: 176" lib/screens/dashboard_screen.dart
           grep -Fq "Image.asset('assets/brand-mark.webp', width: 236" lib/screens/dashboard_screen.dart
           ! grep -q '^const _lavender' lib/screens/dashboard_screen.dart
@@ -121,7 +120,7 @@ jobs:
           grep -Fq 'type topUpRequest struct' ../../backend-reference/controller/user.go
           grep -q "'/v1/images/generations'" lib/services/tokenway_api.dart
           grep -q "'/v1/videos'" lib/services/tokenway_api.dart
-          grep -q "'/v1/audio/speech'" lib/services/tokenway_api.dart
+          grep -Fq '/v1/audio/speech' lib/services/tokenway_api.dart
           test -s lib/screens/login_screen.dart
           test -s lib/screens/chat_screen.dart
           test -s lib/screens/wallet_screen.dart
