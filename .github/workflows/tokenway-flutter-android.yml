@@ -118,6 +118,10 @@ jobs:
           key: ubuntu-gradle-${{ hashFiles('tokenway-source/mobile/android/**/gradle-wrapper.properties') }}
           restore-keys: ubuntu-gradle-
 
+      - name: Confirm task artifact response decoding is awaited
+        working-directory: tokenway-source/mobile
+        run: grep -q 'final body = await _map(response)' lib/services/tokenway_api.dart
+
       - name: Build Android APK
         working-directory: tokenway-source/mobile
         run: flutter build apk --release --no-pub
