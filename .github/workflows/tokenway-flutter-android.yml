@@ -52,7 +52,10 @@ jobs:
 
       - name: Verify original TokenWay brand asset is retained
         working-directory: mobile
-        run: test -s assets/brand-mark.webp.b64
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s assets/brand-mark.webp.b64
           grep -q "assets/brand-mark.webp" lib/screens/login_screen.dart
 
       - name: Verify mobile API and chat modules are present
