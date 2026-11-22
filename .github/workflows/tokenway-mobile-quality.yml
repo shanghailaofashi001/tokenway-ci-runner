@@ -110,6 +110,10 @@ jobs:
           grep -q 'tokenWayPageTheme' lib/screens/media_screen.dart
           grep -q 'tokenWayPageTheme' lib/screens/wallet_screen.dart
           grep -q 'tokenWayPageTheme' lib/screens/task_history_screen.dart
+          grep -q '_imagePrompt' lib/screens/media_screen.dart
+          grep -q '_videoPrompt' lib/screens/media_screen.dart
+          grep -q "envelope['success'] == false" lib/screens/media_screen.dart
+          ! grep -q 'Colors.white60' lib/screens/chat_screen.dart lib/screens/media_screen.dart lib/screens/wallet_screen.dart lib/screens/task_history_screen.dart
           grep -q 'final body = await _map(response)' lib/services/tokenway_api.dart
           grep -Fq 'taskRoute.GET("/:task_id/artifacts", middleware.UserAuth(), controller.GetDashboardTaskArtifacts)' ../../backend-reference/router/api-router.go
           grep -Fq 'common.ApiSuccess(c, response)' ../../backend-reference/controller/task.go
