@@ -68,6 +68,13 @@ jobs:
         working-directory: tokenway-source/mobile
         run: flutter pub get
 
+      - name: Generate official app icons and audit iOS scaffold
+        working-directory: tokenway-source/mobile
+        run: |
+          dart run scripts/prepare_brand_icon.dart
+          dart run flutter_launcher_icons
+          python3 scripts/validate_ios_scaffold.py
+
       - name: Analyze Dart source
         working-directory: tokenway-source/mobile
         run: flutter analyze --no-pub --no-fatal-infos
@@ -88,6 +95,20 @@ jobs:
           grep -q "'/api/user/topup/info'" lib/services/tokenway_api.dart
           grep -q "'/api/user/topup/self'" lib/services/tokenway_api.dart
           grep -q "'/api/task/\$encoded/artifacts'" lib/services/tokenway_api.dart
+          grep -q "'/api/task/self'" lib/services/tokenway_api.dart
+          grep -q "'/api/user/topup'" lib/services/tokenway_api.dart
+          grep -q "'/api/user/login/2fa'" lib/services/tokenway_api.dart
+          grep -q "'/api/user/auth/logout'" lib/services/tokenway_api.dart
+          grep -q 'data is List && data.isNotEmpty' lib/screens/media_screen.dart
+          grep -q "envelope\['success'\] == false" lib/screens/media_screen.dart
+          grep -q '_imagePrompt' lib/screens/media_screen.dart
+          grep -q '_videoPrompt' lib/screens/media_screen.dart
+          test -s lib/screens/profile_screen.dart
+          grep -q 'ProfileScreen(api: widget.api' lib/screens/dashboard_screen.dart
+          grep -q 'tokenWayPageTheme' lib/screens/chat_screen.dart
+          grep -q 'tokenWayPageTheme' lib/screens/media_screen.dart
+          grep -q 'tokenWayPageTheme' lib/screens/wallet_screen.dart
+          grep -q 'tokenWayPageTheme' lib/screens/task_history_screen.dart
           grep -q 'final body = await _map(response)' lib/services/tokenway_api.dart
           grep -Fq 'taskRoute.GET("/:task_id/artifacts", middleware.UserAuth(), controller.GetDashboardTaskArtifacts)' ../../backend-reference/router/api-router.go
           grep -Fq 'common.ApiSuccess(c, response)' ../../backend-reference/controller/task.go
