@@ -1,0 +1,302 @@
+diff --git a/relay/channel/advancedcustom/adaptor_test.go b/relay/channel/advancedcustom/adaptor_test.go
+index b5dddeb..d430402 100644
+--- a/relay/channel/advancedcustom/adaptor_test.go
++++ b/relay/channel/advancedcustom/adaptor_test.go
+@@ -125,6 +125,104 @@ func TestAdaptorJoinsUpstreamPathWithChannelBaseURL(t *testing.T) {
+ 	assert.Equal(t, "sk-test", parsedURL.Query().Get("api_key"))
+ }
+ 
++func TestKuaipaoPresetRoutesJoinBaseURLWithoutDuplicateV1(t *testing.T) {
++	tests := []struct {
++		name         string
++		baseURL      string
++		incomingPath string
++		upstreamPath string
++		wantURL      string
++	}{
++		{
++			name:         "Claude Messages",
++			baseURL:      "https://kuaipao.pro",
++			incomingPath: "/v1/messages",
++			upstreamPath: "/v1/messages",
++			wantURL:      "https://kuaipao.pro/v1/messages",
++		},
++		{
++			name:         "OpenAI Chat Completions",
++			baseURL:      "https://kuaipao.pro/v1",
++			incomingPath: "/v1/chat/completions",
++			upstreamPath: "/chat/completions",
++			wantURL:      "https://kuaipao.pro/v1/chat/completions",
++		},
++		{
++			name:         "OpenAI Responses",
++			baseURL:      "https://kuaipao.pro/v1",
++			incomingPath: "/v1/responses",
++			upstreamPath: "/responses",
++			wantURL:      "https://kuaipao.pro/v1/responses",
++		},
++	}
++
++	for _, tt := range tests {
++		t.Run(tt.name, func(t *testing.T) {
++			info := advancedCustomRelayInfo(&dto.AdvancedCustomConfig{
++				Routes: []dto.AdvancedCustomRoute{{
++					IncomingPath: tt.incomingPath,
++					UpstreamPath: tt.upstreamPath,
++					Converter:    relayconvert.ConverterNone,
++				}},
++			})
++			info.ChannelBaseUrl = tt.baseURL
++			info.RequestURLPath = tt.incomingPath
++
++			got, err := (&Adaptor{}).GetRequestURL(info)
++
++			require.NoError(t, err)
++			assert.Equal(t, tt.wantURL, got)
++		})
++	}
++}
++
++func TestKuaipaoModelListManagementRoutesJoinBaseURLAndUseBearerAuth(t *testing.T) {
++	tests := []struct {
++		name         string
++		baseURL      string
++		upstreamPath string
++		wantURL      string
++	}{
++		{
++			name:         "Claude root base",
++			baseURL:      "https://kuaipao.pro",
++			upstreamPath: "/v1/models",
++			wantURL:      "https://kuaipao.pro/v1/models",
++		},
++		{
++			name:         "OpenAI v1 base",
++			baseURL:      "https://kuaipao.pro/v1",
++			upstreamPath: "/models",
++			wantURL:      "https://kuaipao.pro/v1/models",
++		},
++	}
++
++	for _, tt := range tests {
++		t.Run(tt.name, func(t *testing.T) {
++			info := advancedCustomRelayInfo(&dto.AdvancedCustomConfig{
++				Routes: []dto.AdvancedCustomRoute{{
++					IncomingPath: "/v1/models",
++					UpstreamPath: tt.upstreamPath,
++					Converter:    relayconvert.ConverterNone,
++					Models:       []string{},
++					Auth: &dto.AdvancedCustomRouteAuth{
++						Type:  dto.AdvancedCustomAuthTypeHeader,
++						Name:  "Authorization",
++						Value: "Bearer {api_key}",
++					},
++				}},
++			})
++			info.ChannelBaseUrl = tt.baseURL
++
++			gotURL, headers, err := (&Adaptor{}).BuildModelListRequest(info)
++
++			require.NoError(t, err)
++			assert.Equal(t, tt.wantURL, gotURL)
++			assert.Equal(t, "Bearer sk-test", headers.Get("Authorization"))
++		})
++	}
++}
++
+ func TestAdaptorReturnsErrorWhenUpstreamPathNeedsMissingBaseURL(t *testing.T) {
+ 	adaptor := &Adaptor{}
+ 	info := advancedCustomRelayInfo(&dto.AdvancedCustomConfig{
+diff --git a/web/src/features/channels/lib/__tests__/advanced-custom.test.ts b/web/src/features/channels/lib/__tests__/advanced-custom.test.ts
+index 2bb3fe0..c92fd3d 100644
+--- a/web/src/features/channels/lib/__tests__/advanced-custom.test.ts
++++ b/web/src/features/channels/lib/__tests__/advanced-custom.test.ts
+@@ -21,6 +21,7 @@ import { describe, expect, test } from 'vitest'
+ import {
+   ADVANCED_CUSTOM_CONVERTER_OPTIONS,
+   ADVANCED_CUSTOM_INCOMING_PATH_OPTIONS,
++  ADVANCED_CUSTOM_TEMPLATE_OPTIONS,
+   getAdvancedCustomConverterDefaults,
+   getAdvancedCustomConverterOptions,
+   getAdvancedCustomIncomingPathLabel,
+@@ -109,3 +110,100 @@ describe('advanced custom incoming path options', () => {
+     expect(convertedPaths).not.toContain('/v1/tools/fetch')
+   })
+ })
++
++
++describe('Kuaipao Advanced Custom templates', () => {
++  test('Claude Messages keeps root-base paths and exposes authenticated model sync', () => {
++    const template = ADVANCED_CUSTOM_TEMPLATE_OPTIONS.find(
++      (option) => option.value === 'kuaipao_anthropic'
++    )
++    expect(template?.label).toContain('https://kuaipao.pro')
++    expect(template?.config.advanced_routes).toEqual([
++      {
++        incoming_path: '/v1/models',
++        upstream_path: '/v1/models',
++        converter: 'none',
++        models: [],
++        auth: {
++          type: 'header',
++          name: 'Authorization',
++          value: 'Bearer {api_key}',
++        },
++      },
++      {
++        incoming_path: '/v1/messages',
++        upstream_path: '/v1/messages',
++        converter: 'none',
++        auth: {
++          type: 'header',
++          name: 'x-api-key',
++          value: '{api_key}',
++        },
++      },
++    ])
++  })
++
++  test('OpenAI Chat joins /v1 base with a path that does not duplicate /v1', () => {
++    const template = ADVANCED_CUSTOM_TEMPLATE_OPTIONS.find(
++      (option) => option.value === 'kuaipao_openai_chat'
++    )
++    expect(template?.label).toContain('https://kuaipao.pro/v1')
++    expect(template?.config.advanced_routes).toEqual([
++      {
++        incoming_path: '/v1/models',
++        upstream_path: '/models',
++        converter: 'none',
++        models: [],
++        auth: {
++          type: 'header',
++          name: 'Authorization',
++          value: 'Bearer {api_key}',
++        },
++      },
++      {
++        incoming_path: '/v1/chat/completions',
++        upstream_path: '/chat/completions',
++        converter: 'none',
++        auth: {
++          type: 'header',
++          name: 'Authorization',
++          value: 'Bearer {api_key}',
++        },
++      },
++    ])
++    expect(template?.config.advanced_routes?.some(
++      (route) => route.incoming_path === '/v1/responses'
++    )).toBe(false)
++  })
++
++  test('Responses uses the /v1 base, exposes model sync, and stays isolated', () => {
++    const template = ADVANCED_CUSTOM_TEMPLATE_OPTIONS.find(
++      (option) => option.value === 'kuaipao_openai_responses'
++    )
++    expect(template?.label).toContain('verified models only')
++    expect(template?.label).toContain('https://kuaipao.pro/v1')
++    expect(template?.config.advanced_routes).toEqual([
++      {
++        incoming_path: '/v1/models',
++        upstream_path: '/models',
++        converter: 'none',
++        models: [],
++        auth: {
++          type: 'header',
++          name: 'Authorization',
++          value: 'Bearer {api_key}',
++        },
++      },
++      {
++        incoming_path: '/v1/responses',
++        upstream_path: '/responses',
++        converter: 'none',
++        auth: {
++          type: 'header',
++          name: 'Authorization',
++          value: 'Bearer {api_key}',
++        },
++      },
++    ])
++  })
++})
+diff --git a/web/src/features/channels/lib/advanced-custom.ts b/web/src/features/channels/lib/advanced-custom.ts
+index 10ba8fd..9dbbc50 100644
+--- a/web/src/features/channels/lib/advanced-custom.ts
++++ b/web/src/features/channels/lib/advanced-custom.ts
+@@ -280,6 +280,16 @@ function createGeminiNativeRoutes(): AdvancedCustomRoute[] {
+   }))
+ }
+ 
++function createKuaipaoModelListRoute(upstreamPath: string): AdvancedCustomRoute {
++  return {
++    incoming_path: ADVANCED_CUSTOM_MODEL_LIST_PATH,
++    upstream_path: upstreamPath,
++    converter: 'none',
++    models: [],
++    auth: bearerHeaderAuth(),
++  }
++}
++
+ function createGatewayNativeRoutes(): AdvancedCustomRoute[] {
+   return ['/v1/alpha/search', '/v1/rerank'].map((path) => ({
+     incoming_path: path,
+@@ -303,6 +313,58 @@ export const ADVANCED_CUSTOM_TEMPLATE_OPTIONS: AdvancedCustomTemplateOption[] =
+         ],
+       },
+     },
++    {
++      value: 'kuaipao_anthropic',
++      label: 'Kuaipao AI Claude Messages (Base URL: https://kuaipao.pro)',
++      config: {
++        advanced_routes: [
++          createKuaipaoModelListRoute('/v1/models'),
++          {
++            incoming_path: claudeMessagesPath,
++            upstream_path: claudeMessagesPath,
++            converter: 'none',
++            // Kuaipao's native Messages examples use x-api-key; its Claude
++            // Code guide also uses the ANTHROPIC_API_KEY credential.
++            auth: apiKeyHeaderAuth(),
++          },
++        ],
++      },
++    },
++    {
++      value: 'kuaipao_openai_chat',
++      label: 'Kuaipao AI OpenAI Chat (Base URL: https://kuaipao.pro/v1)',
++      config: {
++        // Responses is intentionally not enabled in this default template:
++        // Kuaipao documents it for selected OpenAI models only. Add that route
++        // only after confirming the model/group supports it.
++        advanced_routes: [
++          createKuaipaoModelListRoute('/models'),
++          {
++            incoming_path: openAIChatPath,
++            upstream_path: '/chat/completions',
++            converter: 'none',
++            auth: bearerHeaderAuth(),
++          },
++        ],
++      },
++    },
++    {
++      value: 'kuaipao_openai_responses',
++      label: 'Kuaipao AI OpenAI Responses (verified models only; Base URL: https://kuaipao.pro/v1)',
++      config: {
++        // Keep Responses isolated from the general Chat channel. Scope this
++        // channel to model IDs whose Responses support has been verified.
++        advanced_routes: [
++          createKuaipaoModelListRoute('/models'),
++          {
++            incoming_path: '/v1/responses',
++            upstream_path: '/responses',
++            converter: 'none',
++            auth: bearerHeaderAuth(),
++          },
++        ],
++      },
++    },
+     {
+       value: 'openai_only',
+       label: 'OpenAI only',
