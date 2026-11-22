@@ -2,6 +2,7 @@
 """Add opt-in end-to-end encrypted cross-device chat history sync to the assembled API."""
 
 from pathlib import Path
+import re
 
 ROOT = Path.cwd()
 
@@ -19,7 +20,7 @@ def insert_once(path: Path, marker: str, addition: str, label: str) -> None:
 
 dto = ROOT / "relaykit/dto/user_settings.go"
 dto_source = dto.read_text(encoding="utf-8")
-if "ChatHistorySync string" not in dto_source:
+if not re.search(r"\\bChatHistorySync\\s+string\\b", dto_source):
     marker = '\tLanguage                         string  `json:"language,omitempty"`                             // Language 用户语言偏好 (zh, en)\n'
     if marker not in dto_source:
         raise SystemExit("relaykit/dto/user_settings.go: Language field anchor missing")
