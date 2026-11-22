@@ -1,0 +1,127 @@
+name: TokenWay homepage targeted remediation
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/tokenway-homepage-targeted-remediation.yml
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: tokenway-homepage-targeted-remediation
+  cancel-in-progress: false
+jobs:
+  prepare:
+    name: Format only the modified homepage file
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Download exact frontend candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          mkdir -p candidate
+          curl --fail --show-error --location -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/14765237398/zip" -o /tmp/candidate.zip
+          unzip -tq /tmp/candidate.zip
+          unzip -q /tmp/candidate.zip -d candidate
+          test -s candidate/TokenWay-V11/web/src/features/home/tokenway-landing.tsx
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.10.0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      - name: Install locked frontend dependencies
+        working-directory: candidate/TokenWay-V11/web
+        run: |
+          set -Eeuo pipefail
+          bun install --frozen-lockfile
+      - name: Format only the changed homepage source
+        working-directory: candidate/TokenWay-V11/web
+        run: |
+          set -Eeuo pipefail
+          ./node_modules/.bin/oxfmt --write src/features/home/tokenway-landing.tsx
+          ./node_modules/.bin/oxfmt --check src/features/home/tokenway-landing.tsx
+          ./node_modules/.bin/oxlint -c .oxlintrc.json src/features/home/tokenway-landing.tsx
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tokenway-v11-homepage-remediated
+          path: candidate/TokenWay-V11/
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 5
+
+  route-contract:
+    name: Retest homepage CTA order and playground route
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: tokenway-v11-homepage-remediated
+          path: candidate/TokenWay-V11
+      - run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          root = Path('candidate/TokenWay-V11/web')
+          home = (root / 'src/features/home/tokenway-landing.tsx').read_text()
+          tree = (root / 'src/routeTree.gen.ts').read_text()
+          start = home.index("<div className='mt-11 flex flex-wrap gap-5'>")
+          pricing = home.index("to='/pricing'", start)
+          chat = home.index("to='/playground'", start)
+          creator = home.index("to='/creator'", start)
+          checks = {
+            'Chinese label': "aiChat: 'AI聊天'" in home,
+            'English label': "aiChat: 'AI Chat'" in home,
+            'MessageCircle import': 'MessageCircle' in home,
+            'playground route link': chat > start,
+            'generated playground route': "'/playground': typeof AuthenticatedPlaygroundIndexRoute" in tree,
+            'playground route module': (root / 'src/routes/_authenticated/playground/index.tsx').is_file(),
+            'original pricing CTA': pricing > start,
+            'original creator CTA': creator > start,
+            'CTA order pricing -> AI Chat -> creator': pricing < chat < creator,
+          }
+          for name, ok in checks.items(): print(('PASS' if ok else 'FAIL') + ': ' + name)
+          if not all(checks.values()): raise SystemExit(1)
+          PY
+
+  source-integrity:
+    name: Verify remediated source inventory
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: tokenway-v11-homepage-remediated
+          path: candidate/TokenWay-V11
+      - name: Ensure no unrelated source file was modified
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          curl --fail --show-error --location -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/14741328440/zip" -o /tmp/original
+          mkdir original
+          if tar -tzf /tmp/original >/dev/null 2>&1; then
+            tar -xzf /tmp/original -C original
+          else
+            mkdir -p /tmp/original-wrapper
+            unzip -q /tmp/original -d /tmp/original-wrapper
+            archive="$(find /tmp/original-wrapper -type f -name '*.tar.gz' -print -quit)"
+            test -n "$archive"
+            tar -xzf "$archive" -C original
+          fi
+          python3 - <<'PY'
+          import hashlib
+          from pathlib import Path
+          def inventory(root):
+              return {p.relative_to(root).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in root.rglob('*') if p.is_file()}
+          before = inventory(Path('original/TokenWay-V11'))
+          after = inventory(Path('candidate/TokenWay-V11'))
+          if before.keys() != after.keys(): raise SystemExit('Source inventory mismatch')
+          changed = sorted(p for p in before if before[p] != after[p])
+          print('Changed files:', changed)
+          if changed != ['web/src/features/home/tokenway-landing.tsx']: raise SystemExit('Unexpected source changes')
+          print('PASS: only homepage file changed')
+          PY
