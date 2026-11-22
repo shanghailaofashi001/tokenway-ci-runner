@@ -27,6 +27,7 @@ on:
       - 'TokenWay frontend dependency security remediation preview'
       - 'TokenWay V11 supplemental frontend gates'
       - 'TokenWay Flutter API contract tests'
+      - 'TokenWay Workflow YAML Validator'
     types: [completed]
     branches: [main]
   workflow_dispatch:
