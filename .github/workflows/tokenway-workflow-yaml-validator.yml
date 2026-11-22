@@ -20,6 +20,15 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Install actionlint
+        run: |
+          set -euo pipefail
+          go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Validate GitHub Actions workflow semantics
+        run: actionlint .github/workflows/tokenway-finance-r7-validation.yml .github/workflows/tokenway-autonomous-watchdog.yml .github/workflows/tokenway-mobile-targeted-tests.yml
+
       - name: Parse every workflow YAML file
         shell: bash
         run: |
@@ -37,3 +46,4 @@ jobs:
           end
           RUBY
 # Force validation on the already-created workflow definition.
+# Run actionlint as well as YAML syntax parsing to catch GitHub-specific workflow errors.
