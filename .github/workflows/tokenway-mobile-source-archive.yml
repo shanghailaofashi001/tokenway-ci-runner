@@ -44,6 +44,7 @@ jobs:
         run: |
           set -euo pipefail
           bash scripts/bootstrap_platforms.sh
+          grep -Fq 'android.permission.INTERNET' android/app/src/main/AndroidManifest.xml
           flutter pub get
 
       - name: Verify source package inputs
