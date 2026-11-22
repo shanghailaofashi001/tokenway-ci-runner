@@ -89,3 +89,4 @@ jobs:
           test -s test/dashboard_test.dart
           test -s assets/brand-mark.webp.b64
           echo "All TokenWay mobile API and security contracts passed."
+# parallel verification trigger 2026-11-23
