@@ -87,3 +87,5 @@ jobs:
 # Archive latest CNY payment and subscription mobile source.
 
 # Rebuild mobile source archive after adding the unified acceptance ledger.
+
+# Refresh source archive with the latest acceptance ledger evidence.
