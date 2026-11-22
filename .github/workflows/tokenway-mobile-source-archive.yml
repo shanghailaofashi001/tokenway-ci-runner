@@ -85,3 +85,5 @@ jobs:
 # Archive latest source snapshot after final README updates.
 
 # Archive latest CNY payment and subscription mobile source.
+
+# Rebuild mobile source archive after adding the unified acceptance ledger.
