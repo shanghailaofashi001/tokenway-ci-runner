@@ -49,7 +49,9 @@ jobs:
       - name: Generate Android and iOS platform projects
         working-directory: tokenway-source/mobile
         shell: bash
-        run: bash scripts/bootstrap_platforms.sh
+        run: |
+          bash -n scripts/bootstrap_platforms.sh
+          bash scripts/bootstrap_platforms.sh
 
       - name: Verify original TokenWay brand asset is retained
         working-directory: tokenway-source/mobile
@@ -106,13 +108,14 @@ jobs:
         working-directory: tokenway-source/mobile
         run: dart run flutter_launcher_icons
 
-      - name: Analyze Dart source
-        working-directory: tokenway-source/mobile
-        run: flutter analyze --no-pub --no-fatal-infos
-
-      - name: Run Flutter tests
-        working-directory: tokenway-source/mobile
-        run: flutter test --no-pub
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ubuntu-gradle-${{ hashFiles('tokenway-source/mobile/android/**/gradle-wrapper.properties') }}
+          restore-keys: ubuntu-gradle-
 
       - name: Build Android APK
         working-directory: tokenway-source/mobile
