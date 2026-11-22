@@ -1,0 +1,38 @@
+name: TokenWay Workflow YAML Validator
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/tokenway-workflow-yaml-validator.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  parse-workflows:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout CI workflows
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Parse every workflow YAML file
+        shell: bash
+        run: |
+          set -euo pipefail
+          ruby - <<'RUBY'
+          require 'yaml'
+          Dir.glob('.github/workflows/*.yml').sort.each do |path|
+            begin
+              YAML.load_file(path, aliases: true)
+              puts "PASS: #{path}"
+            rescue Psych::Exception => error
+              warn "FAIL: #{path}: #{error.message}"
+              exit 1
+            end
+          end
+          RUBY
