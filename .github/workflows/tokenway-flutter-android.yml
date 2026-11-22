@@ -71,6 +71,11 @@ jobs:
           test -s lib/screens/wallet_screen.dart
           grep -q 'AppLanguageController' lib/language.dart
           grep -q 'Switch to Chinese' lib/screens/dashboard_screen.dart
+          test -s lib/screens/media_screen.dart
+          test -s lib/screens/task_history_screen.dart
+          grep -q "'/v1/images/generations'" lib/services/tokenway_api.dart
+          grep -q "'/v1/videos'" lib/services/tokenway_api.dart
+          grep -q "'/v1/audio/speech'" lib/services/tokenway_api.dart
 
       - name: Resolve dependencies
         working-directory: mobile
