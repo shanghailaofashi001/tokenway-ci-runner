@@ -1152,3 +1152,4 @@ jobs:
           retention-days: 30
 # [resume-full-go] targeted package continuation marker
 # parallel verification trigger 2026-11-23
+# second dispatch marker for the independent finance and deployment validation lane
