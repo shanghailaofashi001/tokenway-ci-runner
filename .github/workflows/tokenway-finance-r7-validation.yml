@@ -305,13 +305,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          python3 -m py_compile ../.github/scripts/apply_encrypted_chat_history_sync.py
           python3 ../.github/scripts/apply_encrypted_chat_history_sync.py
           git diff --check
           grep -Eq 'ChatHistorySync[[:space:]]+string' relaykit/dto/user_settings.go
           grep -Fq 'UpdateUserChatHistorySync' model/user.go
-          grep -Fq 'selfRoute.GET("/chat-history-sync"' router/api-router.go
+          grep -Fq 'selfRoute.Use(middleware.DisableCache(), middleware.UserAuth())' router/api-router.go
+          grep -Fq 'selfRoute.GET("/chat-history-sync", controller.GetChatHistorySync)' router/api-router.go
+          grep -Fq 'selfRoute.PUT("/chat-history-sync", middleware.UserCriticalRateLimit("chat-history-sync"), controller.UpdateChatHistorySync)' router/api-router.go
+          grep -Fq 'func GetChatHistorySync(c *gin.Context)' controller/chat_history_sync.go
+          grep -Fq 'func UpdateChatHistorySync(c *gin.Context)' controller/chat_history_sync.go
           test -s controller/chat_history_sync_test.go
-          echo "PASS: opt-in E2E encrypted chat sync API and row-locked settings update applied."
+          echo "PASS: authenticated, no-cache, rate-limited E2E encrypted chat sync API and row-locked settings update applied."
 
       - name: Apply pinned Kuaipao AI migration to V11
         working-directory: source
