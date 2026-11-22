@@ -1,0 +1,77 @@
+name: TokenWay full dependency remediation (isolated parallel strategies)
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/tokenway-dependency-full-remediation.yml
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: tokenway-dependency-full-remediation
+  cancel-in-progress: false
+jobs:
+  remediation:
+    name: \${{ matrix.label }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: Semver-compatible security fixes
+            key: compatible
+            command: bun audit fix
+          - label: Latest security fixes isolated compatibility experiment
+            key: latest
+            command: bun audit fix --latest
+    steps:
+      - name: Download exact audited source snapshot
+        env:
+          GH_TOKEN: \${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          mkdir -p candidate
+          curl --fail --show-error --location -H "Authorization: Bearer \${GH_TOKEN}" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/\${GITHUB_REPOSITORY}/actions/artifacts/14767406608/zip" -o /tmp/tokenway-source.zip
+          unzip -tq /tmp/tokenway-source.zip
+          unzip -q /tmp/tokenway-source.zip -d candidate
+          test -s candidate/web/package.json
+          test -s candidate/web/bun.lock
+          rm -rf candidate/web/node_modules
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.10.0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      - name: Install exact baseline
+        working-directory: candidate/web
+        run: |
+          set -Eeuo pipefail
+          bun install --frozen-lockfile
+      - name: Apply remediation strategy
+        working-directory: candidate/web
+        run: |
+          set -Eeuo pipefail
+          \${{ matrix.command }}
+      - name: Produce full audit report (do not hide remaining findings)
+        working-directory: candidate/web
+        run: |
+          set +e
+          bun audit 2>&1 | tee ../../audit-\${{ matrix.key }}.log
+          audit_status=\${PIPESTATUS[0]}
+          echo "BUN_AUDIT_EXIT=\${audit_status}" >> "$GITHUB_STEP_SUMMARY"
+          grep -E 'vulnerabilities remaining|^[0-9]+ vulnerabilities' ../../audit-\${{ matrix.key }}.log | tee -a "$GITHUB_STEP_SUMMARY" || true
+          exit 0
+      - name: Upload isolated remediation candidate and audit evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tokenway-full-remediation-\${{ matrix.key }}
+          path: |
+            candidate/web/package.json
+            candidate/web/bun.lock
+            audit-\${{ matrix.key }}.log
+          if-no-files-found: error
+          retention-days: 7
