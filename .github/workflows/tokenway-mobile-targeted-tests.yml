@@ -61,3 +61,5 @@ jobs:
           grep -Fq "access token revoke consumes a proof bound to the target id" test/tokenway_api_contract_test.dart
 
 # Root-cause fix: bootstrap the base64 TokenWay brand asset before Flutter test asset bundling.
+
+# Recheck the latest profile-to-API-Key navigation regression coverage.
