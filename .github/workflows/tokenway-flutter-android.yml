@@ -117,6 +117,11 @@ jobs:
           test -s lib/screens/media_screen.dart
           test -s lib/screens/wallet_screen.dart
           test -s lib/screens/task_history_screen.dart
+          test -s lib/screens/access_tokens_screen.dart
+          grep -Fq "import 'access_tokens_screen.dart';" lib/screens/profile_screen.dart
+          grep -Fq "'/api/user/access_tokens/catalog'" lib/services/tokenway_api.dart
+          grep -Fq "'/api/user/access_tokens'" lib/services/tokenway_api.dart
+          grep -Fq "access token creation obtains operation-bound proof" test/tokenway_api_contract_test.dart
           test -s lib/screens/profile_screen.dart
           test -s test/dashboard_test.dart
           grep -Fq "import 'package:flutter/material.dart';" test/dashboard_test.dart
@@ -227,3 +232,5 @@ jobs:
               target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
             });
 # parallel verification trigger 2026-11-23
+
+# Targeted Android release build after mobile API Key lifecycle implementation.
