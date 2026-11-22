@@ -1,13 +1,16 @@
 name: TokenWay autonomous CI watchdog
 
 on:
+  # No workflow-name allowlist: monitor every workflow completion on main.
   workflow_run:
-    workflows:
-      - TokenWay Finance R7 — full V11 validation on public runner
-      - TokenWay self-healing security and regression matrix
     types: [completed]
     branches: [main]
   workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Optional failed GitHub Actions run ID to triage"
+        required: false
+        type: string
 
 permissions:
   actions: write
@@ -15,22 +18,31 @@ permissions:
   issues: write
 
 concurrency:
-  group: tokenway-autonomous-watchdog-${{ github.event.workflow_run.id || github.run_id }}
+  group: tokenway-autonomous-watchdog-${{ github.event.workflow_run.id || inputs.run_id || github.run_id }}
   cancel-in-progress: false
 
 jobs:
-  triage:
-    name: Triage failed validation and perform bounded infrastructure recovery
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion != 'success' }}
+  validate-watchdog:
+    if: ${{ github.event_name == 'push' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 10
     steps:
-      - name: Collect failed run evidence
+      - name: Validate watchdog YAML syntax
+        run: |
+          ruby -e 'require "yaml"; YAML.load_file(".github/workflows/tokenway-autonomous-watchdog.yml", aliases: true); puts "watchdog YAML parsed successfully"'
+
+  triage:
+    name: Classify failed run and perform bounded safe recovery
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.name != 'TokenWay autonomous CI watchdog' && github.event.workflow_run.conclusion != 'success') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Collect run evidence
         id: evidence
         env:
           GH_TOKEN: ${{ github.token }}
           EVENT_NAME: ${{ github.event_name }}
           EVENT_RUN_ID: ${{ github.event.workflow_run.id }}
+          MANUAL_RUN_ID: ${{ inputs.run_id }}
           EVENT_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
           EVENT_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
           EVENT_WORKFLOW: ${{ github.event.workflow_run.name }}
@@ -38,50 +50,77 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
+          RUN_ID="$EVENT_RUN_ID"
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            echo "Manual watchdog run: provide a failed run id in the run summary if needed."
-            exit 0
+            RUN_ID="$MANUAL_RUN_ID"
+            if [ -z "$RUN_ID" ]; then
+              echo "Manual watchdog self-check completed. Supply run_id to triage a prior run."
+              echo "classification=manual-self-check" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
           fi
           mkdir -p "$RUNNER_TEMP/tokenway-watchdog"
-          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$EVENT_RUN_ID/jobs?per_page=100" > "$RUNNER_TEMP/tokenway-watchdog/jobs.json"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/jobs?per_page=100" > "$RUNNER_TEMP/tokenway-watchdog/jobs.json"
+          gh run view "$RUN_ID" --repo "$GITHUB_REPOSITORY" --log-failed > "$RUNNER_TEMP/tokenway-watchdog/failed.log" 2>&1 || true
           jq -r '.jobs[] | select(.conclusion == "failure" or .conclusion == "cancelled" or .conclusion == "timed_out") | "- " + .name + " — " + (.conclusion // "unknown") + " (job " + (.id|tostring) + ")"' "$RUNNER_TEMP/tokenway-watchdog/jobs.json" > "$RUNNER_TEMP/tokenway-watchdog/failed-jobs.txt"
-          gh run view "$EVENT_RUN_ID" --repo "$GITHUB_REPOSITORY" --log-failed > "$RUNNER_TEMP/tokenway-watchdog/failed.log" 2>&1 || true
-          {
-            echo "workflow=$EVENT_WORKFLOW"
-            echo "run_id=$EVENT_RUN_ID"
-            echo "attempt=$EVENT_RUN_ATTEMPT"
-            echo "conclusion=$EVENT_CONCLUSION"
-            echo "url=$EVENT_URL"
-          } >> "$GITHUB_OUTPUT"
-          echo "Failed jobs:"
-          cat "$RUNNER_TEMP/tokenway-watchdog/failed-jobs.txt" || true
-          echo "Failure log collected (not copied wholesale into an issue)."
 
-      - name: Retry one time only for recognizable transient infrastructure failures
-        if: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'failure' && github.event.workflow_run.run_attempt < 2 }}
+          LOG="$RUNNER_TEMP/tokenway-watchdog/failed.log"
+          CLASSIFICATION="unknown"
+          REASON="No known safe remediation signature matched."
+          if grep -Eqi 'HTTP (429|500|502|503|504)|rate limit exceeded|connection reset by peer|TLS handshake timeout|i/o timeout|temporary failure in name resolution|runner lost communication|hosted runner unexpectedly lost communication|ECONNRESET|ETIMEDOUT' "$LOG"; then
+            CLASSIFICATION="transient-infrastructure"
+            REASON="Recognized transient network, API throttling, or runner communication failure."
+          elif grep -Eqi 'could not find compatible versions for pod "Flutter"|required a higher minimum deployment target' "$LOG"; then
+            CLASSIFICATION="ios-deployment-target"
+            REASON="CocoaPods reports that the generated iOS deployment target is below the Flutter pod minimum; inspect the source Podfile/bootstrap configuration before changing it."
+          elif grep -Eqi 'Resource not accessible by integration|Bad credentials|HTTP 401|HTTP 403|secret.*not found|ACTIONS.*secret' "$LOG"; then
+            CLASSIFICATION="permissions-or-secret"
+            REASON="GitHub token permissions, authentication, or a missing repository secret needs configuration review."
+          elif grep -Eqi 'No space left on device|ENOSPC|disk quota exceeded' "$LOG"; then
+            CLASSIFICATION="runner-disk-capacity"
+            REASON="Runner disk capacity was exhausted."
+          elif grep -Eqi 'undefined:|cannot find module|Module not found|TS[0-9]{4}|FAIL .*test|panic:|assertion failed|error:.*(not declared|does not exist)' "$LOG"; then
+            CLASSIFICATION="source-or-dependency"
+            REASON="A source, type, build, or test failure was detected; this requires targeted code review and tests."
+          elif grep -Eqi 'Canceling since a higher priority waiting request|Canceling since.*waiting request' "$LOG"; then
+            CLASSIFICATION="superseded-concurrency"
+            REASON="This run was intentionally superseded by a newer waiting run; this is not evidence of a source defect."
+          fi
+
+          {
+            echo "run_id=$RUN_ID"
+            echo "classification=$CLASSIFICATION"
+            echo "reason=$REASON"
+          } >> "$GITHUB_OUTPUT"
+          echo "Run $RUN_ID classified as $CLASSIFICATION"
+          cat "$RUNNER_TEMP/tokenway-watchdog/failed-jobs.txt" || true
+
+      - name: Retry one time only for transient infrastructure failures
+        if: ${{ github.event_name == 'workflow_run' && (github.event.workflow_run.conclusion == 'failure' || github.event.workflow_run.conclusion == 'timed_out') && github.event.workflow_run.run_attempt < 2 }}
         env:
           GH_TOKEN: ${{ github.token }}
-          RUN_ID: ${{ github.event.workflow_run.id }}
+          RUN_ID: ${{ steps.evidence.outputs.run_id }}
+          CLASSIFICATION: ${{ steps.evidence.outputs.classification }}
         shell: bash
         run: |
           set -Eeuo pipefail
-          log="$RUNNER_TEMP/tokenway-watchdog/failed.log"
-          if grep -Eqi 'HTTP (429|500|502|503|504)|rate limit exceeded|connection reset by peer|TLS handshake timeout|i/o timeout|temporary failure in name resolution|runner lost communication|The hosted runner unexpectedly lost communication' "$log"; then
-            echo "Recognized transient infrastructure signature; retrying failed jobs once."
+          if [ "$CLASSIFICATION" = "transient-infrastructure" ]; then
+            echo "Recognized transient infrastructure failure; retrying failed jobs once."
             gh api --method POST "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/rerun-failed-jobs"
           else
-            echo "No safe transient-infrastructure signature; no automatic retry."
+            echo "No safe automatic retry for classification: $CLASSIFICATION"
           fi
 
-      - name: Open deduplicated failure report for human review
-        if: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.conclusion != 'success' }}
+      - name: Open deduplicated incident for unresolved failures
+        if: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.conclusion != 'success' && steps.evidence.outputs.classification != 'superseded-concurrency' }}
         env:
           GH_TOKEN: ${{ github.token }}
-          RUN_ID: ${{ github.event.workflow_run.id }}
-          RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+          RUN_ID: ${{ steps.evidence.outputs.run_id }}
           RUN_NAME: ${{ github.event.workflow_run.name }}
           RUN_URL: ${{ github.event.workflow_run.html_url }}
           RUN_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          CLASSIFICATION: ${{ steps.evidence.outputs.classification }}
+          REASON: ${{ steps.evidence.outputs.reason }}
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -92,20 +131,22 @@ jobs:
             exit 0
           fi
           jobs="$(jq -r '.jobs[] | select(.conclusion == "failure" or .conclusion == "cancelled" or .conclusion == "timed_out") | "- " + .name + ": " + (.conclusion // "unknown")' "$RUNNER_TEMP/tokenway-watchdog/jobs.json")"
-          body="$(printf 'The unattended watchdog detected a non-success validation run.\n\n- Workflow: %s\n- Run: %s\n- Attempt: %s\n- Conclusion: %s\n- Run URL: %s\n\n## Failed or cancelled jobs\n%s\n\nThe watchdog retries only a narrow set of recognizable transient infrastructure failures, at most once. It does not automatically edit finance, payment, settlement, authentication, secrets, or brand source code. Review the failed step logs and apply a targeted root-cause fix before resuming validation.\n' "$RUN_NAME" "$RUN_ID" "$RUN_ATTEMPT" "$RUN_CONCLUSION" "$RUN_URL" "${jobs:-No failed job summary available}")"
+          body="$(printf 'The unattended watchdog detected a non-success run.\n\n- Workflow: %s\n- Run: %s\n- Conclusion: %s\n- Classification: %s\n- Diagnosis: %s\n- Run URL: %s\n\n## Failed jobs\n%s\n\n## Recovery policy\nOnly recognized transient infrastructure failures are retried, at most once. Source changes are not guessed or applied blindly. Finance, payment, settlement, authentication, security, secrets, and brand assets remain protected. Source/build/test failures are recorded for targeted root-cause repair; already-passed unrelated tests should not be repeated.\n' "$RUN_NAME" "$RUN_ID" "$RUN_CONCLUSION" "$CLASSIFICATION" "$REASON" "$RUN_URL" "${jobs:-No failed job summary available}")"
           gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body"
 
       - name: Publish watchdog result
         if: always()
         env:
-          RUN_URL: ${{ github.event.workflow_run.html_url }}
-          RUN_ID: ${{ github.event.workflow_run.id }}
+          RUN_ID: ${{ steps.evidence.outputs.run_id }}
+          CLASSIFICATION: ${{ steps.evidence.outputs.classification }}
+          REASON: ${{ steps.evidence.outputs.reason }}
         run: |
           {
             echo "## TokenWay unattended watchdog"
             echo
-            echo "- Monitored run: ${RUN_URL:-manual invocation}"
             echo "- Run ID: ${RUN_ID:-not supplied}"
-            echo "- Automatic retry: limited to recognized transient infrastructure failures, maximum one retry."
-            echo "- Source edits: deliberately disabled; sensitive application changes require review."
+            echo "- Classification: ${CLASSIFICATION:-not classified}"
+            echo "- Diagnosis: ${REASON:-manual self-check or no evidence}"
+            echo "- Retry: only recognized transient infrastructure failures, maximum once."
+            echo "- Source edits: no blind changes; sensitive business and brand files remain protected."
           } >> "$GITHUB_STEP_SUMMARY"
