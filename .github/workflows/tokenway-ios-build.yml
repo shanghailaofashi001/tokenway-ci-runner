@@ -87,3 +87,5 @@ jobs:
           path: tokenway-source/mobile/build/ios/iphonesimulator/TokenWay-iOS-Simulator.zip
           if-no-files-found: error
           retention-days: 14
+
+# Rebuild against latest TokenWay mobile source commit after API Key lifecycle changes.
