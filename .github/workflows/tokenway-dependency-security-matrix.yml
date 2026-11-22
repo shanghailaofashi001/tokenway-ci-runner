@@ -29,7 +29,7 @@ jobs:
           original_root="$(find original/source -type f -path '*/web/package.json' -print -quit | sed 's#/web/package.json##')"
           test -n "$original_root"
           cp -a "$original_root/." source/TokenWay-V11/
-          curl --fail --show-error --location -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/14766199131/zip" -o /tmp/remediated-web.zip
+          curl --fail --show-error --location -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/14767259375/zip" -o /tmp/remediated-web.zip
           unzip -tq /tmp/remediated-web.zip
           rm -rf source/TokenWay-V11/web
           mkdir -p source/TokenWay-V11/web
@@ -80,7 +80,7 @@ jobs:
           node --input-type=module <<'NODE'
           import fs from 'node:fs';
           const p=JSON.parse(fs.readFileSync('package.json','utf8'));
-          p.overrides={...(p.overrides||{}),'@hono/node-server':'2.1.6','decode-uri-component':'0.5.1','minimatch':'11.0.1','zod':'4.6.6'};
+          p.overrides={...(p.overrides||{}),'@hono/node-server':'1.19.18','decode-uri-component':'0.5.1','minimatch':'11.0.1','zod':'4.6.6'};
           fs.writeFileSync('package.json',JSON.stringify(p,null,2)+'\n');
           NODE
           node -e "JSON.parse(require('node:fs').readFileSync('package.json','utf8')); console.log('package.json valid JSON')"
