@@ -1151,3 +1151,4 @@ jobs:
           archive: false
           retention-days: 30
 # [resume-full-go] targeted package continuation marker
+# parallel verification trigger 2026-11-23
