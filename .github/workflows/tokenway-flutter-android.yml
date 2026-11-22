@@ -226,3 +226,4 @@ jobs:
               description: 'Flutter analyze, tests, iOS static audit and Android APK build',
               target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
             });
+# parallel verification trigger 2026-11-23
