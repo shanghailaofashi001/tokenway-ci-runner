@@ -125,6 +125,7 @@ jobs:
           grep -Fq "chat stream decodes split SSE events" test/tokenway_api_contract_test.dart
           grep -Fq "text/event-stream" test/tokenway_api_contract_test.dart
           grep -Fq "200," test/tokenway_api_contract_test.dart
+          grep -Fq "task artifacts decode the backend success/data envelope" test/tokenway_api_contract_test.dart
           test -s lib/widgets/turnstile_challenge.dart
           grep -Fq "turnstileToken" lib/services/tokenway_api.dart
 
