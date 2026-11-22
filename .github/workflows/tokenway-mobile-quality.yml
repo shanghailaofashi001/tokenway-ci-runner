@@ -63,6 +63,7 @@ jobs:
           if [[ -f android/build.gradle.kts ]]; then grep -Fq 'webview_flutter_android' android/build.gradle.kts; else grep -Fq 'webview_flutter_android' android/build.gradle; fi
           ! grep -Fq '\\n' android/build.gradle.kts 2>/dev/null || exit 1
           ! grep -Fq '\\n' android/build.gradle 2>/dev/null || exit 1
+          test -s test/dashboard_test.dart
 
       - name: Resolve dependencies
         working-directory: tokenway-source/mobile
@@ -82,4 +83,13 @@ jobs:
       - name: Run Flutter tests
         working-directory: tokenway-source/mobile
         run: flutter test --no-pub
+
+      - name: Verify streaming and screen navigation regression coverage
+        working-directory: tokenway-source/mobile
+        run: |
+          grep -Fq 'void dispatchEvent()' lib/services/tokenway_api.dart
+          grep -Fq 'if (pending.isNotEmpty) consumeLine(pending)' lib/services/tokenway_api.dart
+          grep -Fq "ProfileScreen(api: widget.api, language: widget.language)" lib/screens/dashboard_screen.dart
+          grep -Fq 'initialTab: 1' lib/screens/dashboard_screen.dart
+          grep -Fq 'initialTab: 2' lib/screens/dashboard_screen.dart
 
