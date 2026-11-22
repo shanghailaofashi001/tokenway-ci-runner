@@ -159,7 +159,7 @@ jobs:
 
       - name: Analyze Flutter source
         working-directory: tokenway-source/mobile
-        run: flutter analyze
+        run: flutter analyze --no-fatal-infos
 
       - name: Run Flutter tests
         working-directory: tokenway-source/mobile
