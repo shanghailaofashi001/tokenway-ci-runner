@@ -80,6 +80,8 @@ jobs:
           grep -q "session_id" lib/main.dart
           grep -q "'/api/user/auth/refresh'" lib/services/tokenway_api.dart
           grep -q 'TokenWay AI' scripts/bootstrap_platforms.sh
+          test -s scripts/prepare_brand_icon.dart
+          grep -q 'image:' pubspec.yaml
           grep -q 'turnstile_site_key' lib/screens/login_screen.dart
           test -s lib/widgets/turnstile_challenge.dart
           grep -q 'webview_flutter' pubspec.yaml
@@ -93,6 +95,10 @@ jobs:
       - name: Resolve dependencies
         working-directory: tokenway-source/mobile
         run: flutter pub get
+
+      - name: Prepare original TokenWay app icon
+        working-directory: tokenway-source/mobile
+        run: dart run scripts/prepare_brand_icon.dart
 
       - name: Generate Android and iOS launcher icons
         working-directory: tokenway-source/mobile
