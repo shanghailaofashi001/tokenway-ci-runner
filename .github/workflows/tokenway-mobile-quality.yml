@@ -33,6 +33,13 @@ jobs:
           path: tokenway-source
           persist-credentials: false
 
+      - name: Checkout backend API reference
+        uses: actions/checkout@v4
+        with:
+          repository: QuantumNous/new-api
+          path: backend-reference
+          persist-credentials: false
+
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
