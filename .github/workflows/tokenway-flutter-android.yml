@@ -61,6 +61,8 @@ jobs:
           set -euo pipefail
           test -s assets/brand-mark.webp.b64
           grep -q "assets/brand-mark.webp" lib/screens/login_screen.dart
+          grep -Fq "Image.asset('assets/brand-mark.webp'" lib/screens/dashboard_screen.dart
+          grep -Fq "Image.asset('assets/brand-mark.webp', width: 176" lib/screens/dashboard_screen.dart
 
       - name: Verify mobile API and chat modules are present
         working-directory: tokenway-source/mobile
