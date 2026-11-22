@@ -1,0 +1,74 @@
+name: TokenWay Flutter Android build
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tokenway-flutter-android
+  cancel-in-progress: true
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout CI runner
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Checkout TokenWay mobile source
+        uses: actions/checkout@v4
+        with:
+          repository: shanghailaofashi001/tokenway-v11-dev
+          ref: feat/flutter-mobile-app
+          token: ${{ secrets.TOKENWAY_SOURCE_READ_TOKEN }}
+          path: mobile
+          persist-credentials: false
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Generate Android and iOS platform projects
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter create --platforms=android,ios --org ai.tokenway --project-name tokenway_mobile /tmp/tokenway-platform-shell
+          cp -a /tmp/tokenway-platform-shell/android mobile/
+          cp -a /tmp/tokenway-platform-shell/ios mobile/
+
+      - name: Resolve dependencies
+        working-directory: mobile
+        run: flutter pub get
+
+      - name: Analyze Dart source
+        working-directory: mobile
+        run: flutter analyze --no-pub
+
+      - name: Run Flutter tests
+        working-directory: mobile
+        run: flutter test --no-pub
+
+      - name: Build Android APK
+        working-directory: mobile
+        run: flutter build apk --release --no-pub
+
+      - name: Upload Android APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: tokenway-android-apk
+          path: mobile/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 7
