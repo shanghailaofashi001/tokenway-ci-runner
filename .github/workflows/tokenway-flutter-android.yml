@@ -234,3 +234,5 @@ jobs:
 # Targeted Android release build after mobile API Key lifecycle implementation.
 
 # Include chat image attachment and secure task-file download modules in the native package build.
+
+# Rebuild Android with proof-bound API Key permission editing and file-transfer modules.
