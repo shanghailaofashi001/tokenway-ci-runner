@@ -47,3 +47,4 @@ jobs:
           RUBY
 # Force validation on the already-created workflow definition.
 # Run actionlint as well as YAML syntax parsing to catch GitHub-specific workflow errors.
+# Revalidate restored finance package workflow after reconstructing full source packaging steps.
