@@ -23,14 +23,22 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: Download the preserved TokenWay V11 source artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: TokenWay-V11-Kuaipao-migrated.tar.gz
-          run-id: 44990994489
-          github-token: ${{ github.token }}
-          repository: ${{ github.repository }}
-          path: base-artifact
+      - name: Download the preserved TokenWay V11 source artifact with retry
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p base-artifact
+          curl --fail --show-error --location \
+            --retry 10 --retry-all-errors --retry-delay 5 \
+            --connect-timeout 30 --max-time 900 \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/14741328440/zip" \
+            -o /tmp/tokenway-source-artifact.zip
+          unzip -q /tmp/tokenway-source-artifact.zip -d base-artifact
+          test -s base-artifact/TokenWay-V11-Kuaipao-migrated.tar.gz
 
       - name: Extract source and apply the homepage AI Chat entry
         shell: bash
