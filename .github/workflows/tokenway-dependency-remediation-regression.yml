@@ -17,19 +17,32 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - name: Download isolated dependency-remediation preview
+      - name: Download remediated web and restore exact repository fixture
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -Eeuo pipefail
-          mkdir -p candidate/TokenWay-V11/web original
-          curl --fail --show-error --location -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/14766199131/zip" -o /tmp/dependency-preview.zip
-          unzip -tq /tmp/dependency-preview.zip
-          unzip -q /tmp/dependency-preview.zip -d candidate/TokenWay-V11/web
-          mkdir -p original/source candidate/TokenWay-V11/pkg/billingexpr/testdata
-          git clone --depth 1 --branch main https://github.com/shanghailaofashi001/tokenway-v11-dev.git /tmp/tokenway-source
-          cp /tmp/tokenway-source/pkg/billingexpr/testdata/frontend_simulation.json candidate/TokenWay-V11/pkg/billingexpr/testdata/frontend_simulation.json
-          test -s candidate/TokenWay-V11/pkg/billingexpr/testdata/frontend_simulation.json
+          mkdir -p candidate/TokenWay-V11/web original/source
+          curl --fail --show-error --location -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/14766199131/zip" -o /tmp/remediated-web.zip
+          unzip -tq /tmp/remediated-web.zip
+          unzip -q /tmp/remediated-web.zip -d candidate/TokenWay-V11/web
+          rm -rf candidate/TokenWay-V11/web/node_modules
+          curl --fail --show-error --location -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/14741328440/zip" -o /tmp/original-source.zip
+          if tar -tzf /tmp/original-source.zip >/dev/null 2>&1; then
+            tar -xzf /tmp/original-source.zip -C original/source
+          elif tar -tf /tmp/original-source.zip >/dev/null 2>&1; then
+            tar -xf /tmp/original-source.zip -C original/source
+          elif unzip -tq /tmp/original-source.zip >/dev/null 2>&1; then
+            mkdir -p /tmp/original-artifact
+            unzip -q /tmp/original-source.zip -d /tmp/original-artifact
+            archive="$(find /tmp/original-artifact -type f \\( -name '*.tar.gz' -o -name '*.tgz' \\) -print -quit)"
+            test -n "$archive"
+            tar -xzf "$archive" -C original/source
+          else
+            echo "Unsupported original source artifact container"
+            file /tmp/original-source.zip
+            exit 1
+          fi
           fixture="$(find original/source -path '*/pkg/billingexpr/testdata/frontend_simulation.json' -type f -print -quit)"
           test -n "$fixture"
           mkdir -p candidate/TokenWay-V11/pkg/billingexpr/testdata
@@ -37,7 +50,6 @@ jobs:
           test -s candidate/TokenWay-V11/web/package.json
           test -s candidate/TokenWay-V11/web/bun.lock
           test -s candidate/TokenWay-V11/pkg/billingexpr/testdata/frontend_simulation.json
-          rm -rf candidate/TokenWay-V11/web/node_modules
       - uses: actions/upload-artifact@v4
         with:
           name: tokenway-v11-dependency-remediated-web
@@ -45,7 +57,6 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
           retention-days: 5
-
   regression:
     name: Frontend ${{ matrix.label }}
     needs: prepare
