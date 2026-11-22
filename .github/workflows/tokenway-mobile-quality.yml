@@ -1,0 +1,86 @@
+name: TokenWay Mobile Quality and iOS Scaffold Audit
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/tokenway-mobile-quality.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tokenway-mobile-quality
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout CI runner
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Checkout TokenWay mobile source
+        uses: actions/checkout@v4
+        with:
+          repository: shanghailaofashi001/tokenway-v11-dev
+          ref: feat/flutter-mobile-app
+          token: ${{ secrets.TOKENWAY_SOURCE_READ_TOKEN }}
+          path: tokenway-source
+          persist-credentials: false
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Generate native scaffolding and validate bootstrap
+        working-directory: tokenway-source/mobile
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n scripts/bootstrap_platforms.sh
+          bash scripts/bootstrap_platforms.sh
+          test -s android/app/src/main/AndroidManifest.xml
+          test -s ios/Runner/Info.plist
+          grep -q 'TokenWay AI' android/app/src/main/AndroidManifest.xml
+          grep -q 'TokenWay AI' ios/Runner/Info.plist
+          grep -q 'webview_flutter_android' android/build.gradle.kts || grep -q 'webview_flutter_android' android/build.gradle
+
+      - name: Resolve dependencies
+        working-directory: tokenway-source/mobile
+        run: flutter pub get
+
+      - name: Analyze Dart source
+        working-directory: tokenway-source/mobile
+        run: flutter analyze --no-pub --no-fatal-infos
+
+      - name: Run Flutter tests
+        working-directory: tokenway-source/mobile
+        run: flutter test --no-pub
+
+      - name: Verify API modules and endpoint contract inventory
+        working-directory: tokenway-source/mobile
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q "'/api/user/login'" lib/services/tokenway_api.dart
+          grep -q "'/api/user/self'" lib/services/tokenway_api.dart
+          grep -q "'/api/user/models'" lib/services/tokenway_api.dart
+          grep -q "'/pg/chat/completions'" lib/services/tokenway_api.dart
+          grep -q "'/api/user/topup/info'" lib/services/tokenway_api.dart
+          grep -q "'/api/user/topup/self'" lib/services/tokenway_api.dart
+          grep -q "'/api/task/\$encoded/artifacts'" lib/services/tokenway_api.dart
+          grep -q "'/v1/images/generations'" lib/services/tokenway_api.dart
+          grep -q "'/v1/videos'" lib/services/tokenway_api.dart
+          grep -q "'/v1/audio/speech'" lib/services/tokenway_api.dart
+          test -s lib/screens/login_screen.dart
+          test -s lib/screens/chat_screen.dart
+          test -s lib/screens/wallet_screen.dart
+          test -s lib/screens/media_screen.dart
+          test -s lib/screens/task_history_screen.dart
