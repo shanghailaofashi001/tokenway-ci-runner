@@ -1,0 +1,74 @@
+name: TokenWay iOS Simulator Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/tokenway-ios-simulator.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tokenway-ios-simulator
+  cancel-in-progress: true
+
+jobs:
+  ios-simulator:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout CI runner
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Checkout TokenWay Flutter app
+        uses: actions/checkout@v4
+        with:
+          repository: shanghailaofashi001/tokenway-v11-dev
+          ref: feat/flutter-mobile-app
+          token: ${{ secrets.TOKENWAY_SOURCE_READ_TOKEN }}
+          path: tokenway-source
+          persist-credentials: false
+
+      - name: Verify Apple build host
+        run: |
+          set -euo pipefail
+          sw_vers
+          xcodebuild -version
+          xcrun simctl list devices available >/dev/null
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Generate iOS scaffold if missing
+        working-directory: tokenway-source/mobile
+        run: |
+          set -euo pipefail
+          bash scripts/bootstrap_platforms.sh
+          test -s ios/Runner.xcodeproj/project.pbxproj
+          test -s ios/Runner/Info.plist
+          test -s ios/Podfile
+
+      - name: Resolve Flutter and CocoaPods dependencies
+        working-directory: tokenway-source/mobile
+        run: |
+          flutter pub get
+          cd ios
+          pod install
+
+      - name: Build iOS simulator app without signing
+        working-directory: tokenway-source/mobile
+        run: flutter build ios --simulator --no-codesign --release
+
+      - name: Verify simulator app bundle
+        working-directory: tokenway-source/mobile
+        run: |
+          set -euo pipefail
+          test -d build/ios/iphonesimulator/Runner.app
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' build/ios/iphonesimulator/Runner.app/Info.plist
