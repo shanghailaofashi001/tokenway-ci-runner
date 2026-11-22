@@ -91,3 +91,5 @@ jobs:
 # Refresh source archive with the latest acceptance ledger evidence.
 
 # Rebuild mobile source package after Android, iOS and Kuaipao acceptance closure.
+
+# Include the encrypted cross-device chat sync implementation in the source archive.
