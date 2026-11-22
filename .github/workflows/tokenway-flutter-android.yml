@@ -63,6 +63,8 @@ jobs:
           grep -q "assets/brand-mark.webp" lib/screens/login_screen.dart
           grep -Fq "Image.asset('assets/brand-mark.webp'" lib/screens/dashboard_screen.dart
           grep -Fq "Image.asset('assets/brand-mark.webp', width: 176" lib/screens/dashboard_screen.dart
+          grep -Fq "fit: BoxFit.contain, alignment: Alignment.centerLeft" lib/screens/dashboard_screen.dart
+          ! grep -Fq "fit: BoxFit.fill)))" lib/screens/dashboard_screen.dart
           ! grep -q '^const _lavender' lib/screens/dashboard_screen.dart
 
       - name: Verify exact official TokenWay brand asset and dimensions
