@@ -114,6 +114,9 @@ jobs:
           elif grep -Eqi 'SC1007|offline_graph.*duplicates|duplicates.*offline_graph' "$LOG"; then
             CLASSIFICATION="workflow-static-analysis"
             REASON="Known CI workflow lint defects matched an allowlisted deterministic repair rule; any change must pass actionlint and be proposed in a PR."
+          elif grep -Fq 'PASS: encrypted chat sync DTO' "$LOG" && grep -Fq 'ChatHistorySync string' "$LOG"; then
+            CLASSIFICATION="chat-sync-field-assertion"
+            REASON="The encrypted chat-sync patch was applied, but the field-presence assertion used a literal single-space match against gofmt-aligned Go fields."
           elif grep -Eqi 'undefined:|cannot find module|Module not found|TS[0-9]{4}|FAIL .*test|panic:|assertion failed|error:.*(not declared|does not exist)' "$LOG"; then
             CLASSIFICATION="source-or-dependency"
             REASON="A source, type, build, or test failure was detected; this requires targeted code review and tests."
@@ -147,7 +150,7 @@ jobs:
           fi
 
       - name: Checkout trusted main for allowlisted CI repair
-        if: ${{ github.event_name == 'workflow_run' && steps.evidence.outputs.classification == 'workflow-static-analysis' }}
+        if: ${{ github.event_name == 'workflow_run' && (steps.evidence.outputs.classification == 'workflow-static-analysis' || steps.evidence.outputs.classification == 'chat-sync-field-assertion') }}
         uses: actions/checkout@v4
         with:
           ref: main
@@ -171,6 +174,7 @@ jobs:
           fi
           go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
           "$(go env GOPATH)/bin/actionlint" .github/workflows/tokenway-finance-r7-validation.yml
+          python3 -m py_compile .github/scripts/apply_encrypted_chat_history_sync.py .github/scripts/tokenway-safe-ci-repair.py
           branch="tokenway-safe-repair/$RUN_ID"
           existing_pr="$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$branch" --state open --json number --jq '.[0].number // empty')"
           if [ -n "$existing_pr" ]; then
@@ -181,7 +185,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -b "$branch"
-          git add .github/workflows/tokenway-finance-r7-validation.yml
+          git add .github/workflows/tokenway-finance-r7-validation.yml .github/scripts/apply_encrypted_chat_history_sync.py
           git commit -m "fix(ci): apply allowlisted workflow lint remediation"
           git push origin "$branch"
           gh pr create --repo "$GITHUB_REPOSITORY" --head "$branch" --base main --draft \
