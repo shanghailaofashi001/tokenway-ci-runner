@@ -80,22 +80,29 @@ jobs:
               elif new not in s:
                   raise SystemExit(f'Expected language-label anchor not found: {old!r}')
 
-          creator_anchor = """              <Link
-                to='/creator'
-                className='inline-flex h-[60px] min-w-[212px] items-center justify-center gap-3 rounded-full border border-indigo-300/75 bg-[#091746]/65 px-8 text-[17px] font-bold text-white shadow-[inset_0_0_16px_rgba(114,104,255,0.08)] transition hover:bg-indigo-500/15'
-          """
-          chat_link = """              <Link
-                to='/playground'
-                className='inline-flex h-[60px] min-w-[212px] items-center justify-center gap-3 rounded-full border border-violet-300/75 bg-[linear-gradient(110deg,rgba(75,54,170,0.55),rgba(30,52,122,0.65))] px-8 text-[17px] font-bold text-white shadow-[inset_0_0_16px_rgba(139,92,246,0.12)] transition hover:bg-violet-500/20'
-              >
-                <MessageCircle className='size-5' />
-                {labels.aiChat}
-              </Link>
-          """
           if "to='/playground'" not in s:
-              if s.count(creator_anchor) != 1:
-                  raise SystemExit('Creator CTA anchor is missing or ambiguous; refusing to patch')
-              s = s.replace(creator_anchor, chat_link + creator_anchor, 1)
+              hero_anchor = "<div className='mt-11 flex flex-wrap gap-5'>"
+              if s.count(hero_anchor) != 1:
+                  raise SystemExit('Homepage hero CTA container is missing or ambiguous')
+              hero_start = s.index(hero_anchor)
+              creator = s.find("to='/creator'", hero_start)
+              if creator < 0:
+                  raise SystemExit('Homepage creator CTA not found after hero container')
+              line_start = s.rfind("\\n", 0, creator) + 1
+              indent = s[line_start:creator]
+              if not indent.isspace():
+                  raise SystemExit('Unexpected creator CTA indentation')
+              chat_link = (
+                  indent + "<Link\\n"
+                  + indent + "  to='/playground'\\n"
+                  + indent + "  className='inline-flex h-[60px] min-w-[212px] items-center justify-center gap-3 rounded-full border border-violet-300/75 bg-[linear-gradient(110deg,rgba(75,54,170,0.55),rgba(30,52,122,0.65))] px-8 text-[17px] font-bold text-white shadow-[inset_0_0_16px_rgba(139,92,246,0.12)] transition hover:bg-violet-500/20'\\n"
+                  + indent + ">\\n"
+                  + indent + "  <MessageCircle className='size-5' />\\n"
+                  + indent + "  {labels.aiChat}\\n"
+                  + indent + "</Link>\\n"
+              )
+              s = s[:line_start] + chat_link + s[line_start:]
+
 
           required = (
               "MessageCircle",
