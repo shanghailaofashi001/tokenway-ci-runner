@@ -107,3 +107,5 @@ jobs:
 # Verify the final gateway enablement guards and CNY-only purchase behavior.
 
 # Validate encrypted cross-device chat sync encryption, API contracts and UI entry point.
+
+# Trigger 2026-11-23: verify missing encrypted chat sync service root-cause repair.
