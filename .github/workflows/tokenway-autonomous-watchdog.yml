@@ -7,6 +7,26 @@ on:
       - ".github/workflows/tokenway-autonomous-watchdog.yml"
   # No workflow-name allowlist: monitor every workflow completion on main.
   workflow_run:
+    workflows:
+      - 'TokenWay Finance R7 — full V11 validation on public runner'
+      - 'TokenWay self-healing security and regression matrix'
+      - 'TokenWay Mobile Source Archive'
+      - 'TokenWay iOS Simulator Build'
+      - 'TokenWay Mobile Targeted Regression Tests'
+      - 'TokenWay iOS Native Build'
+      - 'TokenWay Flutter Android build'
+      - 'TokenWay Mobile Quality and iOS Scaffold Audit'
+      - 'TokenWay Mobile API contract checks'
+      - 'TokenWay branded UI acceptance'
+      - 'TokenWay full dependency remediation (isolated parallel strategies)'
+      - 'TokenWay isolated dependency security remediation matrix'
+      - 'TokenWay frontend dependency-remediation regression'
+      - 'TokenWay targeted full unit-suite rerun with root fixture'
+      - 'TokenWay remediated frontend typecheck with root fixtures'
+      - 'TokenWay homepage targeted remediation'
+      - 'TokenWay frontend dependency security remediation preview'
+      - 'TokenWay V11 supplemental frontend gates'
+      - 'TokenWay Flutter API contract tests'
     types: [completed]
     branches: [main]
   workflow_dispatch:
