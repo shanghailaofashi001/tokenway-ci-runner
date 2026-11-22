@@ -59,6 +59,7 @@ jobs:
       TOKENWAY_FRONTEND_VERIFY: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[frontend-verify]') }}
       TOKENWAY_GO_STATIC_ONLY: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[go-static-only]') }}
       TOKENWAY_PACKAGE_ONLY: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[package-only]') }}
+      TOKENWAY_KUAIPAO_ONLY: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[kuaipao-only]') }}
       TEST_MYSQL_DSN: root:tokenway-test@tcp(127.0.0.1:3306)/tokenway_test?charset=utf8mb4&parseTime=True&loc=Local
       TEST_POSTGRES_DSN: postgres://tokenway:tokenway-test@127.0.0.1:5432/tokenway_test?sslmode=disable
       TEST_MYSQL_LOG_DSN: root:tokenway-test@tcp(127.0.0.1:3306)/tokenway_test?charset=utf8mb4&parseTime=True&loc=Local
@@ -115,6 +116,7 @@ jobs:
           test -s private-validation/web/src/assets/tokenway-home/hero-scene.webp
           cp private-validation/web/src/assets/tokenway-home/hero-scene.webp web/src/assets/tokenway-home/hero-scene.webp
           test -s .tokenway-validation/R7-finance-migration.patch.b64
+          test -s .tokenway-validation/kuaipao-v11-migration.patch
           test -s .tokenway-validation/apply-task-quota-persistence-guard.py
           test -s .tokenway-validation/apply-nowpayments-access-token-rules.py
           python3 -m py_compile .tokenway-validation/apply-nowpayments-access-token-rules.py
@@ -285,6 +287,23 @@ jobs:
           grep -Fq 'var SystemName = "TokenWay AI"' common/constants.go
           printf '%s\n' "R7 finance patch applied to the full branded source tree."
 
+      - name: Apply pinned Kuaipao AI migration to V11
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          patch="../.tokenway-validation/kuaipao-v11-migration.patch"
+          printf '%s  %s\n' 'a9d194b0ad5f8f5950118789cb0baa85868cc6301295ad9444509d12cfd52aa2' "$patch" | sha256sum -c -
+          git apply --check "$patch"
+          git apply "$patch"
+          git diff --check
+          grep -Fq "kuaipao_anthropic" web/src/features/channels/lib/advanced-custom.ts
+          grep -Fq "kuaipao_openai_chat" web/src/features/channels/lib/advanced-custom.ts
+          grep -Fq "kuaipao_openai_responses" web/src/features/channels/lib/advanced-custom.ts
+          grep -Fq "TestKuaipaoPresetRoutesJoinBaseURLWithoutDuplicateV1" relay/channel/advancedcustom/adaptor_test.go
+          grep -Fq "TestKuaipaoModelListManagementRoutesJoinBaseURLAndUseBearerAuth" relay/channel/advancedcustom/adaptor_test.go
+          echo "PASS: exact prior Kuaipao implementation and its focused tests migrated."
+
       - name: Repair NOWPayments refunded-order regression fixture scope
         working-directory: source
         shell: bash
@@ -392,8 +411,19 @@ jobs:
             fi
           done
 
+      - name: Run only migrated Kuaipao Go regressions
+        if: ${{ env.TOKENWAY_KUAIPAO_ONLY == 'true' }}
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          export GOPROXY=off GOSUMDB=off GOFLAGS="-mod=vendor -p=1" GOTOOLCHAIN=local
+          mkdir -p web/dist
+          printf '<!doctype html><html></html>\n' > web/dist/index.html
+          go test -v -timeout 3m ./relay/channel/advancedcustom -count=1 -run '^(TestKuaipaoPresetRoutesJoinBaseURLWithoutDuplicateV1|TestKuaipaoModelListManagementRoutesJoinBaseURLAndUseBearerAuth)$'
+
       - name: Run finance controller regression tests
-        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && (github.event_name != 'push' || !contains(github.event.head_commit.message, '[resume-full-go]')) }}
+        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && (github.event_name != 'push' || !contains(github.event.head_commit.message, '[resume-full-go]')) && env.TOKENWAY_KUAIPAO_ONLY != 'true' }}
         working-directory: source
         run: |
           set -euo pipefail
@@ -403,7 +433,7 @@ jobs:
           go test -v -timeout 5m ./controller -count=1 -run 'Test(NowPayments.*|GetNowPayments.*|ApplyWalletQuotaDelta.*|ApplyTaskWalletQuotaDelta.*|BackfillWalletOpeningBalances.*|TransferAffQuotaToQuota.*|LegacyUserQuotaHelpersAlwaysWriteWalletLedger|RecordWalletOpeningBalanceTxWritesOnlyOpeningLedger|UserCheckinCreditsWalletAndLedgerInOneTransaction|RedeemCreditsQuotaExactlyOnce|RedeemRejectsWalletOverflow|RequestBillingJournal.*|UnknownRequestOutcome.*|ApplySubscriptionUsageDelta.*|CleanupSubscriptionPreConsumeRecordsRetainsUnresolvedReservations|PostConsumeUserSubscriptionDeltaRejectsOverflowAndInvalidState|PreConsumeUserSubscription.*|RefundSubscriptionPreConsumeIsAtomicAndIdempotent|SettleSubscriptionPreConsumeIsIdempotentAndClosesRefundPath|SubscriptionExtraReserveIsTrackedAndRefundedAtomically|SubscriptionPreConsumeHeartbeatWinsStaleReview|SubscriptionPreConsumeReviewBlocksSettlementAndRefund|SubscriptionRefundEscapesRequestIDLikeWildcards|SubscriptionSettlementIntentCanBeRecovered|ApplyTaskSubscriptionQuotaDelta.*|TaskSubscriptionSettlementAtomicallyAdjustsTokenAndUsageCounters|BillingRecoveryUsesSingleCombinedScheduledHandler)'
 
       - name: Run finance model regression tests
-        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && (github.event_name != 'push' || !contains(github.event.head_commit.message, '[resume-full-go]')) }}
+        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && (github.event_name != 'push' || !contains(github.event.head_commit.message, '[resume-full-go]')) && env.TOKENWAY_KUAIPAO_ONLY != 'true' }}
         working-directory: source
         run: |
           set -euo pipefail
@@ -411,7 +441,7 @@ jobs:
           go test -v -timeout 5m ./model -count=1 -run 'Test(NowPayments.*|GetNowPayments.*|ApplyWalletQuotaDelta.*|ApplyTaskWalletQuotaDelta.*|BackfillWalletOpeningBalances.*|TransferAffQuotaToQuota.*|LegacyUserQuotaHelpersAlwaysWriteWalletLedger|RecordWalletOpeningBalanceTxWritesOnlyOpeningLedger|UserCheckinCreditsWalletAndLedgerInOneTransaction|RedeemCreditsQuotaExactlyOnce|RedeemRejectsWalletOverflow|RequestBillingJournal.*|UnknownRequestOutcome.*|ApplySubscriptionUsageDelta.*|CleanupSubscriptionPreConsumeRecordsRetainsUnresolvedReservations|PostConsumeUserSubscriptionDeltaRejectsOverflowAndInvalidState|PreConsumeUserSubscription.*|RefundSubscriptionPreConsumeIsAtomicAndIdempotent|SettleSubscriptionPreConsumeIsIdempotentAndClosesRefundPath|SubscriptionExtraReserveIsTrackedAndRefundedAtomically|SubscriptionPreConsumeHeartbeatWinsStaleReview|SubscriptionPreConsumeReviewBlocksSettlementAndRefund|SubscriptionRefundEscapesRequestIDLikeWildcards|SubscriptionSettlementIntentCanBeRecovered|ApplyTaskSubscriptionQuotaDelta.*|TaskSubscriptionSettlementAtomicallyAdjustsTokenAndUsageCounters|BillingRecoveryUsesSingleCombinedScheduledHandler)'
 
       - name: Run finance service regression tests
-        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && (github.event_name != 'push' || !contains(github.event.head_commit.message, '[resume-full-go]')) }}
+        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && (github.event_name != 'push' || !contains(github.event.head_commit.message, '[resume-full-go]')) && env.TOKENWAY_KUAIPAO_ONLY != 'true' }}
         working-directory: source
         run: |
           set -euo pipefail
@@ -419,7 +449,7 @@ jobs:
           go test -v -timeout 5m ./service -count=1 -run 'Test(NowPayments.*|GetNowPayments.*|ApplyWalletQuotaDelta.*|ApplyTaskWalletQuotaDelta.*|BackfillWalletOpeningBalances.*|TransferAffQuotaToQuota.*|LegacyUserQuotaHelpersAlwaysWriteWalletLedger|RecordWalletOpeningBalanceTxWritesOnlyOpeningLedger|UserCheckinCreditsWalletAndLedgerInOneTransaction|RedeemCreditsQuotaExactlyOnce|RedeemRejectsWalletOverflow|RequestBillingJournal.*|UnknownRequestOutcome.*|ApplySubscriptionUsageDelta.*|CleanupSubscriptionPreConsumeRecordsRetainsUnresolvedReservations|PostConsumeUserSubscriptionDeltaRejectsOverflowAndInvalidState|PreConsumeUserSubscription.*|RefundSubscriptionPreConsumeIsAtomicAndIdempotent|SettleSubscriptionPreConsumeIsIdempotentAndClosesRefundPath|SubscriptionExtraReserveIsTrackedAndRefundedAtomically|SubscriptionPreConsumeHeartbeatWinsStaleReview|SubscriptionPreConsumeReviewBlocksSettlementAndRefund|SubscriptionRefundEscapesRequestIDLikeWildcards|SubscriptionSettlementIntentCanBeRecovered|ApplyTaskSubscriptionQuotaDelta.*|TaskSubscriptionSettlementAtomicallyAdjustsTokenAndUsageCounters|BillingRecoveryUsesSingleCombinedScheduledHandler)'
 
       - name: Vet root, relaykit, and tokenkit modules
-        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && (env.TOKENWAY_GO_STATIC_ONLY == 'true' || github.event_name != 'push' || !contains(github.event.head_commit.message, '[resume-full-go]')) }}
+        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && (env.TOKENWAY_GO_STATIC_ONLY == 'true' || github.event_name != 'push' || !contains(github.event.head_commit.message, '[resume-full-go]')) && env.TOKENWAY_KUAIPAO_ONLY != 'true' }}
         working-directory: source
         run: |
           set -euo pipefail
@@ -428,7 +458,7 @@ jobs:
           (cd tokenkit && go vet ./...)
 
       - name: Build root, relaykit, and tokenkit modules
-        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && (env.TOKENWAY_GO_STATIC_ONLY == 'true' || github.event_name != 'push' || !contains(github.event.head_commit.message, '[resume-full-go]')) }}
+        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && (env.TOKENWAY_GO_STATIC_ONLY == 'true' || github.event_name != 'push' || !contains(github.event.head_commit.message, '[resume-full-go]')) && env.TOKENWAY_KUAIPAO_ONLY != 'true' }}
         working-directory: source
         run: |
           set -euo pipefail
@@ -437,7 +467,7 @@ jobs:
           (cd tokenkit && go build ./...)
 
       - name: Isolate tiered batch settlement regression before resuming full Go tests
-        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && (github.event_name != 'push' || (!contains(github.event.head_commit.message, '[router-only]') && !contains(github.event.head_commit.message, '[frontend-only]'))) }}
+        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && (github.event_name != 'push' || (!contains(github.event.head_commit.message, '[router-only]') && !contains(github.event.head_commit.message, '[frontend-only]'))) && env.TOKENWAY_KUAIPAO_ONLY != 'true' }}
         working-directory: source
         shell: bash
         run: |
@@ -454,7 +484,7 @@ jobs:
           fi
 
       - name: Resume failed Go packages only and finish remaining modules
-        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && (github.event_name != 'push' || !contains(github.event.head_commit.message, '[frontend-only]')) }}
+        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && (github.event_name != 'push' || !contains(github.event.head_commit.message, '[frontend-only]')) && env.TOKENWAY_KUAIPAO_ONLY != 'true' }}
         working-directory: source
         shell: bash
         run: |
@@ -613,23 +643,31 @@ jobs:
           fi
 
 
+      - name: Run only migrated Kuaipao frontend regressions
+        if: ${{ env.TOKENWAY_KUAIPAO_ONLY == 'true' }}
+        working-directory: source/web
+        shell: bash
+        run: |
+          set -euo pipefail
+          bun run test -- src/features/channels/lib/__tests__/advanced-custom.test.ts -t "Kuaipao Advanced Custom templates"
+
       - name: Generate routes and build frontend
-        if: ${{ env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' }}
+        if: ${{ env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_KUAIPAO_ONLY != 'true' }}
         working-directory: source/web
         run: bun run build
 
       - name: Frontend typecheck
-        if: ${{ env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' }}
+        if: ${{ env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_KUAIPAO_ONLY != 'true' }}
         working-directory: source/web
         run: bun run typecheck
 
       - name: Frontend unit tests
-        if: ${{ env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' }}
+        if: ${{ env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_KUAIPAO_ONLY != 'true' }}
         working-directory: source/web
         run: TOKIO_WORKER_THREADS=1 RAYON_NUM_THREADS=1 bun run test --maxWorkers=1
 
       - name: Frontend Oxlint
-        if: ${{ env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' }}
+        if: ${{ env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_KUAIPAO_ONLY != 'true' }}
         working-directory: source/web
         shell: bash
         run: |
@@ -661,7 +699,7 @@ jobs:
           fi
 
       - name: Frontend format and copyright checks
-        if: ${{ env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' }}
+        if: ${{ env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_KUAIPAO_ONLY != 'true' }}
         working-directory: source/web
         run: |
           set -euo pipefail
@@ -704,12 +742,101 @@ jobs:
           fi
 
       - name: Retained TokenWay media contract tests
-        if: ${{ env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' }}
+        if: ${{ env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_KUAIPAO_ONLY != 'true' }}
         working-directory: source
         run: |
           set -euo pipefail
           node ../private/.tokenway-validation/test-media-plugin-contracts.mjs
           node ../private/.tokenway-validation/test-rc52-media-adapters.mjs
+
+      - name: Package migrated Kuaipao-enabled TokenWay V11 source
+        if: ${{ success() && env.TOKENWAY_KUAIPAO_ONLY == 'true' }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          import hashlib, json, os, shutil, subprocess, tarfile
+          from pathlib import Path
+          root=Path.cwd()
+          stage=Path(os.environ["RUNNER_TEMP"])/"tokenway-kuaipao-release"
+          if stage.exists(): shutil.rmtree(stage)
+          stage.mkdir(parents=True)
+          dest=stage/"TokenWay-V11"
+          excluded={".git","node_modules","dist","coverage",".cache",".vite",".tanstack",".turbo",".next",".output","tmp","logs"}
+          def ignore(directory,names):
+              out=[]
+              for name in names:
+                  p=Path(directory)/name
+                  if p.is_dir() and name in excluded: out.append(name)
+                  elif name in {".env",".env.local",".env.production",".env.development"}: out.append(name)
+                  elif name.startswith(".env.") and name not in {".env.example",".env.sample",".env.template"}: out.append(name)
+                  elif p.is_file() and p.suffix.lower() in {".sqlite",".sqlite3",".db"}: out.append(name)
+              return out
+          shutil.copytree(root/"source",dest,ignore=ignore,symlinks=True)
+          required=[
+              "web/src/features/channels/lib/advanced-custom.ts",
+              "web/src/features/channels/lib/__tests__/advanced-custom.test.ts",
+              "relay/channel/advancedcustom/adaptor_test.go",
+              "vendor/modules.txt",
+              "relaykit/vendor/modules.txt",
+              "tokenkit/vendor/modules.txt",
+              "web/src/assets/tokenway-home/hero-scene.webp",
+          ]
+          for rel in required:
+              p=dest/rel
+              if not p.is_file() or p.stat().st_size==0: raise SystemExit(f"missing required migrated package file: {rel}")
+          for p in dest.rglob("*"):
+              if p.is_symlink():
+                  try: target=p.resolve(strict=True)
+                  except FileNotFoundError: raise SystemExit(f"broken symlink: {p}")
+                  if not target.is_relative_to(dest.resolve()): raise SystemExit(f"external symlink: {p}")
+          patch=Path(".tokenway-validation/kuaipao-v11-migration.patch")
+          records=[]
+          for p in sorted(x for x in dest.rglob("*") if x.is_file()):
+              records.append(f"{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.relative_to(stage)}")
+          (stage/"FILE-CHECKSUMS.sha256").write_text("\n".join(records)+"\n",encoding="utf-8")
+          manifest={
+              "product":"TokenWay V11",
+              "package_type":"Kuaipao-migrated validated source archive",
+              "source_commit":"48a6c87f9e7757fdc58e5be9bcb4f8281ad0dfd0",
+              "finance_validation_snapshot":"d1dd4edb3c7491f3e8b786dd455920d2e0fc5dd4",
+              "branding_snapshot":"d2494da77bc59b7edb4082bb2a594f24997b6ece",
+              "kuaipao_migration_patch_sha256":hashlib.sha256(patch.read_bytes()).hexdigest(),
+              "kuaipao_channels":["kuaipao_anthropic","kuaipao_openai_chat","kuaipao_openai_responses"],
+              "focused_tests":{
+                  "go":"TestKuaipaoPresetRoutesJoinBaseURLWithoutDuplicateV1; TestKuaipaoModelListManagementRoutesJoinBaseURLAndUseBearerAuth",
+                  "frontend":"Kuaipao Advanced Custom templates"
+              },
+              "source_file_count":len(records),
+              "contains_vendored_go_dependencies":True,
+              "contains_original_tokenway_brand_assets":True,
+              "secrets_or_database_files_included":False,
+              "live_upstream_credentials_tested":False,
+              "packaging_run_id":int(os.environ["GITHUB_RUN_ID"]),
+              "packaging_run_number":int(os.environ["GITHUB_RUN_NUMBER"]),
+          }
+          (stage/"RELEASE-MANIFEST.json").write_text(json.dumps(manifest,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
+          (stage/"PACKAGE-README.md").write_text(
+              "# TokenWay V11 — Kuaipao migrated source\n\n"
+              "Contains the full assembled V11 source, R7 finance changes, preserved TokenWay brand assets, vendored Go modules, and the restored Kuaipao Claude Messages, OpenAI Chat Completions, and verified-model-only Responses presets.\n\n"
+              "Live Kuaipao requests still require the user's API key and model/group confirmation.\n",
+              encoding="utf-8")
+          archive=Path(os.environ["RUNNER_TEMP"])/"TokenWay-V11-Kuaipao-migrated.tar.gz"
+          with tarfile.open(archive,"w:gz") as tf: tf.add(stage,arcname=".")
+          subprocess.run(["tar","-tzf",str(archive)],check=True,stdout=subprocess.DEVNULL)
+          print(f"PACKAGE_READY: {archive}")
+          print(f"PACKAGE_SIZE_BYTES: {archive.stat().st_size}")
+          print(f"PACKAGE_SHA256: {hashlib.sha256(archive.read_bytes()).hexdigest()}")
+          print(f"SOURCE_FILES: {len(records)}")
+          PY
+
+      - name: Upload Kuaipao-migrated TokenWay V11 source archive
+        if: ${{ success() && env.TOKENWAY_KUAIPAO_ONLY == 'true' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          path: ${{ runner.temp }}/TokenWay-V11-Kuaipao-migrated.tar.gz
+          archive: false
+          retention-days: 30
 
       - name: Verify prior acceptance and package the validated TokenWay V11 source
         if: ${{ success() && env.TOKENWAY_PACKAGE_ONLY == 'true' }}
