@@ -5,7 +5,7 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/tokenway-autonomous-watchdog.yml"
-  # No workflow-name allowlist: monitor every workflow completion on main.
+  # Monitor the registered TokenWay CI workflows when they complete on main.
   workflow_run:
     workflows:
       - 'TokenWay Finance R7 — full V11 validation on public runner'
