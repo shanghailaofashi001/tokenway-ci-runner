@@ -51,6 +51,10 @@ jobs:
         working-directory: tokenway-source/mobile
         run: flutter test --no-pub test/tokenway_api_contract_test.dart test/dashboard_test.dart test/smoke_test.dart
 
+      - name: Analyze only changed mobile Dart modules
+        working-directory: tokenway-source/mobile
+        run: flutter analyze --no-pub --no-fatal-infos lib/services/tokenway_api.dart lib/screens/chat_screen.dart lib/screens/task_history_screen.dart lib/screens/access_tokens_screen.dart
+
       - name: Verify API Key screen is connected
         working-directory: tokenway-source/mobile
         run: |
@@ -63,3 +67,5 @@ jobs:
 # Root-cause fix: bootstrap the base64 TokenWay brand asset before Flutter test asset bundling.
 
 # Recheck the latest profile-to-API-Key navigation regression coverage.
+
+# Re-run affected chat attachment, artifact download, API Key UI and API contract checks.
