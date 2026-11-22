@@ -1,0 +1,135 @@
+name: TokenWay frontend lint baseline delta
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/tokenway-frontend-lint-delta.yml
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: tokenway-frontend-lint-delta
+  cancel-in-progress: true
+
+jobs:
+  lint-delta:
+    name: Oxlint changed homepage against original baseline
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Download and extract original source artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          curl --fail --show-error --location --retry 8 --retry-all-errors --retry-delay 4 \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/14741328440/zip" \
+            -o /tmp/tokenway-source.tar.gz
+          tar -tzf /tmp/tokenway-source.tar.gz >/dev/null
+          mkdir source
+          tar -xzf /tmp/tokenway-source.tar.gz -C source
+          test -s source/TokenWay-V11/web/src/features/home/tokenway-landing.tsx
+          cp source/TokenWay-V11/web/src/features/home/tokenway-landing.tsx /tmp/tokenway-homepage-baseline.tsx
+
+      - name: Apply the exact bilingual AI Chat homepage change
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('source/TokenWay-V11/web/src/features/home/tokenway-landing.tsx')
+          s = p.read_text(encoding='utf-8')
+          s = s.replace(
+              "import { ArrowRight, AudioLines, Code2, Play, Rocket } from 'lucide-react'",
+              "import { ArrowRight, AudioLines, Code2, MessageCircle, Play, Rocket } from 'lucide-react'",
+              1,
+          )
+          s = s.replace("explore: '探索模型',\n        begin: '开始创作',",
+                        "explore: '探索模型',\n        aiChat: 'AI聊天',\n        begin: '开始创作',", 1)
+          s = s.replace("explore: 'Explore Models',\n        begin: 'Start Creating',",
+                        "explore: 'Explore Models',\n        aiChat: 'AI Chat',\n        begin: 'Start Creating',", 1)
+          hero = "<div className='mt-11 flex flex-wrap gap-5'>"
+          if s.count(hero) != 1:
+              raise SystemExit('Homepage hero CTA anchor mismatch')
+          hero_start = s.index(hero)
+          creator = s.find("to='/creator'", hero_start)
+          link_start = s.rfind("<Link", hero_start, creator)
+          if creator < 0 or link_start < 0:
+              raise SystemExit('Homepage creator CTA anchor missing')
+          line_start = s.rfind("\n", 0, link_start) + 1
+          indent = s[line_start:link_start]
+          if not indent.isspace():
+              raise SystemExit('Homepage CTA indentation mismatch')
+          block = "\n".join([
+              indent + "<Link",
+              indent + "  to='/playground'",
+              indent + "  className='inline-flex h-[60px] min-w-[212px] items-center justify-center gap-3 rounded-full border border-violet-300/75 bg-[linear-gradient(110deg,rgba(75,54,170,0.55),rgba(30,52,122,0.65))] px-8 text-[17px] font-bold text-white shadow-[inset_0_0_16px_rgba(139,92,246,0.12)] transition hover:bg-violet-500/20'",
+              indent + ">",
+              indent + "  <MessageCircle className='size-5' />",
+              indent + "  {labels.aiChat}",
+              indent + "</Link>",
+          ]) + "\n"
+          s = s[:line_start] + block + s[line_start:]
+          if "to='/playground'" not in s or "aiChat: 'AI聊天'" not in s or "aiChat: 'AI Chat'" not in s:
+              raise SystemExit('AI Chat homepage change did not verify')
+          p.write_text(s, encoding='utf-8')
+          PY
+          cp /tmp/tokenway-homepage-baseline.tsx source/TokenWay-V11/web/src/features/home/__tokenway_baseline__.tsx
+
+      - name: Set up Node.js and Bun
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.10.0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+
+      - name: Install locked dependencies
+        working-directory: source/TokenWay-V11/web
+        run: bun install --frozen-lockfile
+
+      - name: Compare Oxlint diagnostics for original and changed homepage
+        working-directory: source/TokenWay-V11/web
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          set +e
+          ./node_modules/.bin/oxlint -c .oxlintrc.json --format json src/features/home/__tokenway_baseline__.tsx > /tmp/tokenway-lint-baseline.json
+          baseline_status=$?
+          ./node_modules/.bin/oxlint -c .oxlintrc.json --format json src/features/home/tokenway-landing.tsx > /tmp/tokenway-lint-current.json
+          current_status=$?
+          set -e
+          if test "$baseline_status" -gt 1 || test "$current_status" -gt 1; then
+            echo "Oxlint crashed: baseline=$baseline_status current=$current_status"
+            exit 2
+          fi
+          python3 - <<'PY'
+          import collections, json
+          from pathlib import Path
+          def load(path):
+              report = json.loads(Path(path).read_text(encoding='utf-8'))
+              return collections.Counter(
+                  (item.get('severity'), item.get('code'), item.get('message'))
+                  for item in report.get('diagnostics', [])
+              )
+          baseline = load('/tmp/tokenway-lint-baseline.json')
+          current = load('/tmp/tokenway-lint-current.json')
+          introduced = current - baseline
+          print(f'Original homepage diagnostics: {sum(baseline.values())}')
+          print(f'Changed homepage diagnostics: {sum(current.values())}')
+          print(f'New diagnostics introduced: {sum(introduced.values())}')
+          for (severity, code, message), count in introduced.items():
+              print(f'NEW {severity} {code} x{count}: {message}')
+          if any(severity == 'error' for severity, _, _ in introduced):
+              raise SystemExit('New Oxlint errors were introduced by the homepage change')
+          if introduced:
+              raise SystemExit('New Oxlint diagnostics were introduced by the homepage change')
+          print('PASS: no Oxlint diagnostics introduced by the AI Chat CTA')
+          PY
