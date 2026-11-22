@@ -411,14 +411,17 @@ jobs:
           set -euo pipefail
           export GOPROXY=off GOSUMDB=off GOFLAGS="-mod=vendor -p=1" GOTOOLCHAIN=local
           mkdir -p web/dist
-          printf '<!doctype html><html></html>\n' > web/dist/index.html
-          go test -v -timeout 3m ./controller -count=1 -run '^(TestGetNowPaymentsUSDPriceUsesWalletCurrencyExchangeRate|TestGetPayMoneyUsesCNYAsWalletBaseCurrency)
+          printf '<!doctype html><html></html>\\n' > web/dist/index.html
+          go test -v -timeout 3m ./controller -count=1 -run '^(TestGetNowPaymentsUSDPriceUsesWalletCurrencyExchangeRate|TestGetPayMoneyUsesCNYAsWalletBaseCurrency)$'
+
+      - name: Verify offline dependency graph
+        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' }}
         id: offline_graph
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p source/web/dist
-          printf '<!doctype html><html></html>\n' > source/web/dist/index.html
+          printf '<!doctype html><html></html>\\n' > source/web/dist/index.html
           export GOPROXY=off GOSUMDB=off GOFLAGS="-mod=vendor -p=1" GOTOOLCHAIN=local
           for d in source source/relaykit source/tokenkit; do
             echo "===== Offline dependency graph: ${d} ====="
