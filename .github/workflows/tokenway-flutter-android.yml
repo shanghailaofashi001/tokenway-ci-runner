@@ -123,6 +123,7 @@ jobs:
           test -s test/tokenway_api_contract_test.dart
           grep -Fq "video submission uses multipart form fields" test/tokenway_api_contract_test.dart
           grep -Fq "chat stream decodes split SSE events" test/tokenway_api_contract_test.dart
+          grep -Fq "text/event-stream" test/tokenway_api_contract_test.dart
           test -s lib/widgets/turnstile_challenge.dart
           grep -Fq "turnstileToken" lib/services/tokenway_api.dart
 
