@@ -263,3 +263,4 @@ jobs:
 # Trigger 2026-11-23: verify missing encrypted chat sync service root-cause repair.
 # Targeted root-cause verification 2026-11-23: mutable chat list restore and AES-GCM sync service.
 # Final targeted verification 2026-11-23: Unicode-aware sync passphrase validation.
+# Bootstrap root-cause validation 2026-11-23: parse generated AndroidManifest.xml.
