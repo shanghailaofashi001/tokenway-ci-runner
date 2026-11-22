@@ -172,17 +172,21 @@ jobs:
           go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
           "$(go env GOPATH)/bin/actionlint" .github/workflows/tokenway-finance-r7-validation.yml
           branch="tokenway-safe-repair/$RUN_ID"
+          existing_pr="$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$branch" --state open --json number --jq '.[0].number // empty')"
+          if [ -n "$existing_pr" ]; then
+            echo "Existing safe-repair PR: #$existing_pr"
+            echo "pr_created=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -b "$branch"
           git add .github/workflows/tokenway-finance-r7-validation.yml
           git commit -m "fix(ci): apply allowlisted workflow lint remediation"
           git push origin "$branch"
-          if ! gh pr list --repo "$GITHUB_REPOSITORY" --head "$branch" --state open --json number --jq 'length > 0' | grep -q true; then
-            gh pr create --repo "$GITHUB_REPOSITORY" --head "$branch" --base main --draft \
-              --title "Automated safe CI repair for run $RUN_ID" \
-              --body "This draft PR contains only a signature-gated repair to the allowlisted CI workflow. The watchdog matched a known ShellCheck/actionlint diagnostic, applied the exact deterministic rule, and validated the resulting workflow with actionlint. No business source, finance logic, payment code, security code, secrets, or brand assets were changed. Please review before merging."
-          fi
+          gh pr create --repo "$GITHUB_REPOSITORY" --head "$branch" --base main --draft \
+            --title "Automated safe CI repair for run $RUN_ID" \
+            --body "This draft PR contains only a signature-gated repair to the allowlisted CI workflow. The watchdog matched a known ShellCheck/actionlint diagnostic, applied the exact deterministic rule, and validated the resulting workflow with actionlint. No business source, finance logic, payment code, security code, secrets, or brand assets were changed. Please review before merging."
           echo "pr_created=true" >> "$GITHUB_OUTPUT"
 
       - name: Open deduplicated incident for unresolved failures
