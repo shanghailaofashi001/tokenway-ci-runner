@@ -588,41 +588,26 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Keep the full upstream lint scan visible as a baseline diagnostic.
-          # Gate the build on every changed/new frontend source file.
+          # Full upstream lint is a diagnostic; changed frontend files are a hard gate.
           if bun run lint; then
             echo "PASS: full frontend Oxlint scan"
           else
-            echo "::warning::Pinned upstream full-tree Oxlint baseline is not clean; changed-file lint remains mandatory."
+            echo "::warning::Pinned upstream full-tree Oxlint baseline has existing violations; changed-file lint remains mandatory."
           fi
 
           mapfile -t changed_files < <(
             {
-              git diff --name-only --diff-filter=ACMRT HEAD -- '*.js' '*.jsx' '*.ts' '*.tsx' '*.mjs' '*.cjs'
-              git ls-files --others --exclude-standard | grep -E '\\.(js|jsx|ts|tsx|mjs|cjs)
-      - name: Frontend format and copyright checks
-        working-directory: source/web
-        run: |
-          set -euo pipefail
-          bun run format:check
-          bun run copyright:check
-
-      - name: Retained TokenWay media contract tests
-        working-directory: source
-        run: |
-          set -euo pipefail
-          node scripts/test-media-plugin-contracts.mjs
-          node scripts/test-rc52-media-adapters.mjs
- || true
+              git -C .. diff --name-only --diff-filter=ACMRT HEAD -- web | awk '/^web\/.*\.(js|jsx|ts|tsx|mjs|cjs)$/ { sub(/^web\//, ""); print }'
+              git -C .. ls-files --others --exclude-standard | awk '/^web\/.*\.(js|jsx|ts|tsx|mjs|cjs)$/ { sub(/^web\//, ""); print }'
             } | sort -u
           )
 
-          if (("${#changed_files[@]}" == 0)); then
+          if [ "\${#changed_files[@]}" -eq 0 ]; then
             echo "No changed frontend source files to lint."
           else
-            printf 'Linting %s changed/new frontend source files\n' "${#changed_files[@]}"
-            printf '%s\n' "${changed_files[@]}"
-            bunx oxlint -c .oxlintrc.json "${changed_files[@]}"
+            printf 'Linting %s changed/new frontend source files\\n' "\${#changed_files[@]}"
+            printf '%s\\n' "\${changed_files[@]}"
+            bunx oxlint -c .oxlintrc.json "\${changed_files[@]}"
           fi
 
       - name: Frontend format and copyright checks
