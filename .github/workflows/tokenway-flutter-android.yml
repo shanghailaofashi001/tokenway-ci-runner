@@ -130,6 +130,10 @@ jobs:
           grep -Fq 'FilePicker.platform.pickFiles' lib/screens/chat_screen.dart
           grep -Fq 'downloadTaskArtifact' lib/services/tokenway_api.dart
           grep -Fq 'TokenWayDownloads' lib/services/tokenway_api.dart
+          grep -Fq "requestNowPaymentsTopup" lib/services/tokenway_api.dart
+          grep -Fq "requestSubscriptionEpay" lib/services/tokenway_api.dart
+          test -s lib/screens/subscriptions_screen.dart
+          test -s lib/screens/payment_webview_screen.dart
           grep -Fq "video submission uses multipart form fields" test/tokenway_api_contract_test.dart
           grep -Fq "chat stream decodes split SSE events" test/tokenway_api_contract_test.dart
           grep -Fq "text/event-stream" test/tokenway_api_contract_test.dart
@@ -236,3 +240,5 @@ jobs:
 # Include chat image attachment and secure task-file download modules in the native package build.
 
 # Rebuild Android with proof-bound API Key permission editing and file-transfer modules.
+
+# Rebuild latest CNY EPay, NOWPayments USDT and subscription checkout modules.
