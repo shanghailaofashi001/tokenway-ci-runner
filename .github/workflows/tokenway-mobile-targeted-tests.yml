@@ -1,0 +1,57 @@
+name: TokenWay Mobile Targeted Regression Tests
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/tokenway-mobile-targeted-tests.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tokenway-mobile-targeted-tests
+  cancel-in-progress: true
+
+jobs:
+  flutter-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout CI runner
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Checkout latest TokenWay mobile source
+        uses: actions/checkout@v4
+        with:
+          repository: shanghailaofashi001/tokenway-v11-dev
+          ref: feat/flutter-mobile-app
+          token: ${{ secrets.TOKENWAY_SOURCE_READ_TOKEN }}
+          path: tokenway-source
+          persist-credentials: false
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Resolve Flutter dependencies
+        working-directory: tokenway-source/mobile
+        run: flutter pub get
+
+      - name: Run affected mobile regression tests
+        working-directory: tokenway-source/mobile
+        run: flutter test --no-pub test/tokenway_api_contract_test.dart test/dashboard_test.dart test/smoke_test.dart
+
+      - name: Verify API Key screen is connected
+        working-directory: tokenway-source/mobile
+        run: |
+          set -euo pipefail
+          test -s lib/screens/access_tokens_screen.dart
+          grep -Fq "AccessTokensScreen(api: widget.api, language: widget.language)" lib/screens/profile_screen.dart
+          grep -Fq "access token creation obtains operation-bound proof" test/tokenway_api_contract_test.dart
+          grep -Fq "access token revoke consumes a proof bound to the target id" test/tokenway_api_contract_test.dart
