@@ -63,6 +63,7 @@ jobs:
           grep -q "assets/brand-mark.webp" lib/screens/login_screen.dart
           grep -Fq "Image.asset('assets/brand-mark.webp'" lib/screens/dashboard_screen.dart
           grep -Fq "Image.asset('assets/brand-mark.webp', width: 176" lib/screens/dashboard_screen.dart
+          ! grep -q '^const _lavender' lib/screens/dashboard_screen.dart
 
       - name: Verify mobile API and chat modules are present
         working-directory: tokenway-source/mobile
