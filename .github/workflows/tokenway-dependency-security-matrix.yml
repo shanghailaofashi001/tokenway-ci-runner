@@ -23,22 +23,9 @@ jobs:
         run: |
           set -Eeuo pipefail
           mkdir -p source/TokenWay-V11 original/source
-          curl --fail --show-error --location -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/14741328440/zip" -o /tmp/original-source.zip
-          if tar -tzf /tmp/original-source.zip >/dev/null 2>&1; then
-            tar -xzf /tmp/original-source.zip -C original/source
-          elif tar -tf /tmp/original-source.zip >/dev/null 2>&1; then
-            tar -xf /tmp/original-source.zip -C original/source
-          elif unzip -tq /tmp/original-source.zip >/dev/null 2>&1; then
-            mkdir -p /tmp/original-artifact
-            unzip -q /tmp/original-source.zip -d /tmp/original-artifact
-            archive="$(find /tmp/original-artifact -type f \\( -name '*.tar.gz' -o -name '*.tgz' \\) -print -quit)"
-            test -n "$archive"
-            tar -xzf "$archive" -C original/source
-          else
-            echo "Unsupported original source artifact container"
-            file /tmp/original-source.zip
-            exit 1
-          fi
+          curl --fail --show-error --location -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/14741328440/zip" -o /tmp/original-source.tar.gz
+          tar -tzf /tmp/original-source.tar.gz >/dev/null
+          tar -xzf /tmp/original-source.tar.gz -C original/source
           original_root="$(find original/source -type f -path '*/web/package.json' -print -quit | sed 's#/web/package.json##')"
           test -n "$original_root"
           cp -a "$original_root/." source/TokenWay-V11/
