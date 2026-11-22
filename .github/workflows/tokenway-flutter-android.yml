@@ -31,7 +31,7 @@ jobs:
           repository: shanghailaofashi001/tokenway-v11-dev
           ref: feat/flutter-mobile-app
           token: ${{ secrets.TOKENWAY_SOURCE_READ_TOKEN }}
-          path: mobile
+          path: tokenway-source
           persist-credentials: false
 
       - name: Set up Java
@@ -47,12 +47,12 @@ jobs:
           cache: true
 
       - name: Generate Android and iOS platform projects
-        working-directory: mobile
+        working-directory: tokenway-source/mobile
         shell: bash
         run: bash scripts/bootstrap_platforms.sh
 
       - name: Verify original TokenWay brand asset is retained
-        working-directory: mobile
+        working-directory: tokenway-source/mobile
         shell: bash
         run: |
           set -euo pipefail
@@ -60,7 +60,7 @@ jobs:
           grep -q "assets/brand-mark.webp" lib/screens/login_screen.dart
 
       - name: Verify mobile API and chat modules are present
-        working-directory: mobile
+        working-directory: tokenway-source/mobile
         shell: bash
         run: |
           set -euo pipefail
@@ -91,30 +91,30 @@ jobs:
           grep -q "'/v1/audio/speech'" lib/services/tokenway_api.dart
 
       - name: Resolve dependencies
-        working-directory: mobile
+        working-directory: tokenway-source/mobile
         run: flutter pub get
 
       - name: Generate Android and iOS launcher icons
-        working-directory: mobile
+        working-directory: tokenway-source/mobile
         run: dart run flutter_launcher_icons
 
       - name: Analyze Dart source
-        working-directory: mobile
+        working-directory: tokenway-source/mobile
         run: flutter analyze --no-pub
 
       - name: Run Flutter tests
-        working-directory: mobile
+        working-directory: tokenway-source/mobile
         run: flutter test --no-pub
 
       - name: Build Android APK
-        working-directory: mobile
+        working-directory: tokenway-source/mobile
         run: flutter build apk --release --no-pub
 
       - name: Upload Android APK
         uses: actions/upload-artifact@v4
         with:
           name: tokenway-android-apk
-          path: mobile/build/app/outputs/flutter-apk/app-release.apk
+          path: tokenway-source/mobile/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
           retention-days: 7
 
