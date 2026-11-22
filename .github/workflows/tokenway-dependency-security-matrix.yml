@@ -1,0 +1,103 @@
+name: TokenWay isolated dependency security remediation matrix
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/tokenway-dependency-security-matrix.yml
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: tokenway-dependency-security-matrix
+  cancel-in-progress: false
+jobs:
+  prepare:
+    name: Prepare isolated source snapshot
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Download and extract original source artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          mkdir -p source
+          curl --fail --show-error --location -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/14741328440/zip" -o /tmp/source-artifact.zip
+          unzip -tq /tmp/source-artifact.zip
+          unzip -q /tmp/source-artifact.zip -d /tmp/source-artifact
+          archive="$(find /tmp/source-artifact -type f \( -name '*.tar.gz' -o -name '*.tgz' \) -print -quit)"
+          test -n "$archive"
+          tar -tzf "$archive" >/dev/null
+          tar -xzf "$archive" -C source
+          test -s source/TokenWay-V11/web/package.json
+          test -s source/TokenWay-V11/web/bun.lock
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tokenway-source-security-matrix
+          path: source/TokenWay-V11/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 5
+  audit:
+    name: Experiment ${{ matrix.name }}
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Compatible patch overrides plus Zod 4 override
+            key: all-overrides
+          - name: Compatible patch overrides only
+            key: compatible-only
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: tokenway-source-security-matrix
+          path: candidate/TokenWay-V11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.10.0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      - name: Apply isolated dependency overrides
+        working-directory: candidate/TokenWay-V11/web
+        env:
+          MATRIX_KEY: ${{ matrix.key }}
+        run: |
+          set -Eeuo pipefail
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const p=JSON.parse(fs.readFileSync('package.json','utf8'));
+          p.overrides={...(p.overrides||{}),'@hono/node-server':'1.19.18','decode-uri-component':'0.5.1','minimatch':'11.0.1'};
+          if(process.env.MATRIX_KEY==='all-overrides') p.overrides.zod='4.6.6';
+          fs.writeFileSync('package.json',JSON.stringify(p,null,2)+'\n');
+          NODE
+          bun install
+      - name: Audit resolved dependency graph
+        working-directory: candidate/TokenWay-V11/web
+        run: |
+          set +e
+          bun audit 2>&1 | tee /tmp/audit.log
+          grep -E 'vulnerabilities remaining|^[0-9]+ vulnerabilities|^(@hono/node-server|decode-uri-component|minimatch|zod)@' /tmp/audit.log || true
+          exit 0
+      - name: Run typecheck, full tests and production build
+        if: matrix.key == 'all-overrides'
+        working-directory: candidate/TokenWay-V11/web
+        run: |
+          set -Eeuo pipefail
+          bun run typecheck
+          bun run test
+          bun run build
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tokenway-security-matrix-${{ matrix.key }}
+          path: |
+            candidate/TokenWay-V11/web/package.json
+            candidate/TokenWay-V11/web/bun.lock
+          if-no-files-found: ignore
+          retention-days: 5
