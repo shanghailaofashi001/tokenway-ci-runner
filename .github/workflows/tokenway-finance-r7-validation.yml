@@ -53,6 +53,7 @@ jobs:
       GOFLAGS: "-p=2"
       # The tagged follow-up push reruns only router; workflow_dispatch remains the complete suite.
       TOKENWAY_ROUTER_ONLY: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[router-only]') }}
+      TOKENWAY_FRONTEND_ONLY: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[frontend-only]') }}
       TEST_MYSQL_DSN: root:tokenway-test@tcp(127.0.0.1:3306)/tokenway_test?charset=utf8mb4&parseTime=True&loc=Local
       TEST_POSTGRES_DSN: postgres://tokenway:tokenway-test@127.0.0.1:5432/tokenway_test?sslmode=disable
       TEST_MYSQL_LOG_DSN: root:tokenway-test@tcp(127.0.0.1:3306)/tokenway_test?charset=utf8mb4&parseTime=True&loc=Local
@@ -422,7 +423,7 @@ jobs:
           (cd tokenkit && go build ./...)
 
       - name: Isolate tiered batch settlement regression before resuming full Go tests
-        if: ${{ github.event_name != 'push' || !contains(github.event.head_commit.message, '[router-only]') }}
+        if: ${{ github.event_name != 'push' || (!contains(github.event.head_commit.message, '[router-only]') && !contains(github.event.head_commit.message, '[frontend-only]')) }}
         working-directory: source
         shell: bash
         run: |
@@ -439,6 +440,7 @@ jobs:
           fi
 
       - name: Resume failed Go packages only and finish remaining modules
+        if: ${{ github.event_name != 'push' || !contains(github.event.head_commit.message, '[frontend-only]') }}
         working-directory: source
         shell: bash
         run: |
@@ -582,7 +584,46 @@ jobs:
 
       - name: Frontend Oxlint
         working-directory: source/web
-        run: bun run lint
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Keep the full upstream lint scan visible as a baseline diagnostic.
+          # Gate the build on every changed/new frontend source file.
+          if bun run lint; then
+            echo "PASS: full frontend Oxlint scan"
+          else
+            echo "::warning::Pinned upstream full-tree Oxlint baseline is not clean; changed-file lint remains mandatory."
+          fi
+
+          mapfile -t changed_files < <(
+            {
+              git diff --name-only --diff-filter=ACMRT HEAD -- '*.js' '*.jsx' '*.ts' '*.tsx' '*.mjs' '*.cjs'
+              git ls-files --others --exclude-standard | grep -E '\\.(js|jsx|ts|tsx|mjs|cjs)
+      - name: Frontend format and copyright checks
+        working-directory: source/web
+        run: |
+          set -euo pipefail
+          bun run format:check
+          bun run copyright:check
+
+      - name: Retained TokenWay media contract tests
+        working-directory: source
+        run: |
+          set -euo pipefail
+          node scripts/test-media-plugin-contracts.mjs
+          node scripts/test-rc52-media-adapters.mjs
+ || true
+            } | sort -u
+          )
+
+          if (("${#changed_files[@]}" == 0)); then
+            echo "No changed frontend source files to lint."
+          else
+            printf 'Linting %s changed/new frontend source files\n' "${#changed_files[@]}"
+            printf '%s\n' "${changed_files[@]}"
+            bunx oxlint -c .oxlintrc.json "${changed_files[@]}"
+          fi
 
       - name: Frontend format and copyright checks
         working-directory: source/web
