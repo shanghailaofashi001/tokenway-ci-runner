@@ -1,0 +1,72 @@
+name: TokenWay frontend dependency security remediation preview
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/tokenway-frontend-security-preview.yml
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: tokenway-frontend-security-preview
+  cancel-in-progress: false
+jobs:
+  audit-fix-preview:
+    name: Preview non-breaking dependency security fixes
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Download exact TokenWay frontend candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          mkdir -p candidate
+          curl --fail --show-error --location -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/14765237398/zip" -o /tmp/candidate.zip
+          unzip -tq /tmp/candidate.zip
+          unzip -q /tmp/candidate.zip -d candidate
+          test -s candidate/TokenWay-V11/web/bun.lock
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.10.0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      - name: Install exact locked dependencies
+        working-directory: candidate/TokenWay-V11/web
+        run: |
+          set -Eeuo pipefail
+          test "$(node --version)" = "v24.10.0"
+          test "$(bun --version)" = "1.4.4"
+          bun install --frozen-lockfile
+      - name: Preview Bun's in-range security remediation
+        id: fix
+        continue-on-error: true
+        working-directory: candidate/TokenWay-V11/web
+        run: |
+          set +e
+          bun audit fix
+          fix_status=$?
+          echo "fix_status=$fix_status" >> "$GITHUB_OUTPUT"
+          bun audit
+          audit_status=$?
+          echo "audit_status=$audit_status" >> "$GITHUB_OUTPUT"
+          echo "BUN_AUDIT_FIX_EXIT=$fix_status"
+          echo "BUN_AUDIT_EXIT=$audit_status"
+          exit 0
+      - name: Upload isolated remediation preview
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tokenway-v11-dependency-remediation-preview
+          path: candidate/TokenWay-V11/web/
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 5
+      - name: Report audit fix preview result
+        if: always()
+        run: |
+          echo "Bun audit fix exit: ${{ steps.fix.outputs.fix_status }}"
+          echo "Bun audit exit after fix: ${{ steps.fix.outputs.audit_status }}"
+          echo "This artifact is an isolated preview; it has not been merged into the release source."
