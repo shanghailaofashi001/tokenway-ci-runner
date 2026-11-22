@@ -853,7 +853,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           artifact="${RUNNER_TEMP}/tokenway-dependency-candidate.zip"
-          gh api --method GET "repos/${GITHUB_REPOSITORY}/actions/artifacts/14768211653/zip" --output "${artifact}"
+          gh api --method GET "repos/${GITHUB_REPOSITORY}/actions/artifacts/14768211653/zip" > "${artifact}"
           test -s "${artifact}"
           echo "Downloaded audited dependency artifact via authenticated GitHub CLI."
           sha256sum "${artifact}"
@@ -1275,3 +1275,5 @@ jobs:
 # Targeted Kuaipao regression rerun trigger; no full-suite rerun. [kuaipao-only]
 
 # Root-cause fix: use gh api to follow the signed artifact redirect, avoiding urllib's 401 on Azure Blob SAS.
+
+# CLI fix: gh api streams binary artifact bytes to stdout; capture with shell redirection (no --output flag).
