@@ -1,0 +1,157 @@
+name: TokenWay V11 supplemental frontend gates
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/tokenway-frontend-supplemental.yml
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: tokenway-frontend-supplemental
+  cancel-in-progress: false
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Download candidate and original artifacts
+        env:
+          GH_TOKEN: \${{ github.token }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p pair/candidate pair/original
+          curl --fail --show-error --location --retry 8 --retry-all-errors --retry-delay 4 -H "Authorization: Bearer \${GH_TOKEN}" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/\${GITHUB_REPOSITORY}/actions/artifacts/14765237398/zip" -o /tmp/candidate.zip
+          unzip -tq /tmp/candidate.zip
+          unzip -q /tmp/candidate.zip -d pair/candidate
+          curl --fail --show-error --location --retry 8 --retry-all-errors --retry-delay 4 -H "Authorization: Bearer \${GH_TOKEN}" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/\${GITHUB_REPOSITORY}/actions/artifacts/14741328440/zip" -o /tmp/original
+          if tar -tzf /tmp/original >/dev/null 2>&1; then
+            tar -xzf /tmp/original -C pair/original
+          else
+            mkdir -p /tmp/original-wrapper
+            unzip -q /tmp/original -d /tmp/original-wrapper
+            archive="$(find /tmp/original-wrapper -type f -name '*.tar.gz' -print -quit)"
+            test -n "$archive"
+            tar -xzf "$archive" -C pair/original
+          fi
+          test -s pair/candidate/TokenWay-V11/web/package.json
+          test -s pair/original/TokenWay-V11/web/package.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tokenway-v11-supplemental-source-pair
+          path: pair/
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 3
+
+  source-delta:
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: tokenway-v11-supplemental-source-pair
+          path: pair
+      - name: Compare all source file hashes
+        run: |
+          python3 - <<'PY'
+          import hashlib
+          from pathlib import Path
+          def inventory(root):
+              return {p.relative_to(root).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in root.rglob('*') if p.is_file()}
+          before = inventory(Path('pair/original/TokenWay-V11'))
+          after = inventory(Path('pair/candidate/TokenWay-V11'))
+          if before.keys() != after.keys():
+              raise SystemExit('Source inventory changed')
+          changed = sorted(p for p in before if before[p] != after[p])
+          print('Changed files:', changed)
+          if changed != ['web/src/features/home/tokenway-landing.tsx']:
+              raise SystemExit('Unexpected source changes')
+          print('PASS: only the intended homepage file differs')
+          PY
+
+  homepage-route-contract:
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: tokenway-v11-supplemental-source-pair
+          path: pair
+      - name: Check bilingual CTA and route
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          root = Path('pair/candidate/TokenWay-V11/web')
+          home = (root / 'src/features/home/tokenway-landing.tsx').read_text()
+          tree = (root / 'src/routeTree.gen.ts').read_text()
+          checks = {
+            'Chinese label': "aiChat: 'AI聊天'" in home,
+            'English label': "aiChat: 'AI Chat'" in home,
+            'MessageCircle icon': 'MessageCircle' in home,
+            'CTA route': "to='/playground'" in home,
+            'generated route': "'/playground': typeof AuthenticatedPlaygroundIndexRoute" in tree,
+            'route module': (root / 'src/routes/_authenticated/playground/index.tsx').is_file(),
+            'pricing CTA retained': "to='/pricing'" in home,
+            'creator CTA retained': "to='/creator'" in home,
+          }
+          for name, ok in checks.items(): print(('PASS' if ok else 'FAIL') + ': ' + name)
+          if not all(checks.values()): raise SystemExit(1)
+          if not home.index("to='/pricing'") < home.index("to='/playground'") < home.index("to='/creator'"):
+            raise SystemExit('CTA order mismatch')
+          print('PASS: CTA order')
+          PY
+
+  supplemental:
+    name: \${{ matrix.label }}
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: Format check
+            command: format
+          - label: Copyright check
+            command: copyright
+          - label: Dependency audit
+            command: audit
+          - label: Unused code analysis
+            command: knip
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: tokenway-v11-supplemental-source-pair
+          path: pair
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.10.0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ubuntu-bun-supplemental-1.4.4-\${{ hashFiles('pair/candidate/TokenWay-V11/web/bun.lock') }}
+          restore-keys: |
+            ubuntu-bun-supplemental-1.4.4-
+      - name: Install frozen dependencies
+        working-directory: pair/candidate/TokenWay-V11/web
+        run: |
+          set -Eeuo pipefail
+          test "$(node --version)" = "v24.10.0"
+          test "$(bun --version)" = "1.4.4"
+          bun install --frozen-lockfile
+      - name: Run one isolated gate
+        working-directory: pair/candidate/TokenWay-V11/web
+        run: |
+          set -Eeuo pipefail
+          case "\${{ matrix.command }}" in
+            format) bun run format:check ;;
+            copyright) bun run copyright:check ;;
+            audit) bun audit ;;
+            knip) ./node_modules/.bin/knip --no-progress ;;
+          esac
