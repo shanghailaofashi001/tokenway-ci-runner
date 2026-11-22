@@ -49,11 +49,11 @@ jobs:
 
       - name: Run affected mobile regression tests
         working-directory: tokenway-source/mobile
-        run: flutter test --no-pub test/tokenway_api_contract_test.dart test/wallet_payment_test.dart test/subscriptions_screen_test.dart
+        run: flutter test --no-pub test/tokenway_api_contract_test.dart test/wallet_payment_test.dart test/subscriptions_screen_test.dart test/chat_history_sync_service_test.dart
 
       - name: Analyze only changed mobile Dart modules
         working-directory: tokenway-source/mobile
-        run: flutter analyze --no-pub --no-fatal-infos lib/services/tokenway_api.dart lib/screens/chat_screen.dart lib/screens/task_history_screen.dart lib/screens/access_tokens_screen.dart lib/screens/wallet_screen.dart lib/screens/subscriptions_screen.dart lib/screens/payment_webview_screen.dart
+        run: flutter analyze --no-pub --no-fatal-infos lib/services/tokenway_api.dart lib/screens/chat_screen.dart lib/screens/task_history_screen.dart lib/screens/access_tokens_screen.dart lib/screens/wallet_screen.dart lib/screens/subscriptions_screen.dart lib/screens/payment_webview_screen.dart lib/services/chat_history_sync_service.dart
 
       - name: Verify API Key screen is connected
         working-directory: tokenway-source/mobile
@@ -67,6 +67,8 @@ jobs:
           grep -Fq "requestSubscriptionEpay" lib/services/tokenway_api.dart
           grep -Fq "CNY" lib/screens/subscriptions_screen.dart
           grep -Fq "PaymentWebViewScreen" lib/screens/wallet_screen.dart
+          grep -Fq "chat-history-sync" lib/services/tokenway_api.dart
+          grep -Fq "PBKDF2-HMAC-SHA256" lib/services/chat_history_sync_service.dart
 
 # Root-cause fix: bootstrap the base64 TokenWay brand asset before Flutter test asset bundling.
 
@@ -81,3 +83,5 @@ jobs:
 # Target only changed wallet, subscription, payment and API contract modules; previously passed home/smoke tests are not rerun.
 
 # Verify the final gateway enablement guards and CNY-only purchase behavior.
+
+# Validate encrypted cross-device chat sync encryption, API contracts and UI entry point.
