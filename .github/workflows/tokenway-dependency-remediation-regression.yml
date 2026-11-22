@@ -1,0 +1,81 @@
+name: TokenWay frontend dependency-remediation regression
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/tokenway-dependency-remediation-regression.yml
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: tokenway-dependency-remediation-regression
+  cancel-in-progress: false
+jobs:
+  prepare:
+    name: Prepare cleaned dependency-remediated frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Download isolated dependency-remediation preview
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          mkdir -p candidate/TokenWay-V11/web
+          curl --fail --show-error --location -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/14766199131/zip" -o /tmp/dependency-preview.zip
+          unzip -tq /tmp/dependency-preview.zip
+          unzip -q /tmp/dependency-preview.zip -d candidate/TokenWay-V11/web
+          test -s candidate/TokenWay-V11/web/package.json
+          test -s candidate/TokenWay-V11/web/bun.lock
+          rm -rf candidate/TokenWay-V11/web/node_modules
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tokenway-v11-dependency-remediated-web
+          path: candidate/TokenWay-V11/web/
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 5
+
+  regression:
+    name: Frontend ${{ matrix.label }}
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: TypeScript typecheck after dependency fixes
+            command: typecheck
+          - label: Full unit suite after dependency fixes
+            command: test
+          - label: Production build after dependency fixes
+            command: build
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: tokenway-v11-dependency-remediated-web
+          path: web
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.10.0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ubuntu-bun-remediated-1.4.4-${{ hashFiles('web/bun.lock') }}
+          restore-keys: |
+            ubuntu-bun-remediated-1.4.4-
+      - name: Install exact remediated lockfile
+        working-directory: web
+        run: |
+          set -Eeuo pipefail
+          test "$(node --version)" = "v24.10.0"
+          test "$(bun --version)" = "1.4.4"
+          bun install --frozen-lockfile
+      - name: Run isolated regression task
+        working-directory: web
+        run: bun run "${{ matrix.command }}"
