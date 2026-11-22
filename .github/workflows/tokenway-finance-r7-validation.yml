@@ -392,7 +392,7 @@ jobs:
           test -s source/vendor/modules.txt
 
       - name: Verify offline dependency graph
-        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' }}
+        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' }}
         id: offline_graph
         shell: bash
         run: |
@@ -850,6 +850,7 @@ jobs:
         shell: bash
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          TOKENWAY_ARTIFACT_READ_TOKEN: ${{ secrets.TOKENWAY_SOURCE_READ_TOKEN }}
         run: |
           set -Eeuo pipefail
           python3 - <<'PY'
@@ -865,7 +866,7 @@ jobs:
           from pathlib import Path
 
           root = Path.cwd()
-          token = os.environ["GITHUB_TOKEN"]
+          token = os.environ.get("TOKENWAY_ARTIFACT_READ_TOKEN") or os.environ["GITHUB_TOKEN"]
           repository = os.environ["GITHUB_REPOSITORY"]
           api = f"https://api.github.com/repos/{repository}/actions/runs"
 
