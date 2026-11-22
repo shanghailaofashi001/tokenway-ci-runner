@@ -50,7 +50,9 @@ jobs:
           test -s ios/Runner/Info.plist
           grep -q 'TokenWay AI' android/app/src/main/AndroidManifest.xml
           grep -q 'TokenWay AI' ios/Runner/Info.plist
-          grep -q 'webview_flutter_android' android/build.gradle.kts || grep -q 'webview_flutter_android' android/build.gradle
+          if [[ -f android/build.gradle.kts ]]; then grep -Fq 'webview_flutter_android' android/build.gradle.kts; else grep -Fq 'webview_flutter_android' android/build.gradle; fi
+          ! grep -Fq '\\n' android/build.gradle.kts 2>/dev/null || exit 1
+          ! grep -Fq '\\n' android/build.gradle 2>/dev/null || exit 1
 
       - name: Resolve dependencies
         working-directory: tokenway-source/mobile
