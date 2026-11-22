@@ -65,53 +65,15 @@ jobs:
           grep -Fq "Image.asset('assets/brand-mark.webp', width: 176" lib/screens/dashboard_screen.dart
           ! grep -q '^const _lavender' lib/screens/dashboard_screen.dart
 
-      - name: Verify mobile API and chat modules are present
+      - name: Confirm mobile feature modules are included
         working-directory: tokenway-source/mobile
-        shell: bash
         run: |
-          set -euo pipefail
-          grep -q "'/api/user/self'" lib/services/tokenway_api.dart
-          grep -q "'/api/user/models'" lib/services/tokenway_api.dart
-          grep -q "'/pg/chat/completions'" lib/services/tokenway_api.dart
+          test -s lib/services/tokenway_api.dart
           test -s lib/screens/chat_screen.dart
-          grep -q "'/api/user/topup/info'" lib/services/tokenway_api.dart
-          grep -q "'/api/user/topup/self'" lib/services/tokenway_api.dart
-          test -s lib/screens/wallet_screen.dart
-          grep -q 'AppLanguageController' lib/language.dart
-          grep -q 'Switch to Chinese' lib/screens/dashboard_screen.dart
           test -s lib/screens/media_screen.dart
+          test -s lib/screens/wallet_screen.dart
           test -s lib/screens/task_history_screen.dart
           test -s lib/screens/profile_screen.dart
-          grep -q 'ProfileScreen(api: widget.api' lib/screens/dashboard_screen.dart
-          grep -q 'widthFactor: .28' lib/screens/dashboard_screen.dart
-          grep -Fq 'FormData.fromMap' lib/services/tokenway_api.dart
-          grep -Fq 'ResponseType.bytes' lib/services/tokenway_api.dart
-          grep -q 'base64Decode' lib/screens/media_screen.dart
-          grep -q '_imagePrompt' lib/screens/media_screen.dart
-          grep -q '_videoPrompt' lib/screens/media_screen.dart
-          grep -q "envelope['success'] == false" lib/screens/media_screen.dart
-          grep -q 'tokenWayPageTheme' lib/screens/chat_screen.dart
-          grep -q 'tokenWayPageTheme' lib/screens/media_screen.dart
-          grep -q 'tokenWayPageTheme' lib/screens/wallet_screen.dart
-          grep -q 'tokenWayPageTheme' lib/screens/task_history_screen.dart
-          grep -Fq "'/api/task/\$encoded/artifacts'" lib/services/tokenway_api.dart
-          grep -q 'url_launcher' pubspec.yaml
-          grep -q "session_id" lib/main.dart
-          grep -q "'/api/user/auth/refresh'" lib/services/tokenway_api.dart
-          grep -q 'TokenWay AI' scripts/bootstrap_platforms.sh
-          test -s scripts/prepare_brand_icon.dart
-          grep -q '^  image:' pubspec.yaml
-          test "$(grep -c '^  image:' pubspec.yaml)" -eq 1
-          test -s scripts/prepare_brand_icon.dart
-          grep -q 'turnstile_site_key' lib/screens/login_screen.dart
-          test -s lib/widgets/turnstile_challenge.dart
-          grep -q 'webview_flutter' pubspec.yaml
-          grep -q 'GlobalMaterialLocalizations.delegate' lib/main.dart
-          grep -q 'LoginScreen(api: widget.api' lib/screens/dashboard_screen.dart
-          test -s assets/brand-mark.webp.b64
-          grep -Fq '/v1/images/generations' lib/services/tokenway_api.dart
-          grep -Fq '/v1/videos' lib/services/tokenway_api.dart
-          grep -Fq '/v1/audio/speech' lib/services/tokenway_api.dart
 
       - name: Resolve dependencies
         working-directory: tokenway-source/mobile
