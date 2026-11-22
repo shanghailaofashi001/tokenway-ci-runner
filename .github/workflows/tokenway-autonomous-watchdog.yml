@@ -29,6 +29,10 @@ on:
       - 'TokenWay Flutter API contract tests'
       - 'TokenWay Workflow YAML Validator'
       - 'TokenWay Finance Workflow Syntax Guard'
+      - 'Delete exposed source artifacts'
+      - 'TokenWay frontend lint baseline delta'
+      - 'TokenWay V11 frontend parallel validation'
+      - 'TOKENWAY private-source validation'
     types: [completed]
     branches: [main]
   workflow_dispatch:
