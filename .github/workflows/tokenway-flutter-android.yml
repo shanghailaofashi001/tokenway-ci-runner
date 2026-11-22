@@ -2,6 +2,10 @@ name: TokenWay Flutter Android build
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/tokenway-flutter-android.yml"
 
 permissions:
   contents: read
