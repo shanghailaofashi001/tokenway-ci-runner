@@ -83,6 +83,10 @@ jobs:
           test -s lib/screens/task_history_screen.dart
           test -s lib/screens/profile_screen.dart
           grep -q 'ProfileScreen(api: widget.api' lib/screens/dashboard_screen.dart
+          grep -q 'widthFactor: .28' lib/screens/dashboard_screen.dart
+          grep -Fq 'FormData.fromMap' lib/services/tokenway_api.dart
+          grep -Fq 'ResponseType.bytes' lib/services/tokenway_api.dart
+          grep -q 'base64Decode' lib/screens/media_screen.dart
           grep -q '_imagePrompt' lib/screens/media_screen.dart
           grep -q '_videoPrompt' lib/screens/media_screen.dart
           grep -q "envelope['success'] == false" lib/screens/media_screen.dart
