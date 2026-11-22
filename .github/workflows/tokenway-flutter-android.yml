@@ -81,7 +81,8 @@ jobs:
           grep -q "'/api/user/auth/refresh'" lib/services/tokenway_api.dart
           grep -q 'TokenWay AI' scripts/bootstrap_platforms.sh
           test -s scripts/prepare_brand_icon.dart
-          grep -q 'image:' pubspec.yaml
+          grep -q '^  image:' pubspec.yaml
+          test -s scripts/prepare_brand_icon.dart
           grep -q 'turnstile_site_key' lib/screens/login_screen.dart
           test -s lib/widgets/turnstile_challenge.dart
           grep -q 'webview_flutter' pubspec.yaml
