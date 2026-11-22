@@ -71,3 +71,5 @@ jobs:
 # Re-run affected chat attachment, artifact download, API Key UI and API contract checks.
 
 # Retest the corrected SSE fixture for multimodal image attachment payloads.
+
+# Validate the latest proof-bound API Key permission editor and file-transfer modules.
