@@ -99,3 +99,5 @@ jobs:
 # Parallel audit trigger 2026-11-23: mobile platform quality, iOS scaffold, Flutter analysis/tests.
 
 # Rerun after mobile API Key management UI and secure lifecycle implementation.
+
+# Validate the latest mobile API Key screen, profile entry and secure API lifecycle tests.
