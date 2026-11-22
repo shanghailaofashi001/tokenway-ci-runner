@@ -49,11 +49,11 @@ jobs:
 
       - name: Run affected mobile regression tests
         working-directory: tokenway-source/mobile
-        run: flutter test --no-pub test/tokenway_api_contract_test.dart test/dashboard_test.dart test/smoke_test.dart
+        run: flutter test --no-pub test/tokenway_api_contract_test.dart test/wallet_payment_test.dart test/subscriptions_screen_test.dart
 
       - name: Analyze only changed mobile Dart modules
         working-directory: tokenway-source/mobile
-        run: flutter analyze --no-pub --no-fatal-infos lib/services/tokenway_api.dart lib/screens/chat_screen.dart lib/screens/task_history_screen.dart lib/screens/access_tokens_screen.dart
+        run: flutter analyze --no-pub --no-fatal-infos lib/services/tokenway_api.dart lib/screens/chat_screen.dart lib/screens/task_history_screen.dart lib/screens/access_tokens_screen.dart lib/screens/wallet_screen.dart lib/screens/subscriptions_screen.dart lib/screens/payment_webview_screen.dart
 
       - name: Verify API Key screen is connected
         working-directory: tokenway-source/mobile
@@ -63,6 +63,10 @@ jobs:
           grep -Fq "AccessTokensScreen(api: widget.api, language: widget.language)" lib/screens/profile_screen.dart
           grep -Fq "access token creation obtains operation-bound proof" test/tokenway_api_contract_test.dart
           grep -Fq "access token revoke consumes a proof bound to the target id" test/tokenway_api_contract_test.dart
+          grep -Fq "requestNowPaymentsTopup" lib/services/tokenway_api.dart
+          grep -Fq "requestSubscriptionEpay" lib/services/tokenway_api.dart
+          grep -Fq "CNY" lib/screens/subscriptions_screen.dart
+          grep -Fq "PaymentWebViewScreen" lib/screens/wallet_screen.dart
 
 # Root-cause fix: bootstrap the base64 TokenWay brand asset before Flutter test asset bundling.
 
@@ -73,3 +77,5 @@ jobs:
 # Retest the corrected SSE fixture for multimodal image attachment payloads.
 
 # Validate the latest proof-bound API Key permission editor and file-transfer modules.
+
+# Target only changed wallet, subscription, payment and API contract modules; previously passed home/smoke tests are not rerun.
