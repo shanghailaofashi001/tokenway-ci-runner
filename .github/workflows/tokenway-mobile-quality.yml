@@ -101,3 +101,5 @@ jobs:
 # Rerun after mobile API Key management UI and secure lifecycle implementation.
 
 # Validate the latest mobile API Key screen, profile entry and secure API lifecycle tests.
+
+# Targeted rerun after syntax root-cause fix in API Key screen; checkout latest mobile source branch.
