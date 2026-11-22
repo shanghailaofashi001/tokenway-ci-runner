@@ -69,6 +69,8 @@ jobs:
           grep -q "'/api/user/topup/info'" lib/services/tokenway_api.dart
           grep -q "'/api/user/topup/self'" lib/services/tokenway_api.dart
           test -s lib/screens/wallet_screen.dart
+          grep -q 'AppLanguageController' lib/language.dart
+          grep -q 'Switch to Chinese' lib/screens/dashboard_screen.dart
 
       - name: Resolve dependencies
         working-directory: mobile
