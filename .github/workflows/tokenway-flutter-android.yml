@@ -65,7 +65,7 @@ jobs:
           grep -Fq "Image.asset('assets/brand-mark.webp', width: 176" lib/screens/dashboard_screen.dart
           ! grep -q '^const _lavender' lib/screens/dashboard_screen.dart
 
-      - name: Reject low-resolution TokenWay brand source before packaging
+      - name: Verify exact official TokenWay brand asset and dimensions
         working-directory: tokenway-source/mobile
         shell: bash
         run: |
@@ -77,7 +77,7 @@ jobs:
           encoded = Path("assets/brand-mark.webp.b64").read_text().strip()
           data = base64.b64decode(encoded, validate=True)
           if data[:4] != b"RIFF" or data[8:12] != b"WEBP":
-              raise SystemExit("Brand source is not a valid WebP image")
+              raise SystemExit("BLOCKED: mobile brand source is not WebP")
 
           width = height = None
           offset = 12
@@ -99,14 +99,12 @@ jobs:
                   break
               offset += 8 + size + (size & 1)
 
-          if width is None or height is None:
-              raise SystemExit("Could not read WebP dimensions")
-          print(f"TokenWay source logo: {width}x{height}")
-          if width < 1920 or height < 512:
+          if (width, height) != (225, 60):
               raise SystemExit(
-                  "BLOCKED: source logo must be at least 1920x512 before "
-                  "it can be used for high-density UI and 512px launcher artwork"
+                  f"BLOCKED: unexpected brand source dimensions {width}x{height}; "
+                  "expected the verified official website asset 225x60"
               )
+          print("Verified official TokenWay website brand source: 225x60")
           PY
 
       - name: Confirm mobile feature modules are included
