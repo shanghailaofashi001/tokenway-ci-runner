@@ -37,7 +37,16 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/14741328440/zip" \
             -o /tmp/tokenway-source-artifact.zip
-          unzip -q /tmp/tokenway-source-artifact.zip -d base-artifact
+          if tar -tzf /tmp/tokenway-source-artifact.zip >/dev/null 2>&1; then
+            cp /tmp/tokenway-source-artifact.zip base-artifact/TokenWay-V11-Kuaipao-migrated.tar.gz
+          elif unzip -tq /tmp/tokenway-source-artifact.zip >/dev/null 2>&1; then
+            unzip -q /tmp/tokenway-source-artifact.zip -d base-artifact
+          else
+            file /tmp/tokenway-source-artifact.zip
+            xxd -l 32 /tmp/tokenway-source-artifact.zip
+            echo "Downloaded artifact is neither a tar.gz source archive nor a ZIP artifact wrapper." >&2
+            exit 1
+          fi
           test -s base-artifact/TokenWay-V11-Kuaipao-migrated.tar.gz
 
       - name: Extract source and apply the homepage AI Chat entry
