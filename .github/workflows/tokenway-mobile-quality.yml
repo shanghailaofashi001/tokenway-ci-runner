@@ -103,3 +103,5 @@ jobs:
 # Validate the latest mobile API Key screen, profile entry and secure API lifecycle tests.
 
 # Targeted rerun after syntax root-cause fix in API Key screen; checkout latest mobile source branch.
+
+# Trigger 2026-11-23: verify missing encrypted chat sync service root-cause repair.
