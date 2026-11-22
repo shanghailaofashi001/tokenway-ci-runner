@@ -53,6 +53,10 @@ jobs:
           cp -a /tmp/tokenway-platform-shell/android mobile/
           cp -a /tmp/tokenway-platform-shell/ios mobile/
 
+      - name: Verify original TokenWay brand asset is retained
+        working-directory: mobile
+        run: grep -q 'tokenWayBrandMarkBase64' lib/brand_mark.dart
+
       - name: Resolve dependencies
         working-directory: mobile
         run: flutter pub get
