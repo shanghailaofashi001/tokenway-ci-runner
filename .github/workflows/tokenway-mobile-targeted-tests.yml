@@ -110,3 +110,4 @@ jobs:
 
 # Trigger 2026-11-23: verify missing encrypted chat sync service root-cause repair.
 # Targeted rerun after adding the exact AES-GCM marker to the mobile sync service.
+# Targeted root-cause verification 2026-11-23: mutable chat list restore and AES-GCM sync service.
