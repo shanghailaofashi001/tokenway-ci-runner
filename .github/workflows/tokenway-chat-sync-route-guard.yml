@@ -53,6 +53,12 @@ jobs:
           path: source
           fetch-depth: 1
 
+      - name: Set up isolated Go toolchain
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+        with:
+          go-version: "1.26.10"
+          cache: false
+
       - name: Restore access-token baseline and apply encrypted sync
         shell: bash
         run: |
@@ -69,12 +75,6 @@ jobs:
           git diff --check
           grep -Fq '"GET /api/user/chat-history-sync": accessTokenSessionRule' middleware/access_token_routes.go
           grep -Fq '"PUT /api/user/chat-history-sync": accessTokenSessionRule' middleware/access_token_routes.go
-
-      - name: Set up isolated Go toolchain
-        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
-        with:
-          go-version: "1.26.10"
-          cache: false
 
       - name: Verify encrypted chat-sync access-token route coverage
         working-directory: source
