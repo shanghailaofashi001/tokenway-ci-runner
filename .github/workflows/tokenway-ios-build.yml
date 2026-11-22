@@ -99,3 +99,5 @@ jobs:
 # Root-cause fix: Flutter does not support release-mode simulator builds; compile the simulator target without --release.
 
 # Build latest image attachment and task-file download modules for iOS Simulator.
+
+# Rebuild iOS Simulator with proof-bound API Key permission editing and file-transfer modules.
