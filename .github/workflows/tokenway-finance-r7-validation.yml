@@ -1299,7 +1299,7 @@ jobs:
 # parallel verification trigger 2026-11-23
 # second dispatch marker for the independent finance and deployment validation lane
 
-# Package-only follow-up: all four pinned acceptance runs were independently re-verified.
+# Package-only follow-up: all four pinned acceptance runs were independently re-verified; ensure this workflow revision includes the validated-source packaging and upload steps.
 
 # Targeted Kuaipao regression rerun trigger; no full-suite rerun. [kuaipao-only]
 
