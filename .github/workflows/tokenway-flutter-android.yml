@@ -133,6 +133,8 @@ jobs:
           test -s LOGO_SOURCE_AUDIT.md
           grep -Fq "不是矢量路径" LOGO_SOURCE_AUDIT.md
           grep -Fq "turnstileToken" lib/services/tokenway_api.dart
+          grep -Fq "_openPrivacyPolicy" lib/screens/profile_screen.dart
+          grep -Fq "privacy-policy" lib/screens/profile_screen.dart
 
       - name: Resolve dependencies
         working-directory: tokenway-source/mobile
