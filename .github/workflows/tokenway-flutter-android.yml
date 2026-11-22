@@ -74,7 +74,7 @@ jobs:
           grep -q 'Switch to Chinese' lib/screens/dashboard_screen.dart
           test -s lib/screens/media_screen.dart
           test -s lib/screens/task_history_screen.dart
-          grep -q "'/api/task/\$encoded/artifacts'" lib/services/tokenway_api.dart
+          grep -Fq "'/api/task/\$encoded/artifacts'" lib/services/tokenway_api.dart
           grep -q 'url_launcher' pubspec.yaml
           grep -q "session_id" lib/main.dart
           grep -q "'/api/user/auth/refresh'" lib/services/tokenway_api.dart
