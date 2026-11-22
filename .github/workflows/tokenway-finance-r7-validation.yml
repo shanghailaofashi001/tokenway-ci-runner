@@ -1259,3 +1259,5 @@ jobs:
 # second dispatch marker for the independent finance and deployment validation lane
 
 # Package-only follow-up: all four pinned acceptance runs were independently re-verified.
+
+# Targeted Kuaipao regression rerun trigger; no full-suite rerun. [kuaipao-only]
