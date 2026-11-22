@@ -41,7 +41,7 @@ jobs:
           set -euo pipefail
           cd mobile-source/mobile
           api=lib/services/tokenway_api.dart
-          backend=../backend-reference
+          backend=../../backend-reference
           grep -Fq "'/api/user/self'" "$api"
           grep -Fq "'/api/user/models'" "$api"
           grep -Fq "'/pg/chat/completions'" "$api"
