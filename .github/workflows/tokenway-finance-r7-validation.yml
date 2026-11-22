@@ -307,7 +307,7 @@ jobs:
           set -euo pipefail
           python3 ../.github/scripts/apply_encrypted_chat_history_sync.py
           git diff --check
-          grep -Fq 'ChatHistorySync string' relaykit/dto/user_settings.go
+          grep -Eq 'ChatHistorySync[[:space:]]+string' relaykit/dto/user_settings.go
           grep -Fq 'UpdateUserChatHistorySync' model/user.go
           grep -Fq 'selfRoute.GET("/chat-history-sync"' router/api-router.go
           test -s controller/chat_history_sync_test.go
