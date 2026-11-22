@@ -56,12 +56,7 @@ jobs:
           dart run flutter_launcher_icons
           python3 scripts/validate_ios_scaffold.py
 
-      - name: Analyze and run targeted mobile tests
-        working-directory: tokenway-source/mobile
-        run: |
-          set -euo pipefail
-          flutter analyze --no-pub --no-fatal-infos
-          flutter test --no-pub
+# Flutter analyze and regression tests are gated by tokenway-mobile-targeted-tests.yml; avoid rerunning passed tests here.
 
       - name: Compile iOS Simulator app without signing
         working-directory: tokenway-source/mobile
