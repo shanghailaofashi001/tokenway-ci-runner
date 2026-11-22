@@ -66,6 +66,10 @@ jobs:
           grep -Fq 'FilePicker.platform.pickFiles' lib/screens/chat_screen.dart
           grep -Fq 'downloadTaskArtifact' lib/services/tokenway_api.dart
           grep -Fq 'TokenWayDownloads' lib/services/tokenway_api.dart
+          grep -Fq "requestNowPaymentsTopup" lib/services/tokenway_api.dart
+          grep -Fq "requestSubscriptionEpay" lib/services/tokenway_api.dart
+          test -s lib/screens/subscriptions_screen.dart
+          test -s lib/screens/payment_webview_screen.dart
 
       - name: Compile iOS Simulator app without signing
         working-directory: tokenway-source/mobile
@@ -101,3 +105,5 @@ jobs:
 # Build latest image attachment and task-file download modules for iOS Simulator.
 
 # Rebuild iOS Simulator with proof-bound API Key permission editing and file-transfer modules.
+
+# Rebuild latest CNY EPay, NOWPayments USDT and subscription checkout modules.
