@@ -88,8 +88,11 @@ jobs:
               creator = s.find("to='/creator'", hero_start)
               if creator < 0:
                   raise SystemExit('Homepage creator CTA not found after hero container')
-              line_start = s.rfind("\\n", 0, creator) + 1
-              indent = s[line_start:creator]
+              link_start = s.rfind("<Link", hero_start, creator)
+              if link_start < 0:
+                  raise SystemExit('Creator CTA Link element not found')
+              line_start = s.rfind("\\n", 0, link_start) + 1
+              indent = s[line_start:link_start]
               if not indent.isspace():
                   raise SystemExit('Unexpected creator CTA indentation')
               chat_link = (
