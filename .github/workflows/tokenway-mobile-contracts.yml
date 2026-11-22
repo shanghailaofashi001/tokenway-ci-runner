@@ -1,0 +1,62 @@
+name: TokenWay Mobile API contract checks
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/tokenway-mobile-contracts.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tokenway-mobile-contracts
+  cancel-in-progress: true
+
+jobs:
+  api-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout mobile source
+        uses: actions/checkout@v4
+        with:
+          repository: shanghailaofashi001/tokenway-v11-dev
+          ref: feat/flutter-mobile-app
+          token: ${{ secrets.TOKENWAY_SOURCE_READ_TOKEN }}
+          path: mobile-source
+          persist-credentials: false
+
+      - name: Checkout backend API reference
+        uses: actions/checkout@v4
+        with:
+          repository: QuantumNous/new-api
+          path: backend-reference
+          persist-credentials: false
+
+      - name: Verify mobile endpoints against backend contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd mobile-source/mobile
+          api=lib/services/tokenway_api.dart
+          backend=../backend-reference
+          grep -Fq "'/api/user/self'" "$api"
+          grep -Fq "'/api/user/models'" "$api"
+          grep -Fq "'/pg/chat/completions'" "$api"
+          grep -Fq "'/api/user/topup/info'" "$api"
+          grep -Fq "'/api/user/topup/self'" "$api"
+          grep -Fq "'/api/user/auth/refresh'" "$api"
+          grep -Fq "'/api/task/\$encoded/artifacts'" "$api"
+          grep -Fq "'/v1/images/generations'" "$api"
+          grep -Fq "'/v1/videos'" "$api"
+          grep -Fq "'/v1/audio/speech'" "$api"
+          grep -Fq 'GET /api/user/topup/info' "$backend/middleware/access_token_routes.go"
+          grep -Fq 'GET /api/user/topup/self' "$backend/middleware/access_token_routes.go"
+          grep -Fq 'taskReadRouter.GET("/:key/artifacts", controller.GetTaskArtifacts)' "$backend/router/task-router.go"
+          grep -Fq 'POST /api/user/auth/refresh' "$backend/docs/authentication.md"
+          grep -Fq 'turnstile_site_key' lib/screens/login_screen.dart
+          grep -Fq 'AES-GCM' README.md
+          test -s assets/brand-mark.webp.b64
+          echo "All TokenWay mobile API and security contracts passed."
