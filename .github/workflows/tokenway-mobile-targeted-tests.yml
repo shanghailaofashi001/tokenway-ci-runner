@@ -79,3 +79,5 @@ jobs:
 # Validate the latest proof-bound API Key permission editor and file-transfer modules.
 
 # Target only changed wallet, subscription, payment and API contract modules; previously passed home/smoke tests are not rerun.
+
+# Verify the final gateway enablement guards and CNY-only purchase behavior.
