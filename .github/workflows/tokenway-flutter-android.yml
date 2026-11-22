@@ -53,6 +53,14 @@ jobs:
           bash -n scripts/bootstrap_platforms.sh
           bash scripts/bootstrap_platforms.sh
           grep -Fq 'android.permission.INTERNET' android/app/src/main/AndroidManifest.xml
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          root = ET.parse("android/app/src/main/AndroidManifest.xml").getroot()
+          name = "{http://schemas.android.com/apk/res/android}name"
+          if not any(node.attrib.get(name) == "android.permission.INTERNET" for node in root.findall("uses-permission")):
+              raise SystemExit("Android INTERNET permission missing from valid manifest XML")
+          print("PASS: valid Android manifest includes INTERNET permission.")
+          PY
           if [[ -f android/build.gradle.kts ]]; then grep -Fq 'webview_flutter_android' android/build.gradle.kts; else grep -Fq 'webview_flutter_android' android/build.gradle; fi
 
       - name: Verify original TokenWay brand asset is retained
