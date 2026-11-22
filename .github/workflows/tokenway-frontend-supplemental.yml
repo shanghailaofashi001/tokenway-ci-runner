@@ -99,8 +99,12 @@ jobs:
           }
           for name, ok in checks.items(): print(('PASS' if ok else 'FAIL') + ': ' + name)
           if not all(checks.values()): raise SystemExit(1)
-          if not home.index("to='/pricing'") < home.index("to='/playground'") < home.index("to='/creator'"):
-            raise SystemExit('CTA order mismatch')
+          cta_start = home.index("className='mt-11 flex flex-wrap gap-5'")
+          cta_end = home.index('</section>', cta_start)
+          cta = home[cta_start:cta_end]
+          cta_positions = [cta.index("to='/pricing'"), cta.index("to='/playground'"), cta.index("to='/creator'")]
+          if not cta_positions[0] < cta_positions[1] < cta_positions[2]:
+            raise SystemExit('Hero CTA order mismatch')
           print('PASS: CTA order')
           PY
 
