@@ -24,15 +24,21 @@ jobs:
           set -Eeuo pipefail
           mkdir -p source
           curl --fail --show-error --location -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/14741328440/zip" -o /tmp/source-artifact.zip
+          echo "Downloaded source artifact format:"
+          file /tmp/source-artifact.zip
           if tar -tzf /tmp/source-artifact.zip >/dev/null 2>&1; then
             tar -xzf /tmp/source-artifact.zip -C source
-          else
-            unzip -tq /tmp/source-artifact.zip
+          elif tar -tf /tmp/source-artifact.zip >/dev/null 2>&1; then
+            tar -xf /tmp/source-artifact.zip -C source
+          elif unzip -tq /tmp/source-artifact.zip >/dev/null 2>&1; then
             unzip -q /tmp/source-artifact.zip -d /tmp/source-artifact
-            archive="$(find /tmp/source-artifact -type f \\( -name '*.tar.gz' -o -name '*.tgz' \\) -print -quit)"
+            archive="$(find /tmp/source-artifact -type f -name '*.tar.gz' -print -quit)"
             test -n "$archive"
-            tar -tzf "$archive" >/dev/null
             tar -xzf "$archive" -C source
+          else
+            echo "Unsupported source artifact container"
+            xxd -l 64 /tmp/source-artifact.zip
+            exit 1
           fi
           test -s source/TokenWay-V11/web/package.json
           test -s source/TokenWay-V11/web/bun.lock
