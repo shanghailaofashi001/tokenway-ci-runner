@@ -38,12 +38,22 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -s lib/services/chat_history_sync_service.dart
-          test -s test/chat_history_sync_service_test.dart
-          grep -Fq 'PBKDF2-HMAC-SHA256' lib/services/chat_history_sync_service.dart
-          grep -Fq 'AES-GCM' lib/services/chat_history_sync_service.dart
-          grep -Fq 'chat-history-sync' lib/services/tokenway_api.dart
-          grep -Fq 'chat_history_sync_service_test.dart' pubspec.yaml || true
+          for path in lib/services/chat_history_sync_service.dart test/chat_history_sync_service_test.dart; do
+            if [[ ! -s "$path" ]]; then
+              echo "FAIL: required mobile chat-sync file is missing or empty: $path"
+              exit 1
+            fi
+          done
+          for signature in 'PBKDF2-HMAC-SHA256' 'AES-GCM'; do
+            if ! grep -Fq "$signature" lib/services/chat_history_sync_service.dart; then
+              echo "FAIL: chat sync service is missing required cryptographic marker: $signature"
+              exit 1
+            fi
+          done
+          if ! grep -Fq 'chat-history-sync' lib/services/tokenway_api.dart; then
+            echo 'FAIL: mobile API client is not wired to chat-history-sync endpoints'
+            exit 1
+          fi
           echo 'PASS: mobile encrypted chat sync implementation, API wiring and focused tests are present.'
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
