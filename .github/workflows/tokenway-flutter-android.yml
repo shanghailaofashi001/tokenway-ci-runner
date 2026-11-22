@@ -126,6 +126,10 @@ jobs:
           test -s test/dashboard_test.dart
           grep -Fq "import 'package:flutter/material.dart';" test/dashboard_test.dart
           test -s test/tokenway_api_contract_test.dart
+          grep -Fq 'file_picker:' pubspec.yaml
+          grep -Fq 'FilePicker.platform.pickFiles' lib/screens/chat_screen.dart
+          grep -Fq 'downloadTaskArtifact' lib/services/tokenway_api.dart
+          grep -Fq 'TokenWayDownloads' lib/services/tokenway_api.dart
           grep -Fq "video submission uses multipart form fields" test/tokenway_api_contract_test.dart
           grep -Fq "chat stream decodes split SSE events" test/tokenway_api_contract_test.dart
           grep -Fq "text/event-stream" test/tokenway_api_contract_test.dart
@@ -228,3 +232,5 @@ jobs:
 # parallel verification trigger 2026-11-23
 
 # Targeted Android release build after mobile API Key lifecycle implementation.
+
+# Include chat image attachment and secure task-file download modules in the native package build.
