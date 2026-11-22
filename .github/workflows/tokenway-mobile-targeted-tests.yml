@@ -39,6 +39,10 @@ jobs:
           channel: stable
           cache: true
 
+      - name: Restore original TokenWay brand asset and bootstrap platforms
+        working-directory: tokenway-source/mobile
+        run: bash scripts/bootstrap_platforms.sh
+
       - name: Resolve Flutter dependencies
         working-directory: tokenway-source/mobile
         run: flutter pub get
@@ -55,3 +59,5 @@ jobs:
           grep -Fq "AccessTokensScreen(api: widget.api, language: widget.language)" lib/screens/profile_screen.dart
           grep -Fq "access token creation obtains operation-bound proof" test/tokenway_api_contract_test.dart
           grep -Fq "access token revoke consumes a proof bound to the target id" test/tokenway_api_contract_test.dart
+
+# Root-cause fix: bootstrap the base64 TokenWay brand asset before Flutter test asset bundling.
