@@ -86,5 +86,5 @@ jobs:
           test "$(bun --version)" = "1.4.4"
           bun install --frozen-lockfile
       - name: Run isolated regression task
-        working-directory: web
+        working-directory: candidate/TokenWay-V11/web
         run: bun run "${{ matrix.command }}"
