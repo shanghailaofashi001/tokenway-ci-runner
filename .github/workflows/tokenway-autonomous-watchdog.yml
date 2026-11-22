@@ -28,6 +28,7 @@ on:
       - 'TokenWay V11 supplemental frontend gates'
       - 'TokenWay Flutter API contract tests'
       - 'TokenWay Workflow YAML Validator'
+      - 'TokenWay Finance Workflow Syntax Guard'
     types: [completed]
     branches: [main]
   workflow_dispatch:
@@ -39,8 +40,9 @@ on:
 
 permissions:
   actions: write
-  contents: read
+  contents: write
   issues: write
+  pull-requests: write
 
 concurrency:
   group: tokenway-autonomous-watchdog-${{ github.event.workflow_run.id || inputs.run_id || github.run_id }}
@@ -58,6 +60,7 @@ jobs:
       - name: Validate watchdog YAML syntax
         run: |
           ruby -e 'require "yaml"; YAML.load_file(".github/workflows/tokenway-autonomous-watchdog.yml", aliases: true); puts "watchdog YAML parsed successfully"'
+          python3 .github/scripts/tokenway-safe-ci-repair.py --self-test
 
   triage:
     name: Classify failed run and perform bounded safe recovery
@@ -108,6 +111,9 @@ jobs:
           elif grep -Eqi 'No space left on device|ENOSPC|disk quota exceeded' "$LOG"; then
             CLASSIFICATION="runner-disk-capacity"
             REASON="Runner disk capacity was exhausted."
+          elif grep -Eqi 'SC1007|offline_graph.*duplicates|duplicates.*offline_graph' "$LOG"; then
+            CLASSIFICATION="workflow-static-analysis"
+            REASON="Known CI workflow lint defects matched an allowlisted deterministic repair rule; any change must pass actionlint and be proposed in a PR."
           elif grep -Eqi 'undefined:|cannot find module|Module not found|TS[0-9]{4}|FAIL .*test|panic:|assertion failed|error:.*(not declared|does not exist)' "$LOG"; then
             CLASSIFICATION="source-or-dependency"
             REASON="A source, type, build, or test failure was detected; this requires targeted code review and tests."
@@ -140,8 +146,47 @@ jobs:
             echo "No safe automatic retry for classification: $CLASSIFICATION"
           fi
 
+      - name: Checkout trusted main for allowlisted CI repair
+        if: ${{ github.event_name == 'workflow_run' && steps.evidence.outputs.classification == 'workflow-static-analysis' }}
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: true
+
+      - name: Apply deterministic repair, validate, and open a PR
+        id: repair
+        if: ${{ github.event_name == 'workflow_run' && steps.evidence.outputs.classification == 'workflow-static-analysis' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ steps.evidence.outputs.run_id }}
+          LOG_PATH: ${{ runner.temp }}/tokenway-watchdog/failed.log
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 .github/scripts/tokenway-safe-ci-repair.py --root "$GITHUB_WORKSPACE" --log "$LOG_PATH"
+          if git diff --quiet; then
+            echo "No allowlisted repair applies to the current main branch."
+            echo "pr_created=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
+          "$(go env GOPATH)/bin/actionlint" .github/workflows/tokenway-finance-r7-validation.yml
+          branch="tokenway-safe-repair/$RUN_ID"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          git add .github/workflows/tokenway-finance-r7-validation.yml
+          git commit -m "fix(ci): apply allowlisted workflow lint remediation"
+          git push origin "$branch"
+          if ! gh pr list --repo "$GITHUB_REPOSITORY" --head "$branch" --state open --json number --jq 'length > 0' | grep -q true; then
+            gh pr create --repo "$GITHUB_REPOSITORY" --head "$branch" --base main --draft \
+              --title "Automated safe CI repair for run $RUN_ID" \
+              --body "This draft PR contains only a signature-gated repair to the allowlisted CI workflow. The watchdog matched a known ShellCheck/actionlint diagnostic, applied the exact deterministic rule, and validated the resulting workflow with actionlint. No business source, finance logic, payment code, security code, secrets, or brand assets were changed. Please review before merging."
+          fi
+          echo "pr_created=true" >> "$GITHUB_OUTPUT"
+
       - name: Open deduplicated incident for unresolved failures
-        if: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.conclusion != 'success' && steps.evidence.outputs.classification != 'superseded-concurrency' }}
+        if: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.conclusion != 'success' && steps.evidence.outputs.classification != 'superseded-concurrency' && steps.repair.outputs.pr_created != 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
           RUN_ID: ${{ steps.evidence.outputs.run_id }}
