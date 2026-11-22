@@ -95,3 +95,4 @@ jobs:
 # Include the encrypted cross-device chat sync implementation in the source archive.
 
 # Trigger 2026-11-23: verify missing encrypted chat sync service root-cause repair.
+# Targeted root-cause verification 2026-11-23: mutable chat list restore and AES-GCM sync service.
