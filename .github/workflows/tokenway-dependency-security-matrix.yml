@@ -17,37 +17,36 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - name: Download and extract original source artifact
+      - name: Download and extract complete source plus remediated web
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -Eeuo pipefail
-          mkdir -p source/TokenWay-V11/web original/source
-          curl --fail --show-error --location -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/14766199131/zip" -o /tmp/remediated-web.zip
-          unzip -tq /tmp/remediated-web.zip
-          unzip -q /tmp/remediated-web.zip -d source/TokenWay-V11/web
-          rm -rf source/TokenWay-V11/web/node_modules
-          curl --fail --show-error --location -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/14741328440/zip" -o /tmp/original-source.tar.gz
-          unzip -tq /tmp/original-source.tar.gz
-          unzip -q /tmp/original-source.tar.gz -d /tmp/artifact-14741328440
-          archive="$(find /tmp/artifact-14741328440 -type f \\( -name '*.tar.gz' -o -name '*.tgz' \\) -print -quit)"
-          if [ -n "$archive" ]; then
-            tar -tzf "$archive" >/dev/null
-            tar -xzf "$archive" -C source
-          else
-            cp -a /tmp/artifact-14741328440/. source/
-          find /tmp/original-artifact -type f -name '*.tar.gz' -print -quit)"
+          mkdir -p source/TokenWay-V11 original/source
+          curl --fail --show-error --location -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/14741328440/zip" -o /tmp/original-source.zip
+          if tar -tzf /tmp/original-source.zip >/dev/null 2>&1; then
+            tar -xzf /tmp/original-source.zip -C original/source
+          elif tar -tf /tmp/original-source.zip >/dev/null 2>&1; then
+            tar -xf /tmp/original-source.zip -C original/source
+          elif unzip -tq /tmp/original-source.zip >/dev/null 2>&1; then
+            mkdir -p /tmp/original-artifact
+            unzip -q /tmp/original-source.zip -d /tmp/original-artifact
+            archive="$(find /tmp/original-artifact -type f \\( -name '*.tar.gz' -o -name '*.tgz' \\) -print -quit)"
             test -n "$archive"
             tar -xzf "$archive" -C original/source
           else
             echo "Unsupported original source artifact container"
-            file /tmp/original-source.tar.gz
+            file /tmp/original-source.zip
             exit 1
           fi
-          fixture="$(find original/source -path '*/pkg/billingexpr/testdata/frontend_simulation.json' -type f -print -quit)"
-          test -n "$fixture"
-          mkdir -p source/TokenWay-V11/pkg/billingexpr/testdata
-          cp "$fixture" source/TokenWay-V11/pkg/billingexpr/testdata/frontend_simulation.json
+          original_root="$(find original/source -type f -path '*/web/package.json' -print -quit | sed 's#/web/package.json##')"
+          test -n "$original_root"
+          cp -a "$original_root/." source/TokenWay-V11/
+          curl --fail --show-error --location -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/14766199131/zip" -o /tmp/remediated-web.zip
+          unzip -tq /tmp/remediated-web.zip
+          mkdir -p source/TokenWay-V11/web
+          unzip -q /tmp/remediated-web.zip -d source/TokenWay-V11/web
+          rm -rf source/TokenWay-V11/web/node_modules
           test -s source/TokenWay-V11/web/package.json
           test -s source/TokenWay-V11/web/bun.lock
           test -s source/TokenWay-V11/pkg/billingexpr/testdata/frontend_simulation.json
@@ -93,7 +92,7 @@ jobs:
           const p=JSON.parse(fs.readFileSync('package.json','utf8'));
           p.overrides={...(p.overrides||{}),'@hono/node-server':'1.19.18','decode-uri-component':'0.5.1','minimatch':'11.0.1'};
           if(process.env.MATRIX_KEY==='all-overrides') p.overrides.zod='4.6.6';
-          fs.writeFileSync('package.json',JSON.stringify(p,null,2)+'\n');
+          fs.writeFileSync('package.json',JSON.stringify(p,null,2)+'\\n');
           NODE
           bun install
       - name: Audit resolved dependency graph
