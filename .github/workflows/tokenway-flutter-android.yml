@@ -131,7 +131,7 @@ jobs:
           grep -Fq "ValueKey(_turnstileChallengeGeneration)" lib/screens/login_screen.dart
           grep -Fq "_refreshTurnstile" lib/screens/login_screen.dart
           test -s LOGO_SOURCE_AUDIT.md
-          grep -Fq "not a vector" LOGO_SOURCE_AUDIT.md
+          grep -Fq "不是矢量路径" LOGO_SOURCE_AUDIT.md
           grep -Fq "turnstileToken" lib/services/tokenway_api.dart
 
       - name: Resolve dependencies
