@@ -52,7 +52,8 @@ jobs:
 
       - name: Verify original TokenWay brand asset is retained
         working-directory: mobile
-        run: grep -q 'tokenWayBrandMarkBase64' lib/brand_mark.dart
+        run: test -s assets/brand-mark.webp.b64
+          grep -q "assets/brand-mark.webp" lib/screens/login_screen.dart
 
       - name: Verify mobile API and chat modules are present
         working-directory: mobile
@@ -77,6 +78,10 @@ jobs:
       - name: Resolve dependencies
         working-directory: mobile
         run: flutter pub get
+
+      - name: Generate Android and iOS launcher icons
+        working-directory: mobile
+        run: dart run flutter_launcher_icons
 
       - name: Analyze Dart source
         working-directory: mobile
