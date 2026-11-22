@@ -177,13 +177,7 @@ jobs:
         working-directory: tokenway-source/mobile
         run: python3 scripts/validate_ios_scaffold.py
 
-      - name: Analyze Flutter source
-        working-directory: tokenway-source/mobile
-        run: flutter analyze --no-fatal-infos
-
-      - name: Run Flutter tests
-        working-directory: tokenway-source/mobile
-        run: flutter test
+# Flutter analyze and regression tests are gated by tokenway-mobile-targeted-tests.yml; avoid rerunning passed tests here.
 
       - name: Cache Gradle
         uses: actions/cache@v4
