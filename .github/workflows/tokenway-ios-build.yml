@@ -58,6 +58,15 @@ jobs:
 
 # Flutter analyze and regression tests are gated by tokenway-mobile-targeted-tests.yml; avoid rerunning passed tests here.
 
+      - name: Verify chat image and artifact download modules
+        working-directory: tokenway-source/mobile
+        run: |
+          set -euo pipefail
+          grep -Fq 'file_picker:' pubspec.yaml
+          grep -Fq 'FilePicker.platform.pickFiles' lib/screens/chat_screen.dart
+          grep -Fq 'downloadTaskArtifact' lib/services/tokenway_api.dart
+          grep -Fq 'TokenWayDownloads' lib/services/tokenway_api.dart
+
       - name: Compile iOS Simulator app without signing
         working-directory: tokenway-source/mobile
         run: flutter build ios --simulator --no-codesign
@@ -88,3 +97,5 @@ jobs:
 # Targeted rerun after syntax root-cause fix in API Key screen; checkout latest mobile source branch.
 
 # Root-cause fix: Flutter does not support release-mode simulator builds; compile the simulator target without --release.
+
+# Build latest image attachment and task-file download modules for iOS Simulator.
