@@ -69,3 +69,5 @@ jobs:
 # Recheck the latest profile-to-API-Key navigation regression coverage.
 
 # Re-run affected chat attachment, artifact download, API Key UI and API contract checks.
+
+# Retest the corrected SSE fixture for multimodal image attachment payloads.
