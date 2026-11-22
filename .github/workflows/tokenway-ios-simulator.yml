@@ -55,16 +55,13 @@ jobs:
           test -s ios/Runner/Info.plist
           test -s ios/Podfile
 
-      - name: Resolve Flutter and CocoaPods dependencies
+      - name: Resolve Flutter dependencies using the Flutter-managed iOS package integration
         working-directory: tokenway-source/mobile
-        run: |
-          flutter pub get
-          cd ios
-          pod install
+        run: flutter pub get
 
       - name: Build iOS simulator app without signing
         working-directory: tokenway-source/mobile
-        run: flutter build ios --simulator --no-codesign --release
+        run: flutter build ios --simulator --no-codesign
 
       - name: Verify simulator app bundle
         working-directory: tokenway-source/mobile
