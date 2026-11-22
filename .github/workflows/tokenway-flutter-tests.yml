@@ -1,0 +1,52 @@
+name: TokenWay Flutter API contract tests
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/tokenway-flutter-tests.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tokenway-flutter-api-tests
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout CI runner
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Checkout TokenWay mobile source
+        uses: actions/checkout@v4
+        with:
+          repository: shanghailaofashi001/tokenway-v11-dev
+          ref: feat/flutter-mobile-app
+          token: ${{ secrets.TOKENWAY_SOURCE_READ_TOKEN }}
+          path: tokenway-source
+          persist-credentials: false
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Resolve dependencies
+        working-directory: tokenway-source/mobile
+        run: flutter pub get
+
+      - name: Analyze Flutter source
+        working-directory: tokenway-source/mobile
+        run: flutter analyze --no-fatal-infos
+
+      - name: Run Flutter and API contract tests
+        working-directory: tokenway-source/mobile
+        run: flutter test
