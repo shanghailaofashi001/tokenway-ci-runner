@@ -66,6 +66,9 @@ jobs:
           grep -q "'/api/user/models'" lib/services/tokenway_api.dart
           grep -q "'/pg/chat/completions'" lib/services/tokenway_api.dart
           test -s lib/screens/chat_screen.dart
+          grep -q "'/api/user/topup/info'" lib/services/tokenway_api.dart
+          grep -q "'/api/user/topup/self'" lib/services/tokenway_api.dart
+          test -s lib/screens/wallet_screen.dart
 
       - name: Resolve dependencies
         working-directory: mobile
