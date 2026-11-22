@@ -81,6 +81,12 @@ jobs:
           grep -q 'Switch to Chinese' lib/screens/dashboard_screen.dart
           test -s lib/screens/media_screen.dart
           test -s lib/screens/task_history_screen.dart
+          test -s lib/screens/profile_screen.dart
+          grep -q 'ProfileScreen(api: widget.api' lib/screens/dashboard_screen.dart
+          grep -q 'tokenWayPageTheme' lib/screens/chat_screen.dart
+          grep -q 'tokenWayPageTheme' lib/screens/media_screen.dart
+          grep -q 'tokenWayPageTheme' lib/screens/wallet_screen.dart
+          grep -q 'tokenWayPageTheme' lib/screens/task_history_screen.dart
           grep -Fq "'/api/task/\$encoded/artifacts'" lib/services/tokenway_api.dart
           grep -q 'url_launcher' pubspec.yaml
           grep -q "session_id" lib/main.dart
@@ -111,6 +117,10 @@ jobs:
       - name: Generate Android and iOS launcher icons
         working-directory: tokenway-source/mobile
         run: dart run flutter_launcher_icons
+
+      - name: Audit generated iOS project without macOS/Xcode
+        working-directory: tokenway-source/mobile
+        run: python3 scripts/validate_ios_scaffold.py
 
       - name: Cache Gradle
         uses: actions/cache@v4
