@@ -54,9 +54,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: Full patched overrides plus Zod 4 and Hono 2
+          - name: Fully patched dependencies plus Zod 4 and Hono 2.1.6
             key: all-overrides
-          - name: Patch overrides without Zod or Hono major upgrade
+          - name: Semver-compatible dependency patches only
             key: compatible-only
     steps:
       - uses: actions/download-artifact@v4
@@ -78,7 +78,7 @@ jobs:
           node --input-type=module <<'NODE'
           import fs from 'node:fs';
           const p=JSON.parse(fs.readFileSync('package.json','utf8'));
-          p.overrides={...(p.overrides||{}),'@hono/node-server':process.env.MATRIX_KEY==='all-overrides'?'2.1.3':'1.19.18','decode-uri-component':'0.5.1','minimatch':'11.0.1'};
+          p.overrides={...(p.overrides||{}),'@hono/node-server':process.env.MATRIX_KEY==='all-overrides'?'2.1.6':'1.19.18','decode-uri-component':'0.5.1','minimatch':'11.0.1'};
           if(process.env.MATRIX_KEY==='all-overrides') p.overrides.zod='4.6.6';
           fs.writeFileSync('package.json',JSON.stringify(p,null,2)+'\n');
           NODE
