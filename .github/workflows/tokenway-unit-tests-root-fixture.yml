@@ -1,0 +1,61 @@
+name: TokenWay targeted full unit-suite rerun with root fixture
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/tokenway-unit-tests-root-fixture.yml
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: tokenway-unit-tests-root-fixture
+  cancel-in-progress: false
+jobs:
+  unit-tests:
+    name: Full unit suite with complete repository fixture
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Download remediated frontend and restore exact root fixture
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          mkdir -p candidate/TokenWay-V11/web original/source
+          curl --fail --show-error --location -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/14766199131/zip" -o /tmp/remediated.zip
+          unzip -tq /tmp/remediated.zip
+          unzip -q /tmp/remediated.zip -d candidate/TokenWay-V11/web
+          rm -rf candidate/TokenWay-V11/web/node_modules
+          curl --fail --show-error --location -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/14741328440/zip" -o /tmp/original-source.zip
+          unzip -tq /tmp/original-source.zip
+          tar -xzf /tmp/original-source.zip -C original/source
+          fixture="$(find original/source -path '*/pkg/billingexpr/testdata/frontend_simulation.json' -type f -print -quit)"
+          test -n "$fixture"
+          mkdir -p candidate/TokenWay-V11/pkg/billingexpr/testdata
+          cp "$fixture" candidate/TokenWay-V11/pkg/billingexpr/testdata/frontend_simulation.json
+          test -s candidate/TokenWay-V11/pkg/billingexpr/testdata/frontend_simulation.json
+          test -s candidate/TokenWay-V11/web/package.json
+          test -s candidate/TokenWay-V11/web/bun.lock
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.10.0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ubuntu-bun-unit-remediated-1.4.4-${{ hashFiles('candidate/TokenWay-V11/web/bun.lock') }}
+          restore-keys: |
+            ubuntu-bun-unit-remediated-1.4.4-
+      - name: Install exact remediated dependencies
+        working-directory: candidate/TokenWay-V11/web
+        run: |
+          set -Eeuo pipefail
+          test "$(node --version)" = "v24.10.0"
+          test "$(bun --version)" = "1.4.4"
+          bun install --frozen-lockfile
+      - name: Run full unit suite only
+        working-directory: candidate/TokenWay-V11/web
+        run: bun run test
