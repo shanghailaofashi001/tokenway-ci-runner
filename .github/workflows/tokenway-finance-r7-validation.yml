@@ -584,6 +584,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          export PATH="$PWD/node_modules/.bin:$PATH"
           mapfile -t format_files < <(
             {
               git -C .. diff --name-only --diff-filter=ACMRT HEAD -- web
@@ -652,6 +653,7 @@ jobs:
         working-directory: source/web
         run: |
           set -euo pipefail
+          export PATH="$PWD/node_modules/.bin:$PATH"
           if bun run format:check; then
             echo "PASS: full-tree Oxfmt scan"
           else
