@@ -1272,3 +1272,5 @@ jobs:
 # CLI fix: gh api streams binary artifact bytes to stdout; capture with shell redirection (no --output flag).
 
 # Efficiency fix: package-only mode verifies pinned audited manifests and source hashes without rerunning already-passed Bun build, typecheck, unit tests or audit.
+
+# Targeted Kuaipao-only regression follow-up trigger.
