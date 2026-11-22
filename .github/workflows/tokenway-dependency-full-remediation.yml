@@ -65,21 +65,17 @@ jobs:
             echo "partial=false" >> "$GITHUB_OUTPUT"
           fi
           exit 0
-      - name: Apply targeted transitive security overrides
+      - name: Apply targeted security overrides
         working-directory: candidate/web
         run: |
           set -Eeuo pipefail
-          node - <<'NODE'
-          const fs = require('node:fs');
-          const p = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-          p.overrides = {
-            ...(p.overrides || {}),
-            "@hono/node-server": "1.19.18",
-            "decode-uri-component": "0.5.1",
-            "minimatch": "11.0.1"
-          };
-          fs.writeFileSync('package.json', JSON.stringify(p, null, 2) + '\\n');
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const p=JSON.parse(fs.readFileSync('package.json','utf8'));
+          p.overrides={...(p.overrides||{}),'@hono/node-server':'2.1.3','decode-uri-component':'0.5.1','minimatch':'11.0.1','zod':'4.6.6'};
+          fs.writeFileSync('package.json',JSON.stringify(p,null,2)+'\n');
           NODE
+          node -e "JSON.parse(require('node:fs').readFileSync('package.json','utf8'))"
           bun install
       - name: Produce full audit report (do not hide remaining findings)
         if: always()
