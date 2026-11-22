@@ -1153,3 +1153,5 @@ jobs:
 # [resume-full-go] targeted package continuation marker
 # parallel verification trigger 2026-11-23
 # second dispatch marker for the independent finance and deployment validation lane
+
+# Package-only follow-up: all four pinned acceptance runs were independently re-verified.
