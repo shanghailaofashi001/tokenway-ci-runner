@@ -57,6 +57,16 @@ jobs:
         working-directory: mobile
         run: grep -q 'tokenWayBrandMarkBase64' lib/brand_mark.dart
 
+      - name: Verify mobile API and chat modules are present
+        working-directory: mobile
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q "'/api/user/self'" lib/services/tokenway_api.dart
+          grep -q "'/api/user/models'" lib/services/tokenway_api.dart
+          grep -q "'/pg/chat/completions'" lib/services/tokenway_api.dart
+          test -s lib/screens/chat_screen.dart
+
       - name: Resolve dependencies
         working-directory: mobile
         run: flutter pub get
