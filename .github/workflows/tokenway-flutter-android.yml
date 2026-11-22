@@ -74,6 +74,7 @@ jobs:
           test -s lib/screens/wallet_screen.dart
           test -s lib/screens/task_history_screen.dart
           test -s lib/screens/profile_screen.dart
+          test -s test/dashboard_test.dart
 
       - name: Resolve dependencies
         working-directory: tokenway-source/mobile
