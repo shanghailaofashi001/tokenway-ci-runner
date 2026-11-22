@@ -36,3 +36,4 @@ jobs:
             end
           end
           RUBY
+# Force validation on the already-created workflow definition.
