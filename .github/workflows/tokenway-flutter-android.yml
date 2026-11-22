@@ -65,6 +65,50 @@ jobs:
           grep -Fq "Image.asset('assets/brand-mark.webp', width: 176" lib/screens/dashboard_screen.dart
           ! grep -q '^const _lavender' lib/screens/dashboard_screen.dart
 
+      - name: Reject low-resolution TokenWay brand source before packaging
+        working-directory: tokenway-source/mobile
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import base64
+
+          encoded = Path("assets/brand-mark.webp.b64").read_text().strip()
+          data = base64.b64decode(encoded, validate=True)
+          if data[:4] != b"RIFF" or data[8:12] != b"WEBP":
+              raise SystemExit("Brand source is not a valid WebP image")
+
+          width = height = None
+          offset = 12
+          while offset + 8 <= len(data):
+              kind = data[offset:offset + 4]
+              size = int.from_bytes(data[offset + 4:offset + 8], "little")
+              chunk = data[offset + 8:offset + 8 + size]
+              if kind == b"VP8X" and len(chunk) >= 10:
+                  width = 1 + int.from_bytes(chunk[4:7], "little")
+                  height = 1 + int.from_bytes(chunk[7:10], "little")
+                  break
+              if kind == b"VP8 " and len(chunk) >= 10 and chunk[3:6] == bytes((0x9D, 0x01, 0x2A)):
+                  width = int.from_bytes(chunk[6:8], "little") & 0x3FFF
+                  height = int.from_bytes(chunk[8:10], "little") & 0x3FFF
+                  break
+              if kind == b"VP8L" and len(chunk) >= 5 and chunk[0] == 0x2F:
+                  width = 1 + chunk[1] + ((chunk[2] & 0x3F) << 8)
+                  height = 1 + ((chunk[2] >> 6) | (chunk[3] << 2) | ((chunk[4] & 0x0F) << 10))
+                  break
+              offset += 8 + size + (size & 1)
+
+          if width is None or height is None:
+              raise SystemExit("Could not read WebP dimensions")
+          print(f"TokenWay source logo: {width}x{height}")
+          if width < 1920 or height < 512:
+              raise SystemExit(
+                  "BLOCKED: source logo must be at least 1920x512 before "
+                  "it can be used for high-density UI and 512px launcher artwork"
+              )
+          PY
+
       - name: Confirm mobile feature modules are included
         working-directory: tokenway-source/mobile
         run: |
