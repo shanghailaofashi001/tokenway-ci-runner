@@ -53,10 +53,31 @@ jobs:
           grep -Fq "'/v1/videos'" "$api"
           grep -Fq "'/v1/audio/speech'" "$api"
           grep -Fq 'GET /api/user/topup/info' "$backend/middleware/access_token_routes.go"
-          grep -Fq 'GET /api/user/topup/self' "$backend/middleware/access_token_routes.go"
-          grep -Fq 'taskReadRouter.GET("/:key/artifacts", controller.GetTaskArtifacts)' "$backend/router/task-router.go"
+          grep -Fq 'selfRoute.GET("/topup/info", controller.GetTopUpInfo)' "$backend/router/api-router.go"
+          grep -Fq 'selfRoute.GET("/topup/self", controller.GetUserTopUps)' "$backend/router/api-router.go"
+          grep -Fq 'selfRoute.POST("/topup", middleware.CriticalRateLimit(), controller.TopUp)' "$backend/router/api-router.go"
+          grep -Fq 'type topUpRequest struct' "$backend/controller/user.go"
+          grep -Fq 'Key string `json:"key"`' "$backend/controller/user.go"
+          grep -Fq 'taskRoute.GET("/self", middleware.UserAuth(), controller.GetUserTask)' "$backend/router/api-router.go"
+          grep -Fq 'taskRoute.GET("/:task_id/artifacts", middleware.UserAuth(), controller.GetDashboardTaskArtifacts)' "$backend/router/api-router.go"
+          grep -Fq 'response := gin.H{"task_id": task.TaskID, "artifacts": items}' "$backend/controller/task.go"
+          grep -Fq 'common.ApiSuccess(c, response)' "$backend/controller/task.go"
           grep -Fq 'POST /api/user/auth/refresh' "$backend/docs/authentication.md"
+          grep -Fq 'taskRoute.GET("/self", middleware.UserAuth(), controller.GetUserTask)' "$backend/router/api-router.go"
+          grep -Fq 'func GetUserTask(c *gin.Context)' "$backend/controller/task.go"
+          grep -Fq 'func GetUserTopUps(c *gin.Context)' "$backend/controller/topup.go"
+          grep -Fq 'func GetTopUpInfo(c *gin.Context)' "$backend/controller/topup.go"
           grep -Fq 'turnstile_site_key' lib/screens/login_screen.dart
           grep -Fq 'AES-GCM' README.md
+          grep -Fq "'/api/task/self'" "$api"
+          grep -Fq "'/api/user/topup'" "$api"
+          grep -Fq "data: {'key': code}" "$api"
+          grep -Fq "'/api/user/login/2fa'" "$api"
+          grep -Fq "'/api/user/auth/logout'" "$api"
+          grep -Fq "'/v1/images/generations'" "$api"
+          grep -Fq "'/v1/videos'" "$api"
+          grep -Fq "'/v1/audio/speech'" "$api"
+          grep -Fq "envelope['success'] == false" mobile-source/mobile/lib/screens/media_screen.dart
+          test -s mobile-source/mobile/lib/screens/profile_screen.dart
           test -s assets/brand-mark.webp.b64
           echo "All TokenWay mobile API and security contracts passed."
