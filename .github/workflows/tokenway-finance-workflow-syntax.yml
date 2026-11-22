@@ -59,8 +59,10 @@ jobs:
                   raise SystemExit(f"FAIL: targeted CNY/chat-sync test missing: {test_name}")
           if "id: offline_graph" in block or "\n      - name:" in block:
               raise SystemExit("FAIL: CNY test step overlaps another workflow step")
-          if text.index(chat_step) <= start or text.index(offline_step) <= text.index(chat_step):
-              raise SystemExit("FAIL: expected CNY, chat-sync, and offline-graph step order changed")
+          if text.index(chat_step) >= start:
+              raise SystemExit("FAIL: encrypted chat-sync patch must precede targeted CNY/chat-sync tests")
+          if text.index(offline_step) <= start or text.index(kuaipao_step) <= text.index(offline_step):
+              raise SystemExit("FAIL: offline graph and Kuaipao steps are out of order")
 
           print("PASS: CNY, encrypted chat-sync, and offline dependency checks have distinct step boundaries")
           PY
