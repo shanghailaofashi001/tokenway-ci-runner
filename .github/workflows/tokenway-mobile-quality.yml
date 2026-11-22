@@ -105,3 +105,4 @@ jobs:
 # Targeted rerun after syntax root-cause fix in API Key screen; checkout latest mobile source branch.
 
 # Trigger 2026-11-23: verify missing encrypted chat sync service root-cause repair.
+# Targeted root-cause verification 2026-11-23: mutable chat list restore and AES-GCM sync service.
