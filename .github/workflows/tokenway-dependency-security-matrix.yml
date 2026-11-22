@@ -31,10 +31,13 @@ jobs:
           cp -a "$original_root/." source/TokenWay-V11/
           curl --fail --show-error --location -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/14767259375/zip" -o /tmp/remediated-web.zip
           unzip -tq /tmp/remediated-web.zip
-          rm -rf source/TokenWay-V11/web
-          mkdir -p source/TokenWay-V11/web
-          unzip -oq /tmp/remediated-web.zip -d source/TokenWay-V11/web
-          rm -rf source/TokenWay-V11/web/node_modules
+          rm -rf /tmp/remediated-web source/TokenWay-V11/web
+          mkdir -p /tmp/remediated-web source/TokenWay-V11/web
+          unzip -oq /tmp/remediated-web.zip -d /tmp/remediated-web
+          test -s /tmp/remediated-web/candidate/web/package.json
+          test -s /tmp/remediated-web/candidate/web/bun.lock
+          cp /tmp/remediated-web/candidate/web/package.json source/TokenWay-V11/web/package.json
+          cp /tmp/remediated-web/candidate/web/bun.lock source/TokenWay-V11/web/bun.lock
           test -s source/TokenWay-V11/web/package.json
           test -s source/TokenWay-V11/web/bun.lock
           test -s source/TokenWay-V11/pkg/billingexpr/testdata/frontend_simulation.json
