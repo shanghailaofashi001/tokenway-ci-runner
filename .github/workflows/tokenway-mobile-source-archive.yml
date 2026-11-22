@@ -98,3 +98,4 @@ jobs:
 # Targeted root-cause verification 2026-11-23: mutable chat list restore and AES-GCM sync service.
 # Final targeted verification 2026-11-23: Unicode-aware sync passphrase validation.
 # Refresh evidence ledger after latest encrypted chat sync mobile regression closure.
+# Final acceptance ledger refresh after Android APK and iOS Simulator build success.
