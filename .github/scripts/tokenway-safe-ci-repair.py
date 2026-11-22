@@ -133,21 +133,21 @@ def self_test() -> None:
         (root / ".github/scripts").mkdir(parents=True)
         (root / ".github/workflows").mkdir(parents=True)
         (root / ".github/scripts/apply_encrypted_chat_history_sync.py").write_text(
-            'from pathlib import Path\\nif "ChatHistorySync string" not in dto_source:\\n',
+            'from pathlib import Path\nif "ChatHistorySync string" not in dto_source:\n',
             encoding="utf-8",
         )
         (root / ".github/workflows/tokenway-finance-r7-validation.yml").write_text(
-            "grep -Fq 'ChatHistorySync string' relaykit/dto/user_settings.go\\n",
+            "grep -Fq 'ChatHistorySync string' relaykit/dto/user_settings.go\n",
             encoding="utf-8",
         )
         chat_repairs = repair_chat_sync_files(
             root,
-            "grep -Fq 'ChatHistorySync string'\\nPASS: encrypted chat sync DTO applied",
+            "grep -Fq 'ChatHistorySync string'\nPASS: encrypted chat sync DTO applied",
         )
         assert len(chat_repairs) == 2
         script_text = (root / ".github/scripts/apply_encrypted_chat_history_sync.py").read_text()
         workflow_text = (root / ".github/workflows/tokenway-finance-r7-validation.yml").read_text()
-        assert 're.search(r"\\\\bChatHistorySync\\\\s+string\\\\b"' in script_text
+        assert 're.search(r"\\bChatHistorySync\\s+string\\b"' in script_text
         assert "grep -Eq 'ChatHistorySync[[:space:]]+string'" in workflow_text
 
     print("safe repair self-test passed")
