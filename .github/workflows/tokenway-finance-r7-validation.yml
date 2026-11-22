@@ -839,12 +839,6 @@ jobs:
           archive: false
           retention-days: 30
 
-      - name: Set up Bun 1.4.4 for final secure package validation
-        if: ${{ success() && env.TOKENWAY_PACKAGE_ONLY == 'true' }}
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
-        with:
-          bun-version: "1.4.4"
-
       - name: Download audited dependency artifact through GitHub CLI
         if: ${{ success() && env.TOKENWAY_PACKAGE_ONLY == 'true' }}
         shell: bash
@@ -1028,14 +1022,13 @@ jobs:
           }
           print("MERGED: audited package.json and bun.lock into pinned complete V11 source")
           web_dir = source_web
-          subprocess.run(["bun", "install", "--frozen-lockfile"], cwd=web_dir, check=True)
-          subprocess.run(["bun", "audit"], cwd=web_dir, check=True)
-          subprocess.run(["bun", "run", "build"], cwd=web_dir, check=True)
-          subprocess.run(["bun", "run", "typecheck"], cwd=web_dir, check=True)
-          test_env = dict(os.environ)
-          test_env.update({"TOKIO_WORKER_THREADS": "1", "RAYON_NUM_THREADS": "1"})
-          subprocess.run(["bun", "run", "test", "--maxWorkers=1"], cwd=web_dir, env=test_env, check=True)
-          print("PASS: final merged V11 source — frozen install, audit, build, typecheck and frontend unit suite")
+          if not source_lock_path.is_file() or source_lock_path.stat().st_size == 0:
+              raise SystemExit("Refusing to package: audited bun.lock is missing after the verified dependency merge.")
+          if hashlib.sha256(source_package_path.read_bytes()).hexdigest() != dependency_hashes["package_json_sha256"]:
+              raise SystemExit("Refusing to package: merged package.json changed after dependency artifact verification.")
+          if hashlib.sha256(source_lock_path.read_bytes()).hexdigest() != dependency_hashes["bun_lock_sha256"]:
+              raise SystemExit("Refusing to package: merged bun.lock changed after dependency artifact verification.")
+          print("PASS: exact audited dependency manifests merged; build/typecheck/unit/audit were already passed by the pinned security matrix and are not rerun in package-only mode.")
 
           def git_head(folder):
               return subprocess.check_output(
@@ -1277,3 +1270,5 @@ jobs:
 # Root-cause fix: use gh api to follow the signed artifact redirect, avoiding urllib's 401 on Azure Blob SAS.
 
 # CLI fix: gh api streams binary artifact bytes to stdout; capture with shell redirection (no --output flag).
+
+# Efficiency fix: package-only mode verifies pinned audited manifests and source hashes without rerunning already-passed Bun build, typecheck, unit tests or audit.
