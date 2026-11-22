@@ -115,3 +115,5 @@ jobs:
 # Compile end-to-end encrypted cross-device chat sync support in native clients.
 
 # Require the end-to-end encrypted chat sync regression test in native builds.
+
+# Trigger 2026-11-23: verify missing encrypted chat sync service root-cause repair.
