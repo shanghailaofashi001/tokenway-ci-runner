@@ -107,3 +107,4 @@ jobs:
 # Final targeted verification 2026-11-23: Unicode-aware sync passphrase validation.
 # Refresh evidence ledger after latest encrypted chat sync mobile regression closure.
 # Final acceptance ledger refresh after Android APK and iOS Simulator build success.
+# Bootstrap root-cause validation 2026-11-23: parse generated AndroidManifest.xml.
