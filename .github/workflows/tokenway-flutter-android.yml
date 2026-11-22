@@ -82,6 +82,7 @@ jobs:
           grep -q 'TokenWay AI' scripts/bootstrap_platforms.sh
           test -s scripts/prepare_brand_icon.dart
           grep -q '^  image:' pubspec.yaml
+          test "$(grep -c '^  image:' pubspec.yaml)" -eq 1
           test -s scripts/prepare_brand_icon.dart
           grep -q 'turnstile_site_key' lib/screens/login_screen.dart
           test -s lib/widgets/turnstile_challenge.dart
