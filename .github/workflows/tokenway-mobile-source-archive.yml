@@ -62,6 +62,9 @@ jobs:
           test -s pubspec.lock
           test -s lib/main.dart
           test -s lib/screens/access_tokens_screen.dart
+          test -s lib/screens/file_library_screen.dart
+          grep -Fq "client.get('/api/user/files'" lib/services/tokenway_api.dart
+          grep -Fq "client.post('/api/user/files'" lib/services/tokenway_api.dart
           test -s lib/screens/chat_screen.dart
           test -s lib/services/tokenway_api.dart
           test -s scripts/bootstrap_platforms.sh
@@ -108,3 +111,5 @@ jobs:
 # Refresh evidence ledger after latest encrypted chat sync mobile regression closure.
 # Final acceptance ledger refresh after Android APK and iOS Simulator build success.
 # Bootstrap root-cause validation 2026-11-23: parse generated AndroidManifest.xml.
+
+# Re-archive latest TokenWay mobile file library and two-client chat-sync integration tests.
