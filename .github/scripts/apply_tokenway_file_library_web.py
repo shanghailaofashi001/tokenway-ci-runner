@@ -134,6 +134,11 @@ export function FileLibraryCard() {
     uploadMutation.mutate(file)
   }
 
+  let errorMessage = t('Unable to load files')
+  if (filesQuery.error instanceof Error) errorMessage = filesQuery.error.message
+  const refreshClassName = filesQuery.isFetching ? 'h-4 w-4 animate-spin' : 'h-4 w-4'
+  const uploadLabel = uploadMutation.isPending ? t('Uploading') : t('Upload file')
+
   let fileContent: ReactNode
   if (filesQuery.isLoading) {
     fileContent = (
@@ -143,7 +148,7 @@ export function FileLibraryCard() {
     fileContent = (
       <div className='flex flex-col items-center gap-3 py-8 text-center'>
         <p className='text-sm text-destructive'>
-          {filesQuery.error instanceof Error ? filesQuery.error.message : t('Unable to load files')}
+          {errorMessage}
         </p>
         <Button type='button' variant='outline' onClick={() => void filesQuery.refetch()}>
           {t('Retry')}
@@ -212,7 +217,7 @@ export function FileLibraryCard() {
             onClick={() => void filesQuery.refetch()}
             disabled={filesQuery.isFetching}
           >
-            <RefreshCw className={filesQuery.isFetching ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />
+            <RefreshCw className={refreshClassName} />
           </Button>
           <Button
             type='button'
@@ -220,7 +225,7 @@ export function FileLibraryCard() {
             disabled={uploadMutation.isPending}
           >
             <Upload className='mr-2 h-4 w-4' />
-            {uploadMutation.isPending ? t('Uploading') : t('Upload file')}
+            {uploadLabel}
           </Button>
         </div>
       </CardHeader>
