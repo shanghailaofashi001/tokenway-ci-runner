@@ -125,3 +125,5 @@ jobs:
 # Bootstrap root-cause validation 2026-11-23: parse generated AndroidManifest.xml.
 
 # Rebuild iOS Simulator after adding the account file library screen and authenticated API.
+
+# Rebuild iOS Simulator after native file library save-dialog export integration.
