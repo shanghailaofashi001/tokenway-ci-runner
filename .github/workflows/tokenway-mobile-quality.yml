@@ -115,3 +115,5 @@ jobs:
 # Full mobile-suite revalidation after targeted wallet regression passed: 2026-11-23.
 
 # Current HEAD parallel revalidation 2026-11-23: run full Flutter analyze and complete test suite alongside platform builds.
+
+# Payment navigation security regression 2026-11-23: reject generic Android intent:// external launches; validate explicit payment schemes.
