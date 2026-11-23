@@ -8,7 +8,7 @@ on:
       private_ref:
         description: Exact private tokenway-v11-dev commit SHA to validate
         required: true
-        default: dd12d57156c4ec58600e733f14914967f2acba12
+        default: 347830873f07e08e43375f196aeaf6b8f9d6b74e
         type: string
   push:
     branches: [main]
