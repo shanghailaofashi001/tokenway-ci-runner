@@ -32,7 +32,7 @@ License, or (at your option) any later version.
 */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Download, File, FolderOpen, RefreshCw, Trash2, Upload } from 'lucide-react'
-import { useRef } from 'react'
+import { useRef, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -134,99 +134,66 @@ export function FileLibraryCard() {
     uploadMutation.mutate(file)
   }
 
+  let fileContent: ReactNode
+  if (filesQuery.isLoading) {
+    fileContent = (
+      <div className='py-8 text-center text-sm text-muted-foreground'>{t('Loading files...')}</div>
+    )
+  } else if (filesQuery.isError) {
+    fileContent = (
+      <div className='flex flex-col items-center gap-3 py-8 text-center'>
+        <p className='text-sm text-destructive'>
+          {filesQuery.error instanceof Error ? filesQuery.error.message : t('Unable to load files')}
+        </p>
+        <Button type='button' variant='outline' onClick={() => void filesQuery.refetch()}>
+          {t('Retry')}
+        </Button>
+      </div>
+    )
+  } else if (filesQuery.data && filesQuery.data.length > 0) {
+    fileContent = (
+      <ul className='divide-y'>
+        {filesQuery.data.map((file) => (
+          <li key={file.id} className='flex min-w-0 items-center gap-3 py-3 first:pt-0 last:pb-0'>
+            <div className='flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-muted'>
+              <File className='h-5 w-5 text-muted-foreground' />
+            </div>
+            <div className='min-w-0 flex-1'>
+              <p className='truncate text-sm font-medium' title={file.filename}>{file.filename}</p>
+              <p className='text-xs text-muted-foreground'>
+                {formatBytes(file.bytes)} · {file.purpose} · {new Date(file.created_at * 1000).toLocaleString()}
+              </p>
+            </div>
+            <Button type='button' variant='ghost' size='icon' aria-label={t('Download file')} onClick={() => void downloadFile(file)}>
+              <Download className='h-4 w-4' />
+            </Button>
+            <Button
+              type='button'
+              variant='ghost'
+              size='icon'
+              aria-label={t('Delete file')}
+              disabled={deleteMutation.isPending}
+              onClick={() => deleteMutation.mutate(file.id)}
+            >
+              <Trash2 className='h-4 w-4 text-destructive' />
+            </Button>
+          </li>
+        ))}
+      </ul>
+    )
+  } else {
+    fileContent = (
+      <div className='flex flex-col items-center gap-2 py-8 text-center text-muted-foreground'>
+        <FolderOpen className='h-9 w-9 opacity-60' />
+        <p className='text-sm'>{t('Your file library is empty')}</p>
+        <p className='text-xs'>{t('Uploaded files are private to your account')}</p>
+      </div>
+    )
+  }
+
   return (
     <Card data-card-hover='false' className='gap-0 overflow-hidden'>
-      <CardHeader className='flex flex-row items-start justify-between gap-3 border-b'>
-        <div className='min-w-0 space-y-1'>
-          <CardTitle className='flex items-center gap-2 text-base'>
-            <FolderOpen className='h-4 w-4' />
-            {t('File library')}
-          </CardTitle>
-          <CardDescription>
-            {t('Upload, download and manage files private to your account')}
-          </CardDescription>
-        </div>
-        <div className='flex shrink-0 items-center gap-2'>
-          <Button
-            type='button'
-            variant='outline'
-            size='icon'
-            aria-label={t('Refresh files')}
-            onClick={() => void filesQuery.refetch()}
-            disabled={filesQuery.isFetching}
-          >
-            <RefreshCw className={filesQuery.isFetching ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />
-          </Button>
-          <Button
-            type='button'
-            onClick={() => inputRef.current?.click()}
-            disabled={uploadMutation.isPending}
-          >
-            <Upload className='mr-2 h-4 w-4' />
-            {uploadMutation.isPending ? t('Uploading') : t('Upload file')}
-          </Button>
-        </div>
-      </CardHeader>
-      <CardContent className='space-y-3 p-3 sm:p-5'>
-        <input
-          ref={inputRef}
-          type='file'
-          className='hidden'
-          onChange={handleFileChange}
-          aria-label={t('Choose a file to upload')}
-        />
-        {filesQuery.isLoading ? (
-          <div className='py-8 text-center text-sm text-muted-foreground'>{t('Loading files...')}</div>
-        ) : filesQuery.isError ? (
-          <div className='flex flex-col items-center gap-3 py-8 text-center'>
-            <p className='text-sm text-destructive'>
-              {filesQuery.error instanceof Error ? filesQuery.error.message : t('Unable to load files')}
-            </p>
-            <Button type='button' variant='outline' onClick={() => void filesQuery.refetch()}>
-              {t('Retry')}
-            </Button>
-          </div>
-        ) : filesQuery.data?.length ? (
-          <ul className='divide-y'>
-            {filesQuery.data.map((file) => (
-              <li key={file.id} className='flex min-w-0 items-center gap-3 py-3 first:pt-0 last:pb-0'>
-                <div className='flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-muted'>
-                  <File className='h-5 w-5 text-muted-foreground' />
-                </div>
-                <div className='min-w-0 flex-1'>
-                  <p className='truncate text-sm font-medium' title={file.filename}>{file.filename}</p>
-                  <p className='text-xs text-muted-foreground'>
-                    {formatBytes(file.bytes)} · {file.purpose} · {new Date(file.created_at * 1000).toLocaleString()}
-                  </p>
-                </div>
-                <Button type='button' variant='ghost' size='icon' aria-label={t('Download file')} onClick={() => void downloadFile(file)}>
-                  <Download className='h-4 w-4' />
-                </Button>
-                <Button
-                  type='button'
-                  variant='ghost'
-                  size='icon'
-                  aria-label={t('Delete file')}
-                  disabled={deleteMutation.isPending}
-                  onClick={() => deleteMutation.mutate(file.id)}
-                >
-                  <Trash2 className='h-4 w-4 text-destructive' />
-                </Button>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <div className='flex flex-col items-center gap-2 py-8 text-center text-muted-foreground'>
-            <FolderOpen className='h-9 w-9 opacity-60' />
-            <p className='text-sm'>{t('Your file library is empty')}</p>
-            <p className='text-xs'>{t('Uploaded files are private to your account')}</p>
-          </div>
-        )}
-        <p className='text-xs text-muted-foreground'>{t('Maximum file size: 512 MiB')}</p>
-      </CardContent>
-    </Card>
-  )
-}
+
 '''
 target = ROOT / "web/src/features/profile/components/file-library-card.tsx"
 if target.exists():
