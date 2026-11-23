@@ -1351,3 +1351,4 @@ jobs:
 # Efficiency fix: package-only mode verifies pinned audited manifests and source hashes without rerunning already-passed Bun build, typecheck, unit tests or audit.
 
 # Package-only continuation: reuse the newly completed full acceptance run #120 and pinned dependency/security evidence. [package-only]
+# Package-only continuation: produce the verified V11 source archive without rerunning passed checks. [package-only]
