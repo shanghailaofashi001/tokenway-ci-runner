@@ -62,7 +62,7 @@ jobs:
               echo "**BLOCKED — signing credentials are not fully configured.**"
               echo
               echo "Missing GitHub Actions secrets:"
-              for item in "${missing[@]}"; do echo "- `$item`"; done
+              for item in "${missing[@]}"; do printf -- "- %s\n" "$item"; done
               echo
               echo "Add these under the CI repository Settings → Secrets and variables → Actions, then rerun this workflow."
             fi
