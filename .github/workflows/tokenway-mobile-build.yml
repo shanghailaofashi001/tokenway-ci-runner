@@ -153,3 +153,5 @@ jobs:
           path: tokenway-source/mobile/build/ios/TokenWay-iOS-Simulator.zip
           if-no-files-found: error
           retention-days: 14
+
+# Current-head dual-platform rebuild 2026-11-23: validate payment navigation hardening on latest private mobile source.
