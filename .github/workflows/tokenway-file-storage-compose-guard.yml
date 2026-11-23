@@ -1,0 +1,60 @@
+name: TokenWay Production File Storage Compose Guard
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/scripts/apply_tokenway_file_library_web.py"
+      - ".github/workflows/tokenway-file-storage-compose-guard.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tokenway-file-storage-compose-${{ github.ref }}-${{ github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  compose-storage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout CI scripts
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+
+      - name: Checkout pinned upstream source
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          repository: QuantumNous/new-api
+          ref: 48a6c87f9e7757fdc58e5be9bcb4f8281ad0dfd0
+          path: source
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Apply persistent file storage settings
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile .github/scripts/apply_tokenway_file_library_web.py
+          cd source
+          python3 ../.github/scripts/apply_tokenway_file_library_web.py
+          git diff --check
+          test -s docker-compose.yml
+          grep -Fq 'TOKENWAY_FILE_STORAGE_DIR=/data/files' docker-compose.yml
+          grep -Fq './data:/data' docker-compose.yml
+          test -s docs/TOKENWAY-FILE-LIBRARY-DEPLOYMENT.md
+
+      - name: Validate rendered Docker Compose configuration
+        working-directory: source
+        run: docker compose -f docker-compose.yml config --quiet
+
+      - name: Verify storage is not published as a static web directory
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -R -nE 'web/(public|dist).*(files|data/files)|/data/files.*web/(public|dist)' --include='*.yml' --include='*.yaml' --include='*.conf' --include='*.go' .
+          echo "PASS: file bytes persist on the /data host mount and are not configured as a public static directory."
