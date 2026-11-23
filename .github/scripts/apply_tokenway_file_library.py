@@ -73,9 +73,9 @@ func GetUserFile(userID int, id string) (*UserFile, error) {
     return &file, nil
 }
 
-func ListUserFiles(userID int, limit int, after string) ([]UserFile, error) {
+func ListUserFiles(userID int, limit int, after string) ([]UserFile, bool, error) {
     if userID <= 0 {
-        return nil, errors.New("invalid user id")
+        return nil, false, errors.New("invalid user id")
     }
     if limit < 1 || limit > 100 {
         limit = 20
@@ -84,16 +84,17 @@ func ListUserFiles(userID int, limit int, after string) ([]UserFile, error) {
     if after != "" {
         cursor, err := GetUserFile(userID, after)
         if err != nil {
-            return nil, err
+            return nil, false, err
         }
         query = query.Where("(created_at < ?) OR (created_at = ? AND id < ?)", cursor.CreatedAt, cursor.CreatedAt, cursor.ID)
     }
     var files []UserFile
     err := query.Order("created_at DESC").Order("id DESC").Limit(limit + 1).Find(&files).Error
-    if len(files) > limit {
+    hasMore := len(files) > limit
+    if hasMore {
         files = files[:limit]
     }
-    return files, err
+    return files, hasMore, err
 }
 
 func DeleteUserFile(userID int, id string) (*UserFile, error) {
@@ -118,7 +119,6 @@ import (
     "crypto/rand"
     "encoding/hex"
     "errors"
-    "fmt"
     "io"
     "mime"
     "net/http"
@@ -205,7 +205,7 @@ func ListUserFiles(c *gin.Context) {
         }
         limit = parsed
     }
-    files, err := model.ListUserFiles(userID, limit, c.Query("after"))
+    files, hasMore, err := model.ListUserFiles(userID, limit, c.Query("after"))
     if errors.Is(err, gorm.ErrRecordNotFound) {
         userFileError(c, http.StatusNotFound, "File cursor not found")
         return
@@ -216,7 +216,7 @@ func ListUserFiles(c *gin.Context) {
     }
     data := make([]gin.H, 0, len(files))
     for _, file := range files { data = append(data, userFileResponse(file)) }
-    c.JSON(http.StatusOK, gin.H{"object": "list", "data": data, "has_more": false})
+    c.JSON(http.StatusOK, gin.H{"object": "list", "data": data, "has_more": hasMore})
 }
 
 // UploadUserFile implements multipart/form-data POST /v1/files.
@@ -352,7 +352,7 @@ func GetUserFileContent(c *gin.Context) {
     }
     defer file.Close()
     c.Header("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": record.Filename}))
-    c.DataFromReader(http.StatusOK, record.Bytes, record.MIMEType, file, false)
+    c.DataFromReader(http.StatusOK, record.Bytes, record.MIMEType, file, nil)
 }
 
 // DeleteUserFile implements DELETE /v1/files/:id. Ownership is part of the delete predicate.
@@ -370,11 +370,8 @@ func DeleteUserFile(c *gin.Context) {
     }
     root, rootErr := userFileStorageRoot()
     if rootErr == nil {
-        if removeErr := os.Remove(userFilePath(root, userID, record.ID)); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
-            // Metadata is already deleted; leave an orphan for the maintenance cleanup rather than
-            // returning a false failure that encourages a duplicate delete request.
-            _ = fmt.Sprintf("orphaned file %s: %v", record.ID, removeErr)
-        }
+        // Metadata is already deleted; an unlink failure leaves an orphan for storage maintenance.
+        _ = os.Remove(userFilePath(root, userID, record.ID))
     }
     c.JSON(http.StatusOK, gin.H{"id": record.ID, "object": "file", "deleted": true})
 }
@@ -407,10 +404,11 @@ func TestUserFileOwnershipAndPagination(t *testing.T) {
     _, err = GetUserFile(1, "b1")
     require.ErrorIs(t, err, gorm.ErrRecordNotFound)
 
-    files, err := ListUserFiles(1, 1, "")
+    files, hasMore, err := ListUserFiles(1, 1, "")
     require.NoError(t, err)
+    require.True(t, hasMore)
     require.Len(t, files, 1)
-    _, err = ListUserFiles(1, 20, "b1")
+    _, _, err = ListUserFiles(1, 20, "b1")
     require.ErrorIs(t, err, gorm.ErrRecordNotFound)
 
     deleted, err := DeleteUserFile(1, "a1")
