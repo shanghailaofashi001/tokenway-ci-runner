@@ -243,14 +243,8 @@ replace_once(
 )
 replace_once(
     "docker-compose.yml",
-    "      - ./data:/data\n",
-    "      - ./data:/data\n",
-    "file library data uses the existing persistent data mount",
-)
-replace_once(
-    "docker-compose.yml",
-    "      - NODE_NAME=new-api-node-1  # 节点名称，用于审计日志中标识节点身份；多节点/容器部署时建议设置 (Node name used to identify the node in audit logs; recommended for multi-node/container deployments)\n",
-    "      - NODE_NAME=new-api-node-1  # 节点名称，用于审计日志中标识节点身份；多节点/容器部署时建议设置 (Node name used to identify the node in audit logs; recommended for multi-node/container deployments)\n      - TOKENWAY_FILE_STORAGE_DIR=/data/files\n",
+    "      - TZ=Asia/Shanghai\n",
+    "      - TZ=Asia/Shanghai\n      - TOKENWAY_FILE_STORAGE_DIR=/data/files\n",
     "persistent file library storage root",
 )
 print("PASS: web file library UI and persistent storage deployment settings applied")
