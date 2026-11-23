@@ -132,6 +132,9 @@ jobs:
           grep -Fq "'/api/user/access_tokens'" lib/services/tokenway_api.dart
           grep -Fq "access token creation obtains operation-bound proof" test/tokenway_api_contract_test.dart
           test -s lib/screens/profile_screen.dart
+          test -s lib/screens/file_library_screen.dart
+          grep -Fq "client.get('/api/user/files'" lib/services/tokenway_api.dart
+          grep -Fq "client.post('/api/user/files'" lib/services/tokenway_api.dart
           test -s test/dashboard_test.dart
           grep -Fq "import 'package:flutter/material.dart';" test/dashboard_test.dart
           test -s test/tokenway_api_contract_test.dart
@@ -264,3 +267,5 @@ jobs:
 # Targeted root-cause verification 2026-11-23: mutable chat list restore and AES-GCM sync service.
 # Final targeted verification 2026-11-23: Unicode-aware sync passphrase validation.
 # Bootstrap root-cause validation 2026-11-23: parse generated AndroidManifest.xml.
+
+# Rebuild Android after adding the account file library screen and authenticated API.
