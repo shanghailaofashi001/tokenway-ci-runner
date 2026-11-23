@@ -1,0 +1,266 @@
+name: TOKENWAY V11 full five-layer acceptance on public runner
+
+run-name: TOKENWAY full acceptance • ${ github.event.inputs.private_ref || 'main' } • ${ github.run_id }
+
+on:
+  workflow_dispatch:
+    inputs:
+      private_ref:
+        description: Exact private tokenway-v11-dev commit SHA or branch to validate
+        required: true
+        default: 347830873f07e08e43375f196aeaf6b8f9d6b74e
+        type: string
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/tokenway-v11-full-acceptance.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tokenway-v11-full-acceptance-${ github.run_id }
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Full five-layer acceptance (private source stays ephemeral)
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: tokenway
+          MYSQL_DATABASE: tokenway_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -ptokenway"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=18
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: tokenway
+          POSTGRES_DB: tokenway_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d tokenway_test"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=18
+    env:
+      TEST_MYSQL_DSN: "root:tokenway@tcp(127.0.0.1:3306)/tokenway_test?charset=utf8mb4&parseTime=True&loc=Local"
+      TEST_POSTGRES_DSN: "postgres://postgres:tokenway@127.0.0.1:5432/tokenway_test?sslmode=disable&TimeZone=UTC"
+      TEST_FIXED_MYSQL_DSN: "root:tokenway@tcp(127.0.0.1:3306)/tokenway_test?charset=utf8mb4&parseTime=True&loc=Local"
+      TEST_FIXED_POSTGRES_DSN: "postgres://postgres:tokenway@127.0.0.1:5432/tokenway_test?sslmode=disable&TimeZone=UTC"
+      GOMAXPROCS: "2"
+    steps:
+      - name: Checkout public CI orchestrator
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Checkout exact private TokenWay validation inputs
+        id: private
+        uses: actions/checkout@v4
+        with:
+          repository: shanghailaofashi001/tokenway-v11-dev
+          ref: ${ github.event.inputs.private_ref || '347830873f07e08e43375f196aeaf6b8f9d6b74e' }
+          token: ${ secrets.TOKENWAY_SOURCE_READ_TOKEN }
+          path: private
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Checkout pinned upstream New API baseline
+        uses: actions/checkout@v4
+        with:
+          repository: QuantumNous/new-api
+          ref: 48a6c87f9e7757fdc58e5be9bcb4f8281ad0dfd0
+          path: validation-context/source
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Restore private overlays into the ephemeral workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s private/.tokenway-validation/assemble-source.py
+          test -s private/.tokenway-validation/format-go.sh
+          test -d private/.tokenway-patches
+          cp -a private/.tokenway-validation validation-context/
+          cp -a private/.tokenway-patches validation-context/
+          PRIVATE_SHA="$(git -C private rev-parse HEAD)"
+          UPSTREAM_SHA="$(git -C validation-context/source rev-parse HEAD)"
+          {
+            echo "TOKENWAY_PRIVATE_SHA=$PRIVATE_SHA"
+            echo "TOKENWAY_UPSTREAM_SHA=$UPSTREAM_SHA"
+          } >> "$GITHUB_ENV"
+          echo "Private SHA: $PRIVATE_SHA"
+          echo "Pinned upstream SHA: $UPSTREAM_SHA"
+
+      - name: Set up Go 1.26.10
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.10"
+          cache: false
+
+      - name: Layer 1A - Assemble source, normalize formatting and verify dependencies
+        working-directory: validation-context
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile .tokenway-validation/assemble-source.py
+          python3 .tokenway-validation/assemble-source.py
+          bash .tokenway-validation/format-go.sh
+          UNFORMATTED="$(find source -type f -name '*.go' -not -path '*/vendor/*' -print0 | xargs -0 -r gofmt -l)"
+          if [ -n "$UNFORMATTED" ]; then
+            printf '%s\n' "$UNFORMATTED"
+            exit 1
+          fi
+          (cd source && go mod download && go mod verify)
+          (cd source/relaykit && GOWORK=off go mod download && GOWORK=off go mod verify)
+          (cd source/tokenkit && GOWORK=off go mod download && GOWORK=off go mod verify)
+          echo "Layer 1A passed: assembled source, gofmt, and all module dependencies verified."
+
+      - name: Layer 4A - Build frontend production assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUN_DIR="$RUNNER_TEMP/tokenway-bun"
+          mkdir -p "$BUN_DIR"
+          curl -fsSL "https://github.com/oven-sh/bun/releases/download/bun-v1.4.5/bun-linux-x64.zip" -o "$RUNNER_TEMP/bun-linux-x64.zip"
+          python3 -c 'import sys,zipfile; zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])' "$RUNNER_TEMP/bun-linux-x64.zip" "$BUN_DIR"
+          BUN_BIN="$(find "$BUN_DIR" -type f -name bun -print -quit)"
+          test -n "$BUN_BIN"
+          chmod +x "$BUN_BIN"
+          echo "$(dirname "$BUN_BIN")" >> "$GITHUB_PATH"
+          export PATH="$(dirname "$BUN_BIN"):$PATH"
+          bun --version
+          cd validation-context/source/web
+          bun install --frozen-lockfile
+          bun run build
+          test -d dist
+          test -n "$(find dist -type f -print -quit)"
+          echo "Layer 4A passed: production frontend assets built."
+
+      - name: Layer 1B - Compile Root, Relaykit and Tokenkit modules
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd validation-context/source && go build -p 2 ./...)
+          (cd validation-context/source/relaykit && GOWORK=off go build -p 2 ./...)
+          (cd validation-context/source/tokenkit && GOWORK=off go build -p 2 ./...)
+          echo "Layer 1B passed: all three Go modules compiled."
+
+      - name: Layer 2 - Run isolated Root, Relaykit and Tokenkit test suites
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd validation-context/source && go test -p 2 -count=1 -skip '^(TestMigrationSchemaStability|TestFixedPriceBillingDatabaseMatrix|TestPreConsumePolicyDatabaseMatrix)$' ./...)
+          (cd validation-context/source/relaykit && GOWORK=off go test -p 2 -count=1 ./...)
+          (cd validation-context/source/tokenkit && GOWORK=off go test -p 2 -count=1 ./...)
+          echo "Layer 2 passed: all three Go module test suites completed."
+
+      - name: Layer 3A - Wallet ledger and migration matrix (SQLite/MySQL/PostgreSQL)
+        working-directory: validation-context/source
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -p 1 -count=1 -tags=tokenway_test ./model \
+            -run '^(TestWalletLedgerAcrossSupportedDatabases|TestMigrationSchemaStability)$'
+
+      - name: Layer 3B - Fixed-price billing and refund matrix
+        working-directory: validation-context/source
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -p 1 -count=1 ./service -run '^TestFixedPriceBillingDatabaseMatrix$'
+
+      - name: Layer 3C - Pre-consume and settlement matrix
+        working-directory: validation-context/source
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -p 1 -count=1 ./controller -run '^TestPreConsumePolicyDatabaseMatrix$'
+
+      - name: Layer 3D - Signed Epay callback and duplicate-credit matrix
+        working-directory: validation-context/source
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -p 1 -count=1 -tags=tokenway_test ./controller \
+            -run '^TestEpaySuccessfulTopUpCallbackIsSignedAndIdempotentAcrossDatabases$'
+          echo "Layer 3 passed: wallet, billing, settlement and signed callback matrices completed."
+
+      - name: Layer 4B - API, plugin and WebSocket contract tests
+        working-directory: validation-context/source
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -p 2 -count=1 ./controller ./relay/... \
+            -run 'Test.*(WebSocket|PluginNative|TaskPlugin|Protocol|RelayTask)'
+          test -d web/dist
+          test -n "$(find web/dist -type f -print -quit)"
+          echo "Layer 4B passed: backend contracts and frontend artifact verified."
+
+      - name: Layer 5 - Build and verify source archive locally (never upload private source)
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "TOKENWAY_PATCH_SHA=$TOKENWAY_PRIVATE_SHA"
+            echo "TOKENWAY_UPSTREAM_SHA=$TOKENWAY_UPSTREAM_SHA"
+          } > validation-context/source/.tokenway-validation-identity
+          cat > validation-context/source/TOKENWAY-BUILD-INFO.md <<EOF
+          # TOKENWAY AI validated source
+
+          - Patch repository commit: $TOKENWAY_PRIVATE_SHA
+          - Upstream repository: QuantumNous/new-api
+          - Upstream commit: $TOKENWAY_UPSTREAM_SHA
+          - Validation: five-layer public hosted-runner workflow
+          - Frontend assets: built in this run
+          - Database integration: SQLite, MySQL 8.4 and PostgreSQL 17
+          EOF
+          python3 - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile, ZIP_DEFLATED
+          import hashlib
+          import os
+          import tempfile
+
+          root = Path("validation-context/source")
+          archive = Path(tempfile.gettempdir()) / "tokenway-v11-full-acceptance.zip"
+          with ZipFile(archive, "w", ZIP_DEFLATED, compresslevel=6) as zf:
+              for base, dirs, files in os.walk(root):
+                  dirs[:] = [d for d in dirs if d not in {".git", "node_modules", "data"}]
+                  for name in files:
+                      path = Path(base) / name
+                      if path.suffix == ".db":
+                          continue
+                      zf.write(path, path.relative_to(root))
+              bad = zf.testzip()
+              if bad:
+                  raise SystemExit(f"ZIP integrity failure: {bad}")
+          data = archive.read_bytes()
+          digest = hashlib.sha256(data).hexdigest()
+          print(f"archive_bytes={len(data)}")
+          print(f"archive_sha256={digest}")
+          archive.unlink()
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+              summary.write("## TOKENWAY V11 five-layer acceptance\n\n")
+              summary.write(f"- Private source commit: {os.environ['TOKENWAY_PRIVATE_SHA']}\n")
+              summary.write(f"- Upstream commit: {os.environ['TOKENWAY_UPSTREAM_SHA']}\n")
+              summary.write("- Layer 1: assembly, formatting, dependency verification and three-module compilation passed\n")
+              summary.write("- Layer 2: Root, Relaykit and Tokenkit test suites passed\n")
+              summary.write("- Layer 3: SQLite, MySQL 8.4 and PostgreSQL 17 wallet/billing/settlement/Epay matrices passed\n")
+              summary.write("- Layer 4: frontend production build and API/plugin/WebSocket contracts passed\n")
+              summary.write("- Layer 5: local source ZIP integrity verification passed\n")
+              summary.write(f"- Local archive size: {len(data)} bytes\n")
+              summary.write(f"- Local archive SHA-256: {digest}\n\n")
+              summary.write("Private source and archives remained on the ephemeral runner and were not uploaded as artifacts.\n")
+          PY
+          echo "Layer 5 passed: package integrity verified locally; no private source artifact was uploaded."
