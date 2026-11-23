@@ -9,6 +9,10 @@ on:
       - ".github/workflows/tokenway-finance-r7-validation.yml"
       - ".github/scripts/apply_encrypted_chat_history_sync.py"
       - ".github/workflows/tokenway-chat-sync-route-guard.yml"
+      - ".github/scripts/apply_tokenway_file_library.py"
+      - ".github/scripts/apply_tokenway_file_library_web.py"
+      - ".github/workflows/tokenway-file-library-guard.yml"
+      - ".github/workflows/tokenway-file-library-frontend-guard.yml"
 
 permissions:
   contents: read
@@ -319,6 +323,28 @@ jobs:
           grep -Fq 'func UpdateChatHistorySync(c *gin.Context)' controller/chat_history_sync.go
           test -s controller/chat_history_sync_test.go
           echo "PASS: authenticated, no-cache, rate-limited E2E encrypted chat sync API and row-locked settings update applied."
+
+      - name: Apply TokenWay owner-scoped file library backend and UI
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile ../.github/scripts/apply_tokenway_file_library.py ../.github/scripts/apply_tokenway_file_library_web.py
+          python3 ../.github/scripts/apply_tokenway_file_library.py
+          python3 ../.github/scripts/apply_tokenway_file_library_web.py
+          git diff --check
+          grep -Fq 'httpRouter.GET("/files", controller.ListUserFiles)' router/relay-router.go
+          grep -Fq 'httpRouter.POST("/files", controller.UploadUserFile)' router/relay-router.go
+          grep -Fq 'selfRoute.GET("/files", middleware.DisableCache(), controller.ListUserFiles)' router/api-router.go
+          grep -Fq '"GET /api/user/files":' middleware/access_token_routes.go
+          grep -Fq 'func UploadUserFile(c *gin.Context)' controller/user_file.go
+          grep -Fq 'func DeleteUserFile(c *gin.Context)' controller/user_file.go
+          grep -Fq 'func GetUserFileContent(c *gin.Context)' controller/user_file.go
+          test -s model/user_file_test.go
+          test -s controller/user_file_test.go
+          test -s web/src/features/profile/components/file-library-card.tsx
+          grep -Fq 'TOKENWAY_FILE_STORAGE_DIR' docker-compose.yml
+          echo "PASS: owner-scoped file library API, web UI and persistent-volume config applied."
 
       - name: Apply pinned Kuaipao AI migration to V11
         working-directory: source
