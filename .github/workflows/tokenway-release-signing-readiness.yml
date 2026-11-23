@@ -1,0 +1,75 @@
+name: TokenWay Native Release Signing Readiness
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/tokenway-release-signing-readiness.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  signing-preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.TOKENWAY_ANDROID_KEYSTORE_BASE64 }}
+      ANDROID_KEY_ALIAS: ${{ secrets.TOKENWAY_ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.TOKENWAY_ANDROID_KEY_PASSWORD }}
+      ANDROID_STORE_PASSWORD: ${{ secrets.TOKENWAY_ANDROID_STORE_PASSWORD }}
+      IOS_CERTIFICATE_P12_BASE64: ${{ secrets.TOKENWAY_IOS_DISTRIBUTION_CERT_P12_BASE64 }}
+      IOS_CERTIFICATE_PASSWORD: ${{ secrets.TOKENWAY_IOS_DISTRIBUTION_CERT_PASSWORD }}
+      IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.TOKENWAY_IOS_PROVISIONING_PROFILE_BASE64 }}
+      APPLE_TEAM_ID: ${{ secrets.TOKENWAY_APPLE_TEAM_ID }}
+      ASC_API_KEY_ID: ${{ secrets.TOKENWAY_APP_STORE_CONNECT_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.TOKENWAY_APP_STORE_CONNECT_ISSUER_ID }}
+      ASC_PRIVATE_KEY_BASE64: ${{ secrets.TOKENWAY_APP_STORE_CONNECT_PRIVATE_KEY_BASE64 }}
+    steps:
+      - name: Check secret presence without exposing secret values
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +x
+          missing=()
+          check_secret() {
+            local variable="$1"
+            local purpose="$2"
+            if [[ -z "${!variable:-}" ]]; then
+              missing+=("$variable — $purpose")
+            fi
+          }
+          check_secret ANDROID_KEYSTORE_BASE64 "Android upload keystore (.jks/.keystore) base64"
+          check_secret ANDROID_KEY_ALIAS "Android upload key alias"
+          check_secret ANDROID_KEY_PASSWORD "Android upload key password"
+          check_secret ANDROID_STORE_PASSWORD "Android keystore password"
+          check_secret IOS_CERTIFICATE_P12_BASE64 "Apple Distribution certificate (.p12) base64"
+          check_secret IOS_CERTIFICATE_PASSWORD "Apple Distribution certificate password"
+          check_secret IOS_PROVISIONING_PROFILE_BASE64 "App Store provisioning profile base64"
+          check_secret APPLE_TEAM_ID "Apple Developer Team ID"
+          check_secret ASC_API_KEY_ID "App Store Connect API key ID"
+          check_secret ASC_ISSUER_ID "App Store Connect issuer ID"
+          check_secret ASC_PRIVATE_KEY_BASE64 "App Store Connect API private key (.p8) base64"
+
+          {
+            echo "## TokenWay native release signing readiness"
+            echo
+            if (("${#missing[@]}" == 0)); then
+              echo "All required Android and iOS signing secrets are configured."
+              echo "This confirms secret presence only; signing and store upload still require their dedicated release workflow."
+            else
+              echo "**BLOCKED — signing credentials are not fully configured.**"
+              echo
+              echo "Missing GitHub Actions secrets:"
+              for item in "${missing[@]}"; do echo "- `$item`"; done
+              echo
+              echo "Add these under the CI repository Settings → Secrets and variables → Actions, then rerun this workflow."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if (("${#missing[@]}" > 0)); then
+            echo "BLOCKED: ${#missing[@]} signing secrets missing. No signing operation was attempted."
+          else
+            echo "READY: required signing secrets are present; no secret values were printed."
+          fi
