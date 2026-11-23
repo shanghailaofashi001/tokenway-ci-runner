@@ -528,4 +528,25 @@ replace_once(
     '\t\thttpRouter.GET("/files", controller.ListUserFiles)\n\t\thttpRouter.POST("/files", controller.UploadUserFile)\n\t\thttpRouter.DELETE("/files/:id", controller.DeleteUserFile)\n\t\thttpRouter.GET("/files/:id/content", controller.GetUserFileContent)',
     "OpenAI files endpoints",
 )
+
+replace_once(
+    "router/api-router.go",
+    '\t\t\t\tselfRoute.DELETE("/self", middleware.DisableCache(), controller.DeleteSelf)\n',
+    '\t\t\t\tselfRoute.DELETE("/self", middleware.DisableCache(), controller.DeleteSelf)\n'
+    '\t\t\t\tselfRoute.GET("/files", middleware.DisableCache(), controller.ListUserFiles)\n'
+    '\t\t\t\tselfRoute.POST("/files", middleware.CriticalRateLimit(), middleware.UserCriticalRateLimit("file-upload"), middleware.DisableCache(), controller.UploadUserFile)\n'
+    '\t\t\t\tselfRoute.DELETE("/files/:id", middleware.CriticalRateLimit(), middleware.UserCriticalRateLimit("file-delete"), middleware.DisableCache(), controller.DeleteUserFile)\n'
+    '\t\t\t\tselfRoute.GET("/files/:id/content", middleware.DisableCache(), controller.GetUserFileContent)\n',
+    "session-authenticated file library routes",
+)
+replace_once(
+    "middleware/access_token_routes.go",
+    '\t"DELETE /api/user/self":                        accessTokenScopeRule("account_security:write"),\n',
+    '\t"DELETE /api/user/self":                        accessTokenScopeRule("account_security:write"),\n'
+    '\t"GET /api/user/files":                          accessTokenSessionRule,\n'
+    '\t"POST /api/user/files":                         accessTokenSessionRule,\n'
+    '\t"DELETE /api/user/files/:id":                   accessTokenSessionRule,\n'
+    '\t"GET /api/user/files/:id/content":              accessTokenSessionRule,\n',
+    "session-only file library access-token rules",
+)
 print("PASS: owner-scoped file library backend, migration, routes, and focused tests applied")
