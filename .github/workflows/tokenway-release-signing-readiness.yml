@@ -74,3 +74,5 @@ jobs:
           else
             echo "READY: required signing secrets are present; no secret values were printed."
           fi
+
+# Current parallel release gate 2026-11-23: inspect presence of native signing secrets only; never print secret values.
