@@ -8,6 +8,7 @@ on:
     paths:
       - ".github/workflows/tokenway-finance-r7-validation.yml"
       - ".github/scripts/apply_encrypted_chat_history_sync.py"
+      - ".github/workflows/tokenway-chat-sync-route-guard.yml"
 
 permissions:
   contents: read
@@ -947,6 +948,13 @@ jobs:
                   "run_number": 69,
                   "head_sha": "dc110fab4b5502a02504761c24603fa5d5e1275c",
                   "coverage": "go vet ./... and go build ./... for root, relaykit and tokenkit; fresh vendoring and offline dependency graph."
+              },
+              {
+                  "label": "Latest full V11 integrated validation",
+                  "id": 45072900288,
+                  "run_number": 106,
+                  "head_sha": "6c4c93d6653d50f24fce36d45687e16cd4be3e00",
+                  "coverage": "Latest integrated assembly and patch application; finance controller/model/service regressions; Go vet/build and remaining Go module tests; frontend build, typecheck, unit tests, Oxlint, format/copyright checks; retained media contract tests."
               },
           ]
 
