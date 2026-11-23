@@ -109,3 +109,5 @@ jobs:
 # Bootstrap root-cause validation 2026-11-23: parse generated AndroidManifest.xml.
 
 # Current-head revalidation 2026-11-23: private-repo hosted jobs failed before runner assignment.
+
+# Targeted root-cause repair 2026-11-23: close two widget test callbacks after analyzer found unterminated testWidgets blocks.
