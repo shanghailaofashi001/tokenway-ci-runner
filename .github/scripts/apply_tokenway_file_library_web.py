@@ -60,6 +60,11 @@ async function listUserFiles(): Promise<UserFile[]> {
   return response.data.data as UserFile[]
 }
 
+function errorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error) return error.message
+  return fallback
+}
+
 function formatBytes(value: number): string {
   if (value < 1024) return `${value} B`
   if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`
@@ -91,7 +96,7 @@ export function FileLibraryCard() {
       await queryClient.invalidateQueries({ queryKey: FILES_QUERY_KEY })
       toast.success(t('File uploaded successfully'))
     },
-    onError: (error) => toast.error(error instanceof Error ? error.message : t('File upload failed')),
+    onError: (error) => toast.error(errorMessage(error, t('File upload failed'))),
   })
 
   const deleteMutation = useMutation({
@@ -103,7 +108,7 @@ export function FileLibraryCard() {
       await queryClient.invalidateQueries({ queryKey: FILES_QUERY_KEY })
       toast.success(t('File deleted'))
     },
-    onError: (error) => toast.error(error instanceof Error ? error.message : t('File deletion failed')),
+    onError: (error) => toast.error(errorMessage(error, t('File deletion failed'))),
   })
 
   const downloadFile = async (file: UserFile) => {
@@ -119,7 +124,7 @@ export function FileLibraryCard() {
       anchor.click()
       URL.revokeObjectURL(url)
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : t('File download failed'))
+      toast.error(errorMessage(error, t('File download failed')))
     }
   }
 
@@ -136,8 +141,8 @@ export function FileLibraryCard() {
 
   let errorMessage = t('Unable to load files')
   if (filesQuery.error instanceof Error) errorMessage = filesQuery.error.message
-  const refreshClassName = filesQuery.isFetching ? 'h-4 w-4 animate-spin' : 'h-4 w-4'
-  const uploadLabel = uploadMutation.isPending ? t('Uploading') : t('Upload file')
+  let refreshClassName = 'h-4 w-4'\n  if (filesQuery.isFetching) refreshClassName += ' animate-spin'
+  let uploadLabel = t('Upload file')\n  if (uploadMutation.isPending) uploadLabel = t('Uploading')
 
   let fileContent: ReactNode
   if (filesQuery.isLoading) {
