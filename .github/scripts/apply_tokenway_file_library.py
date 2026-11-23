@@ -444,6 +444,9 @@ func userFileTestContext(t *testing.T, method, target string, body *bytes.Buffer
     gin.SetMode(gin.TestMode)
     recorder := httptest.NewRecorder()
     context, _ := gin.CreateTestContext(recorder)
+    if body == nil {
+        body = bytes.NewBuffer(nil)
+    }
     request := httptest.NewRequest(method, target, body)
     if contentType != "" { request.Header.Set("Content-Type", contentType) }
     context.Request = request
