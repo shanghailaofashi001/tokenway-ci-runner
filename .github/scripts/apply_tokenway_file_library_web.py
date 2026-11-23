@@ -141,8 +141,10 @@ export function FileLibraryCard() {
 
   let errorMessage = t('Unable to load files')
   if (filesQuery.error instanceof Error) errorMessage = filesQuery.error.message
-  let refreshClassName = 'h-4 w-4'\n  if (filesQuery.isFetching) refreshClassName += ' animate-spin'
-  let uploadLabel = t('Upload file')\n  if (uploadMutation.isPending) uploadLabel = t('Uploading')
+  let refreshClassName = 'h-4 w-4'
+  if (filesQuery.isFetching) refreshClassName += ' animate-spin'
+  let uploadLabel = t('Upload file')
+  if (uploadMutation.isPending) uploadLabel = t('Uploading')
 
   let fileContent: ReactNode
   if (filesQuery.isLoading) {
