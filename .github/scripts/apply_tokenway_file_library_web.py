@@ -139,8 +139,8 @@ export function FileLibraryCard() {
     uploadMutation.mutate(file)
   }
 
-  let errorMessage = t('Unable to load files')
-  if (filesQuery.error instanceof Error) errorMessage = filesQuery.error.message
+  let loadErrorMessage = t('Unable to load files')
+  if (filesQuery.error instanceof Error) loadErrorMessage = filesQuery.error.message
   let refreshClassName = 'h-4 w-4'
   if (filesQuery.isFetching) refreshClassName += ' animate-spin'
   let uploadLabel = t('Upload file')
@@ -155,7 +155,7 @@ export function FileLibraryCard() {
     fileContent = (
       <div className='flex flex-col items-center gap-3 py-8 text-center'>
         <p className='text-sm text-destructive'>
-          {errorMessage}
+          {loadErrorMessage}
         </p>
         <Button type='button' variant='outline' onClick={() => void filesQuery.refetch()}>
           {t('Retry')}
