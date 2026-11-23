@@ -90,3 +90,5 @@ jobs:
           test -s assets/brand-mark.webp.b64
           echo "All TokenWay mobile API and security contracts passed."
 # parallel verification trigger 2026-11-23
+
+# Current HEAD parallel revalidation 2026-11-23: verify mobile API contracts against backend reference.
