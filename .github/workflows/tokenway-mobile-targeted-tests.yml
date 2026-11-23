@@ -38,7 +38,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for path in lib/services/chat_history_sync_service.dart test/chat_history_sync_service_test.dart; do
+          for path in lib/services/chat_history_sync_service.dart test/chat_history_sync_service_test.dart lib/screens/file_library_screen.dart; do
             if [[ ! -s "$path" ]]; then
               echo "FAIL: required mobile chat-sync file is missing or empty: $path"
               exit 1
@@ -75,7 +75,7 @@ jobs:
 
       - name: Analyze only changed mobile Dart modules
         working-directory: tokenway-source/mobile
-        run: flutter analyze --no-pub --no-fatal-infos lib/services/tokenway_api.dart lib/screens/chat_screen.dart lib/screens/task_history_screen.dart lib/screens/access_tokens_screen.dart lib/screens/wallet_screen.dart lib/screens/subscriptions_screen.dart lib/screens/payment_webview_screen.dart lib/services/chat_history_sync_service.dart
+        run: flutter analyze --no-pub --no-fatal-infos lib/services/tokenway_api.dart lib/screens/chat_screen.dart lib/screens/task_history_screen.dart lib/screens/access_tokens_screen.dart lib/screens/wallet_screen.dart lib/screens/subscriptions_screen.dart lib/screens/payment_webview_screen.dart lib/services/chat_history_sync_service.dart lib/screens/file_library_screen.dart
 
       - name: Verify API Key screen is connected
         working-directory: tokenway-source/mobile
@@ -112,3 +112,5 @@ jobs:
 # Targeted rerun after adding the exact AES-GCM marker to the mobile sync service.
 # Targeted root-cause verification 2026-11-23: mutable chat list restore and AES-GCM sync service.
 # Final targeted verification 2026-11-23: Unicode-aware sync passphrase validation.
+
+# Verify the account file library screen and two-independent-client encrypted sync contract.
