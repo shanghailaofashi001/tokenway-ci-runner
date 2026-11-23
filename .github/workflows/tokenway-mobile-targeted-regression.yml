@@ -50,3 +50,5 @@ jobs:
       - name: Run only the affected wallet payment regression tests
         working-directory: tokenway-source/mobile
         run: flutter test --no-pub test/wallet_payment_test.dart
+
+# Targeted follow-up 2026-11-23: assert the locked payment action by stable widget key.
