@@ -1,0 +1,67 @@
+name: TokenWay File Library Frontend Guard
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/scripts/apply_tokenway_file_library.py"
+      - ".github/scripts/apply_tokenway_file_library_web.py"
+      - ".github/workflows/tokenway-file-library-frontend-guard.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tokenway-file-library-frontend-${{ github.ref }}-${{ github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  file-library-frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout CI scripts
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+
+      - name: Checkout pinned upstream New API
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          repository: QuantumNous/new-api
+          ref: 48a6c87f9e7757fdc58e5be9bcb4f8281ad0dfd0
+          path: source
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Apply file library backend and web UI
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile .github/scripts/apply_tokenway_file_library.py .github/scripts/apply_tokenway_file_library_web.py
+          cd source
+          python3 ../.github/scripts/apply_tokenway_file_library.py
+          python3 ../.github/scripts/apply_tokenway_file_library_web.py
+          git diff --check
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.4"
+
+      - name: Install frontend dependencies
+        working-directory: source/web
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck file library frontend integration
+        working-directory: source/web
+        run: bun run typecheck
+
+      - name: Lint changed file library components
+        working-directory: source/web
+        run: bunx oxlint -c .oxlintrc.json src/features/profile/components/file-library-card.tsx src/features/profile/index.tsx
+
+      - name: Build production frontend
+        working-directory: source/web
+        run: bun run build
