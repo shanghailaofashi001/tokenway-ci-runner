@@ -117,3 +117,5 @@ jobs:
 # Re-archive latest TokenWay mobile file library, native save dialog and two-client chat-sync integration.
 
 # Refresh source archive after Android APK and iOS Simulator build success.
+
+# Refresh source archive for payment-navigation security hardening and latest private App HEAD.
