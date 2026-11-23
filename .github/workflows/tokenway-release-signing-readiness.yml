@@ -70,6 +70,7 @@ jobs:
 
           if (("${#missing[@]}" > 0)); then
             echo "BLOCKED: ${#missing[@]} signing secrets missing. No signing operation was attempted."
+            exit 1
           else
             echo "READY: required signing secrets are present; no secret values were printed."
           fi
