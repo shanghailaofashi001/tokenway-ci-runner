@@ -193,7 +193,51 @@ export function FileLibraryCard() {
 
   return (
     <Card data-card-hover='false' className='gap-0 overflow-hidden'>
-
+      <CardHeader className='flex flex-row items-start justify-between gap-3 border-b'>
+        <div className='min-w-0 space-y-1'>
+          <CardTitle className='flex items-center gap-2 text-base'>
+            <FolderOpen className='h-4 w-4' />
+            {t('File library')}
+          </CardTitle>
+          <CardDescription>
+            {t('Upload, download and manage files private to your account')}
+          </CardDescription>
+        </div>
+        <div className='flex shrink-0 items-center gap-2'>
+          <Button
+            type='button'
+            variant='outline'
+            size='icon'
+            aria-label={t('Refresh files')}
+            onClick={() => void filesQuery.refetch()}
+            disabled={filesQuery.isFetching}
+          >
+            <RefreshCw className={filesQuery.isFetching ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />
+          </Button>
+          <Button
+            type='button'
+            onClick={() => inputRef.current?.click()}
+            disabled={uploadMutation.isPending}
+          >
+            <Upload className='mr-2 h-4 w-4' />
+            {uploadMutation.isPending ? t('Uploading') : t('Upload file')}
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className='space-y-3 p-3 sm:p-5'>
+        <input
+          ref={inputRef}
+          type='file'
+          className='hidden'
+          onChange={handleFileChange}
+          aria-label={t('Choose a file to upload')}
+        />
+        {fileContent}
+        <p className='text-xs text-muted-foreground'>{t('Maximum file size: 512 MiB')}</p>
+      </CardContent>
+    </Card>
+  )
+}
 '''
 target = ROOT / "web/src/features/profile/components/file-library-card.tsx"
 if target.exists():
