@@ -111,3 +111,5 @@ jobs:
 # Current-head revalidation 2026-11-23: private-repo hosted jobs failed before runner assignment.
 
 # Targeted root-cause repair 2026-11-23: close two widget test callbacks after analyzer found unterminated testWidgets blocks.
+
+# Full mobile-suite revalidation after targeted wallet regression passed: 2026-11-23.
