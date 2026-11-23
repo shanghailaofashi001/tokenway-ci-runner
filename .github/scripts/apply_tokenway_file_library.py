@@ -435,7 +435,7 @@ import (
     "github.com/QuantumNous/new-api/model"
     "github.com/gin-gonic/gin"
     "github.com/stretchr/testify/require"
-    "gorm.io/driver/sqlite"
+    "github.com/glebarez/sqlite"
     "gorm.io/gorm"
 )
 
