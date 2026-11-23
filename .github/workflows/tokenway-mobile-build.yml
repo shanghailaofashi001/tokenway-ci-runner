@@ -1,0 +1,135 @@
+name: TokenWay Android and iOS Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: Private TokenWay source branch or commit
+        required: true
+        default: feat/flutter-mobile-app
+        type: string
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/tokenway-mobile-build.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tokenway-mobile-build-${{ github.event_name == 'workflow_dispatch' && inputs.source_ref || 'feat/flutter-mobile-app' }}
+  cancel-in-progress: false
+
+jobs:
+  android-release:
+    name: Android release APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout CI runner
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Checkout private TokenWay source
+        id: source
+        uses: actions/checkout@v4
+        with:
+          repository: shanghailaofashi001/tokenway-v11-dev
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.source_ref || 'feat/flutter-mobile-app' }}
+          token: ${{ secrets.TOKENWAY_SOURCE_READ_TOKEN }}
+          path: tokenway-source
+          persist-credentials: false
+
+      - name: Record exact source revision
+        run: |
+          echo "TOKENWAY_SOURCE_SHA=${{ steps.source.outputs.commit }}" >> "$GITHUB_ENV"
+          echo "Building TokenWay source revision ${{ steps.source.outputs.commit }}"
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Bootstrap Android project and official branding
+        working-directory: tokenway-source/mobile
+        run: bash scripts/bootstrap_platforms.sh
+
+      - name: Build release APK
+        working-directory: tokenway-source/mobile
+        run: flutter build apk --release
+
+      - name: Verify APK output
+        working-directory: tokenway-source/mobile
+        run: test -s build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Upload Android APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: tokenway-android-release-${{ steps.source.outputs.commit }}
+          path: tokenway-source/mobile/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 14
+
+  ios-simulator:
+    name: iOS Simulator build
+    runs-on: macos-latest
+    timeout-minutes: 50
+    steps:
+      - name: Checkout CI runner
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Checkout private TokenWay source
+        id: source
+        uses: actions/checkout@v4
+        with:
+          repository: shanghailaofashi001/tokenway-v11-dev
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.source_ref || 'feat/flutter-mobile-app' }}
+          token: ${{ secrets.TOKENWAY_SOURCE_READ_TOKEN }}
+          path: tokenway-source
+          persist-credentials: false
+
+      - name: Record exact source revision
+        run: |
+          echo "TOKENWAY_SOURCE_SHA=${{ steps.source.outputs.commit }}" >> "$GITHUB_ENV"
+          echo "Building TokenWay source revision ${{ steps.source.outputs.commit }}"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Bootstrap iOS project and official branding
+        working-directory: tokenway-source/mobile
+        run: bash scripts/bootstrap_platforms.sh
+
+      - name: Build iOS Simulator app without signing
+        working-directory: tokenway-source/mobile
+        run: flutter build ios --simulator --no-codesign
+
+      - name: Verify iOS Simulator app output
+        working-directory: tokenway-source/mobile
+        run: test -d build/ios/iphonesimulator/Runner.app
+
+      - name: Package iOS Simulator app
+        working-directory: tokenway-source/mobile
+        run: |
+          ditto -c -k --sequesterRsrc --keepParent build/ios/iphonesimulator/Runner.app build/ios/TokenWay-iOS-Simulator.zip
+
+      - name: Upload iOS Simulator app
+        uses: actions/upload-artifact@v4
+        with:
+          name: tokenway-ios-simulator-${{ steps.source.outputs.commit }}
+          path: tokenway-source/mobile/build/ios/TokenWay-iOS-Simulator.zip
+          if-no-files-found: error
+          retention-days: 14
