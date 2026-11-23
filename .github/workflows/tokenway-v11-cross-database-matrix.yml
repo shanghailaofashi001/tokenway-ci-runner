@@ -1,0 +1,191 @@
+name: TOKENWAY V11 cross-database integration matrix
+
+run-name: TOKENWAY V11 DB matrix • ${{ github.run_id }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      private_ref:
+        description: Exact private tokenway-v11-dev commit SHA to validate
+        required: true
+        default: dd12d57156c4ec58600e733f14914967f2acba12
+        type: string
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/tokenway-v11-cross-database-matrix.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tokenway-v11-cross-database-matrix-${{ github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  integration:
+    name: SQLite, MySQL 8.4 and PostgreSQL 17 integration tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: tokenway-test
+          MYSQL_DATABASE: tokenway_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -ptokenway-test"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=18
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: tokenway-test
+          POSTGRES_DB: tokenway_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d tokenway_test"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=18
+    env:
+      TEST_MYSQL_DSN: root:tokenway-test@tcp(127.0.0.1:3306)/tokenway_test?charset=utf8mb4&parseTime=True&loc=Local
+      TEST_POSTGRES_DSN: postgres://postgres:tokenway-test@127.0.0.1:5432/tokenway_test?sslmode=disable&TimeZone=UTC
+      TEST_FIXED_MYSQL_DSN: root:tokenway-test@tcp(127.0.0.1:3306)/tokenway_test?charset=utf8mb4&parseTime=True&loc=Local
+      TEST_FIXED_POSTGRES_DSN: postgres://postgres:tokenway-test@127.0.0.1:5432/tokenway_test?sslmode=disable&TimeZone=UTC
+    steps:
+      - name: Checkout public CI orchestrator
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Checkout exact private TokenWay source and overlays
+        uses: actions/checkout@v4
+        with:
+          repository: shanghailaofashi001/tokenway-v11-dev
+          ref: ${{ github.event.inputs.private_ref || 'dd12d57156c4ec58600e733f14914967f2acba12' }}
+          token: ${{ secrets.TOKENWAY_SOURCE_READ_TOKEN }}
+          path: private
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Create isolated validation workspace
+        shell: bash
+        run: mkdir -p validation-context
+
+      - name: Checkout pinned upstream New API base
+        uses: actions/checkout@v4
+        with:
+          repository: QuantumNous/new-api
+          ref: 48a6c87f9e7757fdc58e5be9bcb4f8281ad0dfd0
+          path: validation-context/source
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Restore private validation inputs without exposing source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s private/.tokenway-validation/assemble-source.py
+          test -s private/.tokenway-validation/format-go.sh
+          test -d private/.tokenway-patches
+          cp -a private/.tokenway-validation validation-context/
+          cp -a private/.tokenway-patches validation-context/
+          PRIVATE_SHA="$(git -C private rev-parse HEAD)"
+          UPSTREAM_SHA="$(git -C validation-context/source rev-parse HEAD)"
+          {
+            echo "TOKENWAY_PRIVATE_SHA=$PRIVATE_SHA"
+            echo "TOKENWAY_UPSTREAM_SHA=$UPSTREAM_SHA"
+          } >> "$GITHUB_ENV"
+          echo "Private source checkout and upstream pin verified; source files are not printed or uploaded."
+
+      - name: Set up Go 1.26.10
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.10"
+          cache: false
+
+      - name: Assemble exact private source overlays and normalize Go formatting
+        working-directory: validation-context
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile .tokenway-validation/assemble-source.py
+          python3 .tokenway-validation/assemble-source.py
+          bash .tokenway-validation/format-go.sh
+
+      - name: Verify Go formatting and all module dependencies
+        working-directory: validation-context
+        shell: bash
+        run: |
+          set -euo pipefail
+          UNFORMATTED="$(find source -type f -name '*.go' -not -path '*/vendor/*' -print0 | xargs -0 -r gofmt -l)"
+          if [ -n "$UNFORMATTED" ]; then
+            printf '%s\n' "$UNFORMATTED"
+            exit 1
+          fi
+          (cd source && go mod download && go mod verify)
+          (cd source/relaykit && GOWORK=off go mod download && GOWORK=off go mod verify)
+          (cd source/tokenkit && GOWORK=off go mod download && GOWORK=off go mod verify)
+
+      - name: Confirm ephemeral MySQL and PostgreSQL services
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$TEST_MYSQL_DSN"
+          test -n "$TEST_POSTGRES_DSN"
+          test -n "$TEST_FIXED_MYSQL_DSN"
+          test -n "$TEST_FIXED_POSTGRES_DSN"
+          echo "SQLite, MySQL 8.4 and PostgreSQL 17 endpoints are configured."
+
+      - name: Layer 3A - Wallet ledger and migration matrix
+        working-directory: validation-context/source
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -p 1 -count=1 -tags=tokenway_test ./model \
+            -run '^(TestWalletLedgerAcrossSupportedDatabases|TestMigrationSchemaStability)$'
+
+      - name: Layer 3B - Fixed-price billing and refund matrix
+        working-directory: validation-context/source
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -p 1 -count=1 ./service -run '^TestFixedPriceBillingDatabaseMatrix$'
+
+      - name: Layer 3C - Public pre-consume and settlement matrix
+        working-directory: validation-context/source
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -p 1 -count=1 ./controller -run '^TestPreConsumePolicyDatabaseMatrix$'
+
+      - name: Layer 3D - Signed Epay callback and duplicate-payment matrix
+        working-directory: validation-context/source
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -p 1 -count=1 -tags=tokenway_test ./controller \
+            -run '^TestEpaySuccessfulTopUpCallbackIsSignedAndIdempotentAcrossDatabases$'
+
+      - name: Record integration evidence without publishing private source
+        if: success()
+        shell: bash
+        run: |
+          {
+            echo "## TOKENWAY V11 cross-database integration"
+            echo
+            echo "Private source commit: $TOKENWAY_PRIVATE_SHA"
+            echo "Upstream commit: $TOKENWAY_UPSTREAM_SHA"
+            echo "Wallet ledger and migration: SQLite, MySQL 8.4, PostgreSQL 17"
+            echo "Fixed-price billing/refunds: SQLite, MySQL 8.4, PostgreSQL 17"
+            echo "Pre-consume/settlement: SQLite, MySQL 8.4, PostgreSQL 17"
+            echo "Signed Epay callback/idempotency: SQLite, MySQL 8.4, PostgreSQL 17"
+            echo
+            echo "Private source, generated archives, database contents and credentials were not uploaded."
+          } >> "$GITHUB_STEP_SUMMARY"
