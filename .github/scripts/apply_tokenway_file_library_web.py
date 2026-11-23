@@ -243,20 +243,14 @@ replace_once(
 )
 replace_once(
     "docker-compose.yml",
-    "      TASK_ARTIFACT_STORE_MODE: ${TASK_ARTIFACT_STORE_MODE:-upstream}\n",
-    "      TASK_ARTIFACT_STORE_MODE: ${TASK_ARTIFACT_STORE_MODE:-upstream}\n      TOKENWAY_FILE_STORAGE_DIR: ${TOKENWAY_FILE_STORAGE_DIR:-/data/files}\n",
+    "      - ./data:/data\n",
+    "      - ./data:/data\n",
+    "file library data uses the existing persistent data mount",
+)
+replace_once(
+    "docker-compose.yml",
+    "      - NODE_NAME=new-api-node-1  # 节点名称，用于审计日志中标识节点身份；多节点/容器部署时建议设置 (Node name used to identify the node in audit logs; recommended for multi-node/container deployments)\n",
+    "      - NODE_NAME=new-api-node-1  # 节点名称，用于审计日志中标识节点身份；多节点/容器部署时建议设置 (Node name used to identify the node in audit logs; recommended for multi-node/container deployments)\n      - TOKENWAY_FILE_STORAGE_DIR=/data/files\n",
     "persistent file library storage root",
-)
-replace_once(
-    ".env.production.example",
-    "NODE_NAME=tokenway-ai-1\n",
-    "NODE_NAME=tokenway-ai-1\nTOKENWAY_FILE_STORAGE_DIR=/data/files\n",
-    "file library storage configuration",
-)
-replace_once(
-    "docs/TOKENWAY-AI-DEPLOYMENT.md",
-    "**生产媒体持久化需要 S3 兼容存储。**",
-    "**用户文件库使用 `TOKENWAY_FILE_STORAGE_DIR` 指定的持久化目录（Compose 默认 `/data/files`，由 `tokenway_data` 卷保存）。部署前确认该卷有足够空间、备份和恢复策略；多应用节点必须挂载同一套受控共享文件存储，不能让每个节点各自使用本地目录。**生产媒体持久化需要 S3 兼容存储。**",
-    "document durable file library storage requirements",
 )
 print("PASS: web file library UI and persistent storage deployment settings applied")
