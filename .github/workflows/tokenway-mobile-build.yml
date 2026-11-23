@@ -70,6 +70,26 @@ jobs:
         working-directory: tokenway-source/mobile
         run: test -s build/app/outputs/flutter-apk/app-release.apk
 
+      # Build an App Bundle for packaging validation. Without an owner-provided
+      # upload keystore this is not a Play Store release-signed artifact.
+      - name: Build Android App Bundle (CI validation)
+        working-directory: tokenway-source/mobile
+        run: flutter build appbundle --release
+
+      - name: Verify Android App Bundle output
+        working-directory: tokenway-source/mobile
+        run: |
+          test -s build/app/outputs/bundle/release/app-release.aab
+          unzip -t build/app/outputs/bundle/release/app-release.aab
+
+      - name: Upload Android App Bundle (CI validation)
+        uses: actions/upload-artifact@v4
+        with:
+          name: tokenway-android-appbundle-ci-validation-${{ steps.source.outputs.commit }}
+          path: tokenway-source/mobile/build/app/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Upload Android APK
         uses: actions/upload-artifact@v4
         with:
