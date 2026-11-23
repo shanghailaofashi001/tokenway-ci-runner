@@ -1,0 +1,96 @@
+name: TokenWay File Library Backend Guard
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/scripts/apply_tokenway_file_library.py"
+      - ".github/workflows/tokenway-file-library-guard.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tokenway-file-library-guard-${{ github.ref }}-${{ github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  file-library-backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: tokenway-test
+          MYSQL_DATABASE: tokenway_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -ptokenway-test"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=18
+    env:
+      GOWORK: "off"
+      GOTOOLCHAIN: "local"
+      GOMAXPROCS: "2"
+      GOFLAGS: "-p=2"
+      TEST_MYSQL_DSN: root:tokenway-test@tcp(127.0.0.1:3306)/tokenway_test?charset=utf8mb4&parseTime=True&loc=Local
+    steps:
+      - name: Checkout CI scripts
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+
+      - name: Checkout pinned upstream New API
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          repository: QuantumNous/new-api
+          ref: 48a6c87f9e7757fdc58e5be9bcb4f8281ad0dfd0
+          path: source
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Apply file library implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile .github/scripts/apply_tokenway_file_library.py
+          cd source
+          python3 ../.github/scripts/apply_tokenway_file_library.py
+          gofmt -w model/user_file.go model/user_file_test.go model/main.go controller/user_file.go controller/user_file_test.go router/relay-router.go
+          git diff --check
+          ! grep -Eq 'httpRouter\.(GET|POST|DELETE)\("/files[^"]*", controller\.RelayNotImplemented\)' router/relay-router.go
+          grep -Fq 'httpRouter.GET("/files", controller.ListUserFiles)' router/relay-router.go
+          grep -Fq 'httpRouter.POST("/files", controller.UploadUserFile)' router/relay-router.go
+          grep -Fq 'httpRouter.DELETE("/files/:id", controller.DeleteUserFile)' router/relay-router.go
+          grep -Fq 'httpRouter.GET("/files/:id/content", controller.GetUserFileContent)' router/relay-router.go
+
+      - name: Set up isolated Go toolchain
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+        with:
+          go-version: "1.26.10"
+          cache: false
+
+      - name: Restore Go modules
+        working-directory: source
+        run: go mod download
+
+      - name: Test owner-scoped file model
+        working-directory: source
+        run: go test ./model -run '^TestUserFileOwnershipAndPagination$' -count=1
+
+      - name: Test upload, content, delete and cross-user isolation
+        working-directory: source
+        run: go test ./controller -run '^TestUserFileUploadListContentDeleteAndOwnerIsolation$' -count=1
+
+      - name: Verify dashboard access-token route table remains complete
+        working-directory: source
+        run: go test ./router -run '^TestAccessTokenRouteRulesCoverEveryDashboardRoute$' -count=1
+
+      - name: Compile affected packages
+        working-directory: source
+        run: go test ./model ./controller ./router -run '^$'
+
