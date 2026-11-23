@@ -77,7 +77,37 @@ jobs:
              echo '--- filesystem capacity ---'
              df -h '$DEPLOY_PATH'
              echo '--- local application listener ---'
-             curl -sS -o /dev/null -w 'HTTP %{http_code}\n' http://127.0.0.1:13000/sign-in || true"
+             curl -sS -o /dev/null -w 'HTTP %{http_code}\n' http://127.0.0.1:13000/sign-in || true
+             echo '--- payment configuration presence only; values are never printed ---'
+             docker compose -p tokenway-v11 exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -At <<'SQL' || echo 'PAYMENT_PREFLIGHT_QUERY_FAILED'
+             WITH required(key) AS (
+               VALUES ('EpayId'), ('EpayKey'), ('NowPaymentsApiKey'), ('NowPaymentsIPNSecret'),
+                      ('USDExchangeRate'), ('payment_setting.compliance_confirmed'),
+                      ('payment_setting.compliance_terms_version')
+             )
+             SELECT required.key || '=' ||
+               CASE
+                 WHEN required.key = 'USDExchangeRate' THEN
+                   CASE WHEN options.value ~ '^[0-9]+(\\.[0-9]+)?
+
+      - name: Record safety boundary
+        if: always()
+        run: |
+          {
+            echo
+            echo "This workflow is read-only. It does not stop containers, alter Compose files, migrate the database, delete volumes, or deploy an image."
+            echo "Any production switch must preserve the existing PostgreSQL/Redis/Silo volumes and .env, and must take a verified database backup first."
+          } >> "$GITHUB_STEP_SUMMARY"
+ AND options.value::numeric > 0 THEN 'SET' ELSE 'MISSING' END
+                 WHEN required.key = 'payment_setting.compliance_confirmed' THEN
+                   CASE WHEN lower(options.value) = 'true' THEN 'SET' ELSE 'MISSING' END
+                 WHEN required.key = 'payment_setting.compliance_terms_version' THEN
+                   CASE WHEN options.value = 'v1' THEN 'SET' ELSE 'MISSING' END
+                 ELSE CASE WHEN coalesce(btrim(options.value), '') <> '' THEN 'SET' ELSE 'MISSING' END
+               END
+             FROM required LEFT JOIN options ON options.key = required.key
+             ORDER BY required.key;
+             SQL"
 
       - name: Record safety boundary
         if: always()
