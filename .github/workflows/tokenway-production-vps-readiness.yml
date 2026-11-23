@@ -33,15 +33,15 @@ jobs:
           {
             echo "## TokenWay production VPS readiness"
             echo
-            echo "Expected deployment directory: `$DEPLOY_PATH`"
-            echo "Expected Compose project: `tokenway-v11`"
-            echo "Expected app listener: `127.0.0.1:13000 → container 3000`"
+            echo "Expected deployment directory: $DEPLOY_PATH"
+            echo "Expected Compose project: tokenway-v11"
+            echo "Expected app listener: 127.0.0.1:13000 → container 3000"
             echo
             if (("${#missing[@]}" > 0)); then
               echo "**BLOCKED — read-only SSH audit cannot connect.**"
               echo
               echo "Missing GitHub Actions secrets:"
-              for item in "${missing[@]}"; do echo "- $item"; done
+              for item in "${missing[@]}"; do printf -- '- %s\n' "$item"; done
               echo
               echo "Add the missing secrets to the CI repository Actions secrets, then rerun this workflow."
             else
@@ -50,11 +50,13 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           if (("${#missing[@]}" > 0)); then
             echo "blocked=true" >> "$GITHUB_OUTPUT"
+            echo "BLOCKED: missing production SSH configuration; no remote command was attempted."
           else
             echo "blocked=false" >> "$GITHUB_OUTPUT"
+            echo "READY: production SSH configuration is present; only read-only checks will run."
           fi
 
-      - name: Run read-only VPS and Docker Compose audit
+      - name: Run read-only VPS, storage and payment configuration audit
         if: steps.preflight.outputs.blocked == 'false'
         shell: bash
         run: |
@@ -66,20 +68,51 @@ jobs:
           ssh-keyscan -p "$PROD_PORT" -H "$PROD_HOST" >> "$HOME/.ssh/known_hosts" 2>/dev/null
           ssh -i "$HOME/.ssh/tokenway_prod_key" -p "$PROD_PORT" \
             -o BatchMode=yes -o ConnectTimeout=12 \
-            "$PROD_USER@$PROD_HOST" \
-            "set -eu
-             cd '$DEPLOY_PATH'
-             test -f docker-compose.yml
-             docker compose version
-             docker compose -p tokenway-v11 ps
-             echo '--- persistent volumes ---'
-             docker volume ls --format '{{.Name}}' | grep -E 'tokenway_v11_pg_data|tokenway_data' || true
-             echo '--- filesystem capacity ---'
-             df -h '$DEPLOY_PATH'
-             echo '--- local application listener ---'
-             curl -sS -o /dev/null -w 'HTTP %{http_code}\n' http://127.0.0.1:13000/sign-in || true
-             echo '--- payment configuration presence only (1=set, 0=empty; values never printed) ---'
-             docker compose -p tokenway-v11 exec -T postgres psql -U tokenway -d tokenway -Atc 'SELECT key || chr(9) || CASE WHEN length(value)>0 THEN chr(49) ELSE chr(48) END FROM options' | grep -E '^(EpayId|EpayKey|NowPaymentsApiKey|NowPaymentsIPNSecret|USDExchangeRate|payment_setting[.]compliance_confirmed|payment_setting[.]compliance_terms_version)' || true"
+            "$PROD_USER@$PROD_HOST" bash -s -- "$DEPLOY_PATH" <<'REMOTE'
+          set -euo pipefail
+          DEPLOY_PATH="$1"
+          cd "$DEPLOY_PATH"
+          test -f docker-compose.yml
+          docker compose version
+          docker compose -p tokenway-v11 ps
+          echo '--- persistent volumes ---'
+          docker volume ls --format '{{.Name}}' | grep -E 'tokenway_v11_pg_data|tokenway_data' || true
+          echo '--- filesystem capacity ---'
+          df -h "$DEPLOY_PATH"
+          echo '--- local application listener ---'
+          curl -sS -o /dev/null -w 'HTTP %{http_code}\n' http://127.0.0.1:13000/sign-in || true
+          echo '--- payment configuration presence only (no secret values) ---'
+          docker compose -p tokenway-v11 exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -At' <<'SQL'
+          WITH required(key) AS (
+            VALUES
+              ('EpayId'),
+              ('EpayKey'),
+              ('NowPaymentsApiKey'),
+              ('NowPaymentsIPNSecret'),
+              ('USDExchangeRate'),
+              ('payment_setting.compliance_confirmed'),
+              ('payment_setting.compliance_terms_version')
+          ),
+          vals AS (
+            SELECT required.key, options.value
+            FROM required
+            LEFT JOIN options ON options.key = required.key
+          )
+          SELECT key || '=' ||
+            CASE
+              WHEN key = 'USDExchangeRate' THEN
+                CASE WHEN value ~ '^[0-9]+([.][0-9]+)?$' AND value::numeric > 0 THEN 'SET' ELSE 'MISSING' END
+              WHEN key = 'payment_setting.compliance_confirmed' THEN
+                CASE WHEN lower(coalesce(value, '')) = 'true' THEN 'SET' ELSE 'MISSING' END
+              WHEN key = 'payment_setting.compliance_terms_version' THEN
+                CASE WHEN value = 'v1' THEN 'SET' ELSE 'MISSING' END
+              ELSE
+                CASE WHEN coalesce(btrim(value), '') <> '' THEN 'SET' ELSE 'MISSING' END
+            END
+          FROM vals
+          ORDER BY key;
+          SQL
+          REMOTE
 
       - name: Record safety boundary
         if: always()
@@ -87,5 +120,6 @@ jobs:
           {
             echo
             echo "This workflow is read-only. It does not stop containers, alter Compose files, migrate the database, delete volumes, or deploy an image."
+            echo "Payment checks report presence only; they never print credential values or initiate charges, refunds, or callbacks."
             echo "Any production switch must preserve the existing PostgreSQL/Redis/Silo volumes and .env, and must take a verified database backup first."
           } >> "$GITHUB_STEP_SUMMARY"
