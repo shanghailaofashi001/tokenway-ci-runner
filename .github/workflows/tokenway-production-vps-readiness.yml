@@ -51,6 +51,7 @@ jobs:
           if (("${#missing[@]}" > 0)); then
             echo "blocked=true" >> "$GITHUB_OUTPUT"
             echo "BLOCKED: missing production SSH configuration; no remote command was attempted."
+            exit 1
           else
             echo "blocked=false" >> "$GITHUB_OUTPUT"
             echo "READY: production SSH configuration is present; only read-only checks will run."
