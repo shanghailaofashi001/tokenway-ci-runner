@@ -66,9 +66,9 @@ function getErrorMessage(error: unknown, fallback: string): string {
 }
 
 function formatBytes(value: number): string {
-  if (value < 1024) return `${value} B`
-  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`
-  if (value < 1024 * 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(1)} MB`
+  if (value < 1024) { return `${value} B` }
+  if (value < 1024 * 1024) { return `${(value / 1024).toFixed(1)} KB` }
+  if (value < 1024 * 1024 * 1024) { return `${(value / (1024 * 1024)).toFixed(1)} MB` }
   return `${(value / (1024 * 1024 * 1024)).toFixed(2)} GB`
 }
 
@@ -102,7 +102,7 @@ export function FileLibraryCard() {
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       const response = await api.delete(`/api/user/files/${encodeURIComponent(id)}`)
-      if (response.data?.deleted !== true) throw new Error('File deletion was not confirmed')
+      if (response.data?.deleted !== true) { throw new Error('File deletion was not confirmed') }
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: FILES_QUERY_KEY })
@@ -140,7 +140,7 @@ export function FileLibraryCard() {
   }
 
   let loadErrorMessage = t('Unable to load files')
-  if (filesQuery.error instanceof Error) loadErrorMessage = filesQuery.error.message
+  if (filesQuery.error instanceof Error) { loadErrorMessage = filesQuery.error.message }
   let refreshClassName = 'h-4 w-4'
   if (filesQuery.isFetching) refreshClassName += ' animate-spin'
   let uploadLabel = t('Upload file')
