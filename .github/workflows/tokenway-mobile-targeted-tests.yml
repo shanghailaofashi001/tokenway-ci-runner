@@ -54,6 +54,14 @@ jobs:
             echo 'FAIL: mobile API client is not wired to chat-history-sync endpoints'
             exit 1
           fi
+          for method in getUserFiles uploadUserFile downloadUserFile deleteUserFile; do
+            if ! grep -Fq "$method" lib/services/tokenway_api.dart; then
+              echo "FAIL: mobile file library API method is missing: $method"
+              exit 1
+            fi
+          done
+          grep -Fq "FileLibraryScreen(api: widget.api, language: widget.language)" lib/screens/profile_screen.dart
+          grep -Fq "file library uses authenticated account routes for list, upload and delete" test/tokenway_api_contract_test.dart
           echo 'PASS: mobile encrypted chat sync implementation, API wiring and focused tests are present.'
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -113,4 +121,5 @@ jobs:
 # Targeted root-cause verification 2026-11-23: mutable chat list restore and AES-GCM sync service.
 # Final targeted verification 2026-11-23: Unicode-aware sync passphrase validation.
 
-# Verify the account file library screen and two-independent-client encrypted sync contract.
+# Verify account file library API methods, profile navigation, CRUD contracts and two-device encrypted sync.
+# Targeted rerun after repairing multipart FormData field assertions.
