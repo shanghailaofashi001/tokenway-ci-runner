@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Add opt-in end-to-end encrypted cross-device chat history sync to the assembled API."""
+"""Add opt-in end-to-end encrypted cross-device chat history sync to the assembled API.
+
+The two sync endpoints are explicitly session-only in the personal-access-token route registry."""
 
 from pathlib import Path
 import re
