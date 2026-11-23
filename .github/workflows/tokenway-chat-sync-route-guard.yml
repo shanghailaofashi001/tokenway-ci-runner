@@ -25,26 +25,6 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Checkout pinned TokenWay validation materials
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
-        with:
-          repository: shanghailaofashi001/tokenway-v11-dev
-          ref: d1dd4edb3c7491f3e8b786dd455920d2e0fc5dd4
-          token: ${{ secrets.TOKENWAY_SOURCE_READ_TOKEN }}
-          path: private
-          fetch-depth: 1
-          persist-credentials: false
-
-      - name: Checkout pinned brand and route baseline
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
-        with:
-          repository: shanghailaofashi001/tokenway-v11-dev
-          ref: d2494da77bc59b7edb4082bb2a594f24997b6ece
-          token: ${{ secrets.TOKENWAY_SOURCE_READ_TOKEN }}
-          path: private-validation
-          fetch-depth: 1
-          persist-credentials: false
-
       - name: Checkout pinned upstream source
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
@@ -63,13 +43,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -d private/.tokenway-validation
-          cp -a private/.tokenway-validation .tokenway-validation
-          cp -a private-validation/.tokenway-validation/. .tokenway-validation/
-          test -s .tokenway-validation/add-playground-access-token-rules.py
-          python3 -m py_compile .github/scripts/apply_encrypted_chat_history_sync.py .tokenway-validation/add-playground-access-token-rules.py
+          python3 -m py_compile .github/scripts/apply_encrypted_chat_history_sync.py
           cd source
-          python3 ../.tokenway-validation/add-playground-access-token-rules.py
           python3 ../.github/scripts/apply_encrypted_chat_history_sync.py
           gofmt -w relaykit/dto/user_settings.go model/user.go router/api-router.go middleware/access_token_routes.go controller/chat_history_sync.go controller/chat_history_sync_test.go router/access_token_scope_test.go
           git diff --check
