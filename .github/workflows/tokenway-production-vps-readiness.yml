@@ -1,0 +1,89 @@
+name: TokenWay Production VPS Readiness Audit
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/tokenway-production-vps-readiness.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  read-only-production-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PROD_HOST: ${{ secrets.TOKENWAY_PROD_SSH_HOST }}
+      PROD_USER: ${{ secrets.TOKENWAY_PROD_SSH_USER || 'root' }}
+      PROD_PORT: ${{ secrets.TOKENWAY_PROD_SSH_PORT || '22' }}
+      PROD_SSH_KEY: ${{ secrets.TOKENWAY_PROD_SSH_PRIVATE_KEY }}
+      DEPLOY_PATH: ${{ secrets.TOKENWAY_PROD_DEPLOY_PATH || '/opt/tokenway-v11-kuaipao/TokenWay-V11' }}
+    steps:
+      - name: Check production SSH access configuration
+        id: preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +x
+          missing=()
+          [[ -n "$PROD_HOST" ]] || missing+=("TOKENWAY_PROD_SSH_HOST")
+          [[ -n "$PROD_SSH_KEY" ]] || missing+=("TOKENWAY_PROD_SSH_PRIVATE_KEY")
+          {
+            echo "## TokenWay production VPS readiness"
+            echo
+            echo "Expected deployment directory: `$DEPLOY_PATH`"
+            echo "Expected Compose project: `tokenway-v11`"
+            echo "Expected app listener: `127.0.0.1:13000 → container 3000`"
+            echo
+            if (("${#missing[@]}" > 0)); then
+              echo "**BLOCKED — read-only SSH audit cannot connect.**"
+              echo
+              echo "Missing GitHub Actions secrets:"
+              for item in "${missing[@]}"; do echo "- $item"; done
+              echo
+              echo "Add the missing secrets to the CI repository Actions secrets, then rerun this workflow."
+            else
+              echo "SSH inputs are present. The next step will run read-only checks only."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          if (("${#missing[@]}" > 0)); then
+            echo "blocked=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "blocked=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run read-only VPS and Docker Compose audit
+        if: steps.preflight.outputs.blocked == 'false'
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +x
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PROD_SSH_KEY" > "$HOME/.ssh/tokenway_prod_key"
+          chmod 600 "$HOME/.ssh/tokenway_prod_key"
+          ssh-keyscan -p "$PROD_PORT" -H "$PROD_HOST" >> "$HOME/.ssh/known_hosts" 2>/dev/null
+          ssh -i "$HOME/.ssh/tokenway_prod_key" -p "$PROD_PORT" \
+            -o BatchMode=yes -o ConnectTimeout=12 \
+            "$PROD_USER@$PROD_HOST" \
+            "set -eu
+             cd '$DEPLOY_PATH'
+             test -f docker-compose.yml
+             docker compose version
+             docker compose -p tokenway-v11 ps
+             echo '--- persistent volumes ---'
+             docker volume ls --format '{{.Name}}' | grep -E 'tokenway_v11_pg_data|tokenway_data' || true
+             echo '--- filesystem capacity ---'
+             df -h '$DEPLOY_PATH'
+             echo '--- local application listener ---'
+             curl -sS -o /dev/null -w 'HTTP %{http_code}\n' http://127.0.0.1:13000/sign-in || true"
+
+      - name: Record safety boundary
+        if: always()
+        run: |
+          {
+            echo
+            echo "This workflow is read-only. It does not stop containers, alter Compose files, migrate the database, delete volumes, or deploy an image."
+            echo "Any production switch must preserve the existing PostgreSQL/Redis/Silo volumes and .env, and must take a verified database backup first."
+          } >> "$GITHUB_STEP_SUMMARY"
