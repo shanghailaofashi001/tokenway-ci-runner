@@ -52,3 +52,5 @@ jobs:
         run: flutter test --no-pub test/wallet_payment_test.dart
 
 # Targeted follow-up 2026-11-23: assert the locked payment action by stable widget key.
+
+# Current HEAD parallel revalidation 2026-11-23: isolate wallet and payment regression tests.
