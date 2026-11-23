@@ -292,8 +292,9 @@ For the provided single-node Docker Compose deployment, set:
 TOKENWAY_FILE_STORAGE_DIR=/data/files
 ```
 
-Mount a persistent volume over `/data` (the supplied Compose deployment already
-uses the `tokenway_data` volume). Back up the database and this directory together.
+The supplied Compose file bind-mounts `./data:/data`, so this directory persists at
+`./data/files` on the host. Keep that host directory on durable storage and back it
+up together with the database.
 Restore both from the same backup point to preserve metadata-to-object consistency.
 
 The default application path is `data/files` relative to the process working
