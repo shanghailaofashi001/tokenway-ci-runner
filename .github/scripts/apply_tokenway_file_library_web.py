@@ -15,6 +15,13 @@ def replace_once(path: str, old: str, new: str, label: str) -> None:
     target.write_text(content.replace(old, new, 1), encoding="utf-8")
 
 
+def replace_if_present(path: str, old: str, new: str, label: str) -> None:
+    if (ROOT / path).is_file():
+        replace_once(path, old, new, label)
+    else:
+        print(f"SKIP optional deployment overlay: {path} is not part of this source snapshot")
+
+
 component = r'''/*
 Copyright (C) 2023-2026 QuantumNous
 
@@ -241,10 +248,40 @@ replace_once(
     "                <ProfileSettingsCard\n                  profile={profile}\n                  loading={loading}\n                  onProfileUpdate={refreshProfile}\n                  quotaRemindEnabled={quotaRemindEnabled}\n                  quotaRemindThreshold={quotaRemindThreshold}\n                />\n                <FileLibraryCard />\n",
     "profile file library placement",
 )
-replace_once(
+replace_if_present(
     "docker-compose.yml",
     "      - TZ=Asia/Shanghai\n",
     "      - TZ=Asia/Shanghai\n      - TOKENWAY_FILE_STORAGE_DIR=/data/files\n",
     "persistent file library storage root",
 )
+file_doc = ROOT / "docs/TOKENWAY-FILE-LIBRARY-DEPLOYMENT.md"
+if not file_doc.exists():
+    file_doc.parent.mkdir(parents=True, exist_ok=True)
+    file_doc.write_text(
+        """# TokenWay File Library Storage
+
+The file library stores metadata in the application database and file bytes in the
+filesystem directory configured by `TOKENWAY_FILE_STORAGE_DIR`.
+
+For the provided single-node Docker Compose deployment, set:
+
+```dotenv
+TOKENWAY_FILE_STORAGE_DIR=/data/files
+```
+
+Mount a persistent volume over `/data` (the supplied Compose deployment already
+uses the `tokenway_data` volume). Back up the database and this directory together.
+Restore both from the same backup point to preserve metadata-to-object consistency.
+
+The default application path is `data/files` relative to the process working
+directory. The production deployment should set the absolute path above explicitly.
+
+For multiple application replicas, all replicas must mount the same durable,
+access-controlled shared filesystem. Separate per-container local directories are
+not a supported shared-library configuration. Restrict directory permissions to
+the application user and exclude this directory from public static file serving.
+""",
+        encoding="utf-8",
+    )
+
 print("PASS: web file library UI and persistent storage deployment settings applied")
