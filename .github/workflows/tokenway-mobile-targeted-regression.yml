@@ -1,0 +1,47 @@
+name: TokenWay Mobile Targeted Payment Regression
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/tokenway-mobile-targeted-regression.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tokenway-mobile-payment-regression
+  cancel-in-progress: false
+
+jobs:
+  wallet-payment:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout CI runner
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Checkout current TokenWay mobile source
+        uses: actions/checkout@v4
+        with:
+          repository: shanghailaofashi001/tokenway-v11-dev
+          ref: feat/flutter-mobile-app
+          token: ${{ secrets.TOKENWAY_SOURCE_READ_TOKEN }}
+          path: tokenway-source
+          persist-credentials: false
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Resolve Flutter dependencies
+        working-directory: tokenway-source/mobile
+        run: flutter pub get
+
+      - name: Run only the affected wallet payment regression tests
+        working-directory: tokenway-source/mobile
+        run: flutter test --no-pub test/wallet_payment_test.dart
