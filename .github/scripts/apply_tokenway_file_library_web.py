@@ -60,7 +60,7 @@ async function listUserFiles(): Promise<UserFile[]> {
   return response.data.data as UserFile[]
 }
 
-function errorMessage(error: unknown, fallback: string): string {
+function getErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof Error) return error.message
   return fallback
 }
@@ -96,7 +96,7 @@ export function FileLibraryCard() {
       await queryClient.invalidateQueries({ queryKey: FILES_QUERY_KEY })
       toast.success(t('File uploaded successfully'))
     },
-    onError: (error) => toast.error(errorMessage(error, t('File upload failed'))),
+    onError: (error) => toast.error(getErrorMessage(error, t('File upload failed'))),
   })
 
   const deleteMutation = useMutation({
@@ -108,7 +108,7 @@ export function FileLibraryCard() {
       await queryClient.invalidateQueries({ queryKey: FILES_QUERY_KEY })
       toast.success(t('File deleted'))
     },
-    onError: (error) => toast.error(errorMessage(error, t('File deletion failed'))),
+    onError: (error) => toast.error(getErrorMessage(error, t('File deletion failed'))),
   })
 
   const downloadFile = async (file: UserFile) => {
@@ -124,7 +124,7 @@ export function FileLibraryCard() {
       anchor.click()
       URL.revokeObjectURL(url)
     } catch (error) {
-      toast.error(errorMessage(error, t('File download failed')))
+      toast.error(getErrorMessage(error, t('File download failed')))
     }
   }
 
