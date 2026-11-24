@@ -189,7 +189,9 @@ run_root_package() (
   if [[ "$separate_integration_suites" == "true" ]]; then
     case "$pkg" in
       github.com/QuantumNous/new-api/service)
-        package_skip_pattern='^(TestProcessRequestBillingRecoverySettlesRefundsAndReviewsUnknownOutcomes|TestSettle.*|TestRefund.*|TestUpdateBatchTasks.*|TestUpdateSunoTasksStalePollsRefundExactlyOnce|TestSweepTimedOutTasks.*|TestTaskReportsOnceAtTheFinalState)  if timeout --signal=TERM --kill-after=30s 17m go test "${test_args[@]}" "$pkg" > "$logfile" 2>&1; then
+        package_skip_pattern='^(TestProcessRequestBillingRecoverySettlesRefundsAndReviewsUnknownOutcomes|TestSettle.*|TestRefund.*|TestUpdateBatchTasks.*|TestUpdateSunoTasksStalePollsRefundExactlyOnce|TestSweepTimedOutTasks.*|TestTaskReportsOnceAtTheFinalState)
+
+  if timeout --signal=TERM --kill-after=30s 17m go test "${test_args[@]}" "$pkg" > "$logfile" 2>&1; then
     printf 'PASS: %s\n' "$pkg" > "$log_dir/${slug}.status"
     echo "PASS: $pkg"
     return 0
@@ -344,7 +346,9 @@ echo "All selected Root, Relaykit, and Tokenkit test suites passed."
 
         ;;
       github.com/QuantumNous/new-api/controller)
-        package_skip_pattern='^(TestImmediateTaskSettlementDatabase|TestExecuteTaskSubmission.*|TestResponsesWS.*|TestResponsesWebSocket.*)  if timeout --signal=TERM --kill-after=30s 17m go test "${test_args[@]}" "$pkg" > "$logfile" 2>&1; then
+        package_skip_pattern='^(TestImmediateTaskSettlementDatabase|TestExecuteTaskSubmission.*|TestResponsesWS.*|TestResponsesWebSocket.*)
+
+  if timeout --signal=TERM --kill-after=30s 17m go test "${test_args[@]}" "$pkg" > "$logfile" 2>&1; then
     printf 'PASS: %s\n' "$pkg" > "$log_dir/${slug}.status"
     echo "PASS: $pkg"
     return 0
@@ -499,7 +503,9 @@ echo "All selected Root, Relaykit, and Tokenkit test suites passed."
 
         ;;
       github.com/QuantumNous/new-api/relay)
-        package_skip_pattern='^TestResponsesWS.*  if timeout --signal=TERM --kill-after=30s 17m go test "${test_args[@]}" "$pkg" > "$logfile" 2>&1; then
+        package_skip_pattern='^TestResponsesWS.*
+
+  if timeout --signal=TERM --kill-after=30s 17m go test "${test_args[@]}" "$pkg" > "$logfile" 2>&1; then
     printf 'PASS: %s\n' "$pkg" > "$log_dir/${slug}.status"
     echo "PASS: $pkg"
     return 0
@@ -654,7 +660,9 @@ echo "All selected Root, Relaykit, and Tokenkit test suites passed."
 
         ;;
       github.com/QuantumNous/new-api/pkg/wsmanager)
-        package_skip_pattern='^(TestCloseChannel.*|TestUnregisterPreventsClose|TestRegisteredCloseIsIdempotent|TestPublishCloseChannelsNoopsWhenRedisDisabled|TestRedisChannelCloseEventsStayWithinDatabase)  if timeout --signal=TERM --kill-after=30s 17m go test "${test_args[@]}" "$pkg" > "$logfile" 2>&1; then
+        package_skip_pattern='^(TestCloseChannel.*|TestUnregisterPreventsClose|TestRegisteredCloseIsIdempotent|TestPublishCloseChannelsNoopsWhenRedisDisabled|TestRedisChannelCloseEventsStayWithinDatabase)
+
+  if timeout --signal=TERM --kill-after=30s 17m go test "${test_args[@]}" "$pkg" > "$logfile" 2>&1; then
     printf 'PASS: %s\n' "$pkg" > "$log_dir/${slug}.status"
     echo "PASS: $pkg"
     return 0
