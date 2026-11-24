@@ -49,6 +49,7 @@ for line in pathlib.Path(logfile).read_text(encoding="utf-8", errors="replace").
 selector = {
     "go_module_scope": "root",
     "root_test_packages": "github.com/QuantumNous/new-api/" + package,
+    "integration_package": package,
     "root_test_pattern": pattern,
     "targeted_only": True,
 }
