@@ -1,0 +1,279 @@
+name: TokenWay V11 Windows Desktop Release
+
+on:
+  workflow_run:
+    workflows:
+      - "TokenWay Finance R7 — full V11 validation on public runner"
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: "Successful TokenWay V11 source acceptance run ID"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: tokenway-v11-windows-desktop-release
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build and smoke-test Windows installer from validated source
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' || github.event.workflow_run.conclusion == 'failure' }}
+    runs-on: windows-latest
+    timeout-minutes: 90
+    env:
+      SOURCE_RUN_ID: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.id || inputs.source_run_id }}
+    steps:
+      - name: Set up Node.js 22
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: "22"
+
+      - name: Set up Go 1.26.10
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+        with:
+          go-version: "1.26.10"
+          cache: false
+
+      - name: Verify source acceptance and download exact same-run archive
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:SOURCE_RUN_ID -notmatch '^\d+$') { throw "Invalid source run ID: $env:SOURCE_RUN_ID" }
+          $run = gh api "repos/$env:GITHUB_REPOSITORY/actions/runs/$env:SOURCE_RUN_ID" | ConvertFrom-Json
+          if ($run.name -ne 'TokenWay Finance R7 — full V11 validation on public runner') { throw "Unexpected source workflow: $($run.name)" }
+          if ($run.head_branch -ne 'main') { throw "Source run is not from main: $($run.head_branch)" }
+          $jobs = gh api "repos/$env:GITHUB_REPOSITORY/actions/runs/$env:SOURCE_RUN_ID/jobs" | ConvertFrom-Json
+          $validation = @($jobs.jobs | Where-Object { $_.name -eq 'Assemble branded V11 source, apply R7, test all modules and frontend' } | Select-Object -First 1)
+          if (-not $validation -or $validation[0].conclusion -ne 'success') { throw 'The complete TokenWay source acceptance job did not pass; refusing desktop release.' }
+          $artifactResponse = gh api "repos/$env:GITHUB_REPOSITORY/actions/runs/$env:SOURCE_RUN_ID/artifacts" | ConvertFrom-Json
+          $artifact = @($artifactResponse.artifacts | Where-Object { $_.name -eq 'tokenway-v11-validated-source' -and -not $_.expired } | Select-Object -First 1)
+          if (-not $artifact) { throw 'The exact same-run validated TokenWay source archive is missing or expired.' }
+
+          $download = Join-Path $env:RUNNER_TEMP 'tokenway-source-artifact'
+          New-Item -ItemType Directory -Force -Path $download | Out-Null
+          gh run download $env:SOURCE_RUN_ID --repo $env:GITHUB_REPOSITORY --name tokenway-v11-validated-source --dir $download
+          if ($LASTEXITCODE -ne 0) { throw "gh run download failed with exit code $LASTEXITCODE" }
+          $archive = Join-Path $download 'TokenWay-V11-validated-source.tar.gz'
+          if (-not (Test-Path $archive)) { throw "Same-run source archive missing: $archive" }
+          $archiveHash = (Get-FileHash -Algorithm SHA256 $archive).Hash.ToLowerInvariant()
+          $extract = Join-Path $env:RUNNER_TEMP 'tokenway-v11-source'
+          New-Item -ItemType Directory -Force -Path $extract | Out-Null
+          tar -xzf $archive -C $extract
+          if ($LASTEXITCODE -ne 0) { throw 'Unable to extract the validated TokenWay source archive.' }
+
+          $manifestPath = Join-Path $extract 'RELEASE-MANIFEST.json'
+          $checksumsPath = Join-Path $extract 'FILE-CHECKSUMS.sha256'
+          $project = Join-Path $extract 'TokenWay-V11'
+          if (-not (Test-Path $manifestPath) -or -not (Test-Path $checksumsPath) -or -not (Test-Path $project)) { throw 'The validated source archive is missing its release manifest, checksums or source root.' }
+          $manifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
+          if ($manifest.packaging_workflow.run_id -ne [long]$env:SOURCE_RUN_ID) { throw 'Release manifest run ID does not match this desktop source run.' }
+          if ($manifest.desktop.product_name -ne 'TokenWay V11' -or $manifest.desktop.version -ne '11.0.0' -or $manifest.desktop.application_id -ne 'com.tokenway.ai.desktop') { throw 'Desktop release identity in the source manifest is invalid.' }
+          if ($manifest.desktop.windows_backend_binary -ne 'tokenway-v11.exe' -or $manifest.desktop.windows_backend_resource -ne 'bin/tokenway-v11.exe') { throw 'Manifest Windows backend path is inconsistent.' }
+
+          $verified = 0
+          foreach ($line in Get-Content $checksumsPath) {
+            if ($line -notmatch '^([0-9a-f]{64})  (.+)$') { throw "Malformed source checksum entry: $line" }
+            $expected = $Matches[1]
+            $relative = $Matches[2].Replace('/', '\')
+            $file = Join-Path $extract $relative
+            if (-not (Test-Path -LiteralPath $file -PathType Leaf)) { throw "Source file missing from archive: $relative" }
+            $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $file).Hash.ToLowerInvariant()
+            if ($actual -ne $expected) { throw "Source checksum mismatch: $relative" }
+            $verified++
+          }
+          if ($verified -lt 9000) { throw "Unexpectedly small source checksum set: $verified" }
+
+          "TOKENWAY_SOURCE_ROOT=$project" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "TOKENWAY_SOURCE_ARCHIVE_SHA256=$archiveHash" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "TOKENWAY_SOURCE_CHECKSUM_COUNT=$verified" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          @(
+            "Source acceptance run: $env:SOURCE_RUN_ID",
+            "Source archive SHA-256: $archiveHash",
+            "Validated source file checksums: $verified",
+            "Assembled source tree SHA-256: $($manifest.assembled_source_tree_sha256)",
+            "Desktop product: $($manifest.desktop.product_name) $($manifest.desktop.version)"
+          ) | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+
+      - name: Install and checksum-verify Bun 1.4.4
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $uri = 'https://github.com/oven-sh/bun/releases/download/bun-v1.4.4/bun-windows-x64.zip'
+          $zip = Join-Path $env:RUNNER_TEMP 'bun-windows-x64.zip'
+          Invoke-WebRequest -Uri $uri -OutFile $zip
+          $actual = (Get-FileHash -Algorithm SHA256 $zip).Hash.ToLowerInvariant()
+          $expected = 'cd2c0fccc78f3ede1f50ca827a15f063eda13d4d150a3d0674f4f6e323d864a5'
+          if ($actual -ne $expected) { throw "Bun archive checksum mismatch: $actual" }
+          $bunDir = Join-Path $env:RUNNER_TEMP 'bun-1.4.4'
+          Expand-Archive -Path $zip -DestinationPath $bunDir -Force
+          $bunExe = Get-ChildItem -Path $bunDir -Filter bun.exe -Recurse | Select-Object -First 1
+          if (-not $bunExe) { throw 'Bun executable was not found in the verified archive.' }
+          Copy-Item $bunExe.FullName (Join-Path $bunDir 'bun.exe') -Force
+          Add-Content -Path $env:GITHUB_PATH -Value $bunDir
+          $env:PATH = "$bunDir;$env:PATH"
+          $version = (& (Join-Path $bunDir 'bun.exe') --version).Trim()
+          if ($version -ne '1.4.4') { throw "Expected Bun 1.4.4, found $version" }
+          Write-Host "Verified Bun $version ($actual)"
+
+      - name: Build frontend from validated source
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Set-Location (Join-Path $env:TOKENWAY_SOURCE_ROOT 'web')
+          $env:DISABLE_ESLINT_PLUGIN = 'true'
+          $env:VITE_REACT_APP_VERSION = '11.0.0'
+          bun install --frozen-lockfile
+          if ($LASTEXITCODE -ne 0) { throw "bun install failed with exit code $LASTEXITCODE" }
+          bun run build
+          if ($LASTEXITCODE -ne 0) { throw "frontend build failed with exit code $LASTEXITCODE" }
+          if (-not (Test-Path (Join-Path $env:TOKENWAY_SOURCE_ROOT 'web/dist/index.html'))) { throw 'Frontend build output is missing.' }
+
+      - name: Build Windows TokenWay V11 backend
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Set-Location $env:TOKENWAY_SOURCE_ROOT
+          $env:CGO_ENABLED = '0'
+          $env:GOFLAGS = '-mod=vendor'
+          go version
+          go build -pgo=vendor/github.com/Calcium-Ion/moejs/default.pgo -trimpath -ldflags='-s -w -X github.com/QuantumNous/new-api/common.Version=11.0.0' -o tokenway-v11.exe .
+          if ($LASTEXITCODE -ne 0) { throw "Go Windows build failed with exit code $LASTEXITCODE" }
+          if (-not (Test-Path (Join-Path $env:TOKENWAY_SOURCE_ROOT 'tokenway-v11.exe'))) { throw 'Windows backend binary was not produced.' }
+
+      - name: Package NSIS installer and portable executable
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Set-Location (Join-Path $env:TOKENWAY_SOURCE_ROOT 'electron')
+          npm ci --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { throw "npm ci failed with exit code $LASTEXITCODE" }
+          node --check main.js
+          node --check preload.js
+          npm run build:win
+          if ($LASTEXITCODE -ne 0) { throw "electron-builder failed with exit code $LASTEXITCODE" }
+          $dist = Join-Path (Get-Location) 'dist'
+          $executables = @(Get-ChildItem -Path $dist -Filter '*.exe' -File)
+          if ($executables.Count -lt 2) { throw "Expected NSIS installer and portable executable; found $($executables.Count)." }
+          $installer = $executables | Where-Object { $_.Name -match '(?i)Setup.*\.exe$' } | Select-Object -First 1
+          if (-not $installer) { throw "NSIS setup executable not found among: $($executables.Name -join ', ')" }
+          $portable = $executables | Where-Object { $_.FullName -ne $installer.FullName } | Select-Object -First 1
+          if (-not $portable) { throw 'Portable executable is missing.' }
+          "TOKENWAY_INSTALLER=$($installer.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "TOKENWAY_PORTABLE=$($portable.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          Get-FileHash -Algorithm SHA256 $installer.FullName
+          Get-FileHash -Algorithm SHA256 $portable.FullName
+
+      - name: Silently install and smoke-test the packaged desktop app
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $stdout = Join-Path $env:RUNNER_TEMP 'tokenway-desktop.stdout.log'
+          $stderr = Join-Path $env:RUNNER_TEMP 'tokenway-desktop.stderr.log'
+          $installerProcess = Start-Process -FilePath $env:TOKENWAY_INSTALLER -ArgumentList '/S' -Wait -PassThru
+          if ($installerProcess.ExitCode -ne 0) { throw "NSIS installer exited with code $($installerProcess.ExitCode)" }
+
+          $installedExe = Join-Path $env:LOCALAPPDATA 'Programs/TokenWay V11/TokenWay V11.exe'
+          if (-not (Test-Path $installedExe)) {
+            $installedExe = Get-ChildItem -Path $env:ProgramFiles -Filter 'TokenWay V11.exe' -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
+          }
+          if (-not $installedExe -or -not (Test-Path $installedExe)) { throw 'Installed TokenWay V11.exe was not found.' }
+          $installDir = Split-Path -Parent $installedExe
+          $resource = Join-Path $installDir 'resources/bin/tokenway-v11.exe'
+          if (-not (Test-Path $resource)) { throw "Installed Go backend resource is missing: $resource" }
+
+          $appProcess = Start-Process -FilePath $installedExe -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+          try {
+            $healthy = $false
+            for ($i = 0; $i -lt 90; $i++) {
+              if ($appProcess.HasExited) { break }
+              $client = [System.Net.Sockets.TcpClient]::new()
+              try {
+                $connect = $client.BeginConnect('127.0.0.1', 3000, $null, $null)
+                if ($connect.AsyncWaitHandle.WaitOne(1000, $false) -and $client.Connected) {
+                  $client.EndConnect($connect)
+                  $healthy = $true
+                }
+              } catch {
+                $healthy = $false
+              } finally {
+                $client.Dispose()
+              }
+              if ($healthy) { break }
+              Start-Sleep -Seconds 1
+            }
+            if (-not $healthy) {
+              if (Test-Path $stdout) { Get-Content $stdout -Tail 80 }
+              if (Test-Path $stderr) { Get-Content $stderr -Tail 80 }
+              throw 'Installed TokenWay V11 desktop did not start its embedded backend on 127.0.0.1:3000 within 90 seconds.'
+            }
+
+            $database = Join-Path $env:APPDATA 'TokenWay V11/data/tokenway-v11.db'
+            $dbReady = $false
+            for ($i = 0; $i -lt 15; $i++) {
+              if (Test-Path $database) {
+                $db = Get-Item $database
+                if ($db.Length -gt 0) { $dbReady = $true; break }
+              }
+              Start-Sleep -Seconds 1
+            }
+            if (-not $dbReady) {
+              if (Test-Path $stdout) { Get-Content $stdout -Tail 80 }
+              if (Test-Path $stderr) { Get-Content $stderr -Tail 80 }
+              throw "Expected non-empty isolated TokenWay database was not created: $database"
+            }
+
+            @(
+              'PASS: NSIS installer completed silently with exit code 0',
+              "PASS: installed application: $installedExe",
+              "PASS: bundled backend resource: $resource",
+              'PASS: desktop process launched backend on 127.0.0.1:3000',
+              "PASS: isolated database created: $database ($($db.Length) bytes)",
+              "Source acceptance run: $env:SOURCE_RUN_ID",
+              "Source archive SHA-256: $env:TOKENWAY_SOURCE_ARCHIVE_SHA256"
+            ) | Out-File -FilePath (Join-Path $env:RUNNER_TEMP 'WINDOWS-DESKTOP-SMOKE-TEST.txt') -Encoding utf8
+          } finally {
+            if ($appProcess -and -not $appProcess.HasExited) { taskkill /PID $appProcess.Id /T /F | Out-Null }
+          }
+
+      - name: Prepare release checksums and acceptance report
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $out = Join-Path $env:RUNNER_TEMP 'tokenway-v11-windows-desktop-release'
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          Copy-Item $env:TOKENWAY_INSTALLER $out
+          Copy-Item $env:TOKENWAY_PORTABLE $out
+          Copy-Item (Join-Path $env:RUNNER_TEMP 'WINDOWS-DESKTOP-SMOKE-TEST.txt') $out
+          $hashes = Get-ChildItem $out -Filter '*.exe' -File | Get-FileHash -Algorithm SHA256
+          $hashes | ForEach-Object { "$($_.Hash.ToLowerInvariant())  $([IO.Path]::GetFileName($_.Path))" } | Set-Content (Join-Path $out 'SHA256SUMS.txt')
+          @(
+            '# TokenWay V11 Windows desktop release',
+            '',
+            "Source acceptance run: $env:SOURCE_RUN_ID",
+            "Source archive SHA-256: $env:TOKENWAY_SOURCE_ARCHIVE_SHA256",
+            "Verified source file checksums: $env:TOKENWAY_SOURCE_CHECKSUM_COUNT",
+            "Installer: $(Split-Path -Leaf $env:TOKENWAY_INSTALLER)",
+            "Portable: $(Split-Path -Leaf $env:TOKENWAY_PORTABLE)",
+            '',
+            'The NSIS installer was installed silently; the installed app launched the bundled Go backend and created its isolated per-user SQLite database.',
+            'Executables are not code-signed. A production distributor should sign them using its own Windows code-signing certificate.'
+          ) | Set-Content (Join-Path $out 'WINDOWS-ACCEPTANCE.md')
+          "Windows release files, checksums and installation smoke evidence are ready." | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          "TOKENWAY_WINDOWS_RELEASE_DIR=$out" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Upload Windows installer, portable executable and acceptance evidence
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: tokenway-v11-windows-desktop
+          path: ${{ runner.temp }}/tokenway-v11-windows-desktop-release/
+          if-no-files-found: error
+          retention-days: 30
