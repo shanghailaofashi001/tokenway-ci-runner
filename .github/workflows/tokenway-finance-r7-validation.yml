@@ -328,6 +328,83 @@ jobs:
           grep -Fq 'var SystemName = "TokenWay AI"' common/constants.go
           printf '%s\n' "R7 finance patch applied to the full branded source tree."
 
+
+      - name: Resolve log channel names before opening streaming database cursors
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("model/log.go")
+          source = path.read_text(encoding="utf-8")
+          old = '''func StreamAllLogs(ctx context.Context, filter LogFilter, role int, fn func(*Log) error) error {
+          \ttx, err := filter.apply(LOG_DB.WithContext(ctx))
+          \tif err != nil {
+          \t\treturn err
+          \t}
+          \tvisibility := logOtherVisibilityAdmin
+          \tif role >= common.RoleRootUser {
+          \t\tvisibility = logOtherVisibilityRoot
+          \t}
+          \tchannelNames := make(map[int]string)
+          \treturn streamLogs(tx, "logs.created_at desc, logs.id desc", func(log *Log) error {
+          \t\tif log.ChannelId != 0 {
+          \t\t\tname, ok := channelNames[log.ChannelId]
+          \t\t\tif !ok {
+          \t\t\t\tif channel, err := CacheGetChannel(log.ChannelId); err == nil {
+          \t\t\t\t\tname = channel.Name
+          \t\t\t\t}
+          \t\t\t\tchannelNames[log.ChannelId] = name
+          \t\t\t}
+          \t\t\tlog.ChannelName = name
+          \t\t}
+          \t\tlog.Other = formatLogOtherJSON(log.Other, visibility)
+          \t\treturn fn(log)
+          \t})
+          }'''
+          new = '''func StreamAllLogs(ctx context.Context, filter LogFilter, role int, fn func(*Log) error) error {
+          \ttx, err := filter.apply(LOG_DB.WithContext(ctx))
+          \tif err != nil {
+          \t\treturn err
+          \t}
+          \tvisibility := logOtherVisibilityAdmin
+          \tif role >= common.RoleRootUser {
+          \t\tvisibility = logOtherVisibilityRoot
+          \t}
+
+          \t// Resolve channel names before streamLogs opens its row cursor. SQLite may
+          \t// share the same database handle for main and log data; querying channels
+          \t// from inside the row callback can then wait forever for the cursor's only
+          \t// available connection.
+          \tchannelNames := make(map[int]string)
+          \tvar channelIDs []int
+          \tif err := tx.Model(&Log{}).Distinct("channel_id").Where("channel_id <> ?", 0).Pluck("channel_id", &channelIDs).Error; err != nil {
+          \t\treturn err
+          \t}
+          \tfor _, channelID := range channelIDs {
+          \t\tif channel, err := CacheGetChannel(channelID); err == nil {
+          \t\t\tchannelNames[channelID] = channel.Name
+          \t\t}
+          \t}
+
+          \treturn streamLogs(tx, "logs.created_at desc, logs.id desc", func(log *Log) error {
+          \t\tif log.ChannelId != 0 {
+          \t\t\tlog.ChannelName = channelNames[log.ChannelId]
+          \t\t}
+          \t\tlog.Other = formatLogOtherJSON(log.Other, visibility)
+          \t\treturn fn(log)
+          \t})
+          }'''
+          if source.count(old) != 1:
+              raise SystemExit(f"expected exactly one StreamAllLogs implementation, found {source.count(old)}")
+          path.write_text(source.replace(old, new, 1), encoding="utf-8")
+          print("PASS: channel lookups now finish before the streaming row cursor is opened")
+          PY
+          git diff --check
+          grep -Fq 'Resolve channel names before streamLogs opens its row cursor.' model/log.go
+
       - name: Install TokenWay finance and database integration test sources
         if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_KUAIPAO_ONLY != 'true' && (env.TOKENWAY_GO_MODULE_SCOPE == 'all' || env.TOKENWAY_GO_MODULE_SCOPE == 'root') }}
         shell: bash
