@@ -185,7 +185,7 @@ run_root_package() (
     test_args+=(-run '^TestProcessRequestBillingRecoverySettlesRefundsAndReviewsUnknownOutcomes$')
   fi
 
-  if [[ -n "$root_skip_pattern" ]]; then
+  if [[ -n "$root_skip_pattern" && ( "$pkg" == "github.com/QuantumNous/new-api/service" || "$pkg" == "github.com/QuantumNous/new-api/controller" || "$pkg" == "github.com/QuantumNous/new-api/relay" || "$pkg" == "github.com/QuantumNous/new-api/pkg/wsmanager" ) ]]; then
     test_args+=(-skip "$root_skip_pattern")
   fi
 
