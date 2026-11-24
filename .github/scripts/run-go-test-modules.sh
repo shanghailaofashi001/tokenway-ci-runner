@@ -8,6 +8,24 @@ mkdir -p "$log_dir"
 
 scope="${TOKENWAY_GO_MODULE_SCOPE:-all}"
 root_input="${TOKENWAY_ROOT_TEST_PACKAGES:-}"
+if [[ -z "$root_input" && "${GITHUB_EVENT_NAME:-}" == "push" && -n "${GITHUB_EVENT_PATH:-}" && -f "$GITHUB_EVENT_PATH" ]]; then
+  root_input="$(python3 - "$GITHUB_EVENT_PATH" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as event_file:
+    event = json.load(event_file)
+message = event.get("head_commit", {}).get("message", "")
+marker = "[root-packages="
+start = message.find(marker)
+if start >= 0:
+    end = message.find("]", start)
+    if end > start:
+        print(message[start + len(marker):end].strip())
+PY
+)"
+fi
+
 root_test_pattern="${TOKENWAY_ROOT_TEST_PATTERN:-}"
 if [[ -z "$root_test_pattern" && "${GITHUB_EVENT_NAME:-}" == "push" && -n "${GITHUB_EVENT_PATH:-}" && -f "$GITHUB_EVENT_PATH" ]]; then
   root_test_pattern="$(python3 - "$GITHUB_EVENT_PATH" <<'PY'
@@ -26,24 +44,17 @@ if start >= 0:
 PY
 )"
 fi
-if [[ "$root_test_pattern" == *if [[ -z "$root_input" && "${GITHUB_EVENT_NAME:-}" == "push" && -n "${GITHUB_EVENT_PATH:-}" && -f "$GITHUB_EVENT_PATH" ]]; then
-  root_input="$(python3 - "$GITHUB_EVENT_PATH" <<'PY'
-import json
-import sys
-
-with open(sys.argv[1], encoding="utf-8") as event_file:
-    event = json.load(event_file)
-message = event.get("head_commit", {}).get("message", "")
-marker = "[root-packages="
-start = message.find(marker)
-if start >= 0:
-    end = message.find("]", start)
-    if end > start:
-        print(message[start + len(marker):end].strip())
-PY
-)"
+if [[ "$root_test_pattern" == *$'\n'* || "$root_test_pattern" == *$'\r'* ]]; then
+  echo "TOKENWAY_ROOT_TEST_PATTERN must be a single-line Go test regular expression." >&2
+  exit 2
 fi
+if [[ -n "$root_test_pattern" && -z "$root_input" ]]; then
+  echo "root_test_pattern requires one or more exact root_test_packages." >&2
+  exit 2
+fi
+
 parallelism="${TOKENWAY_ROOT_TEST_PARALLELISM:-2}"
+
 if ! [[ "$parallelism" =~ ^[1-4]$ ]]; then
   echo "TOKENWAY_ROOT_TEST_PARALLELISM must be between 1 and 4, got: $parallelism" >&2
   exit 2
