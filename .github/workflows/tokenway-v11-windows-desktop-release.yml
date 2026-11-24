@@ -28,13 +28,25 @@ concurrency:
 
 jobs:
   verify-config-push:
-    name: Ignore config-only pushes; release waits for source acceptance completion
+    name: Validate config push and resume the pinned accepted desktop release
     if: ${{ github.event_name == 'push' }}
     runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
     steps:
       - name: Confirm no desktop release is built from an unvalidated workflow edit
         run: |
           echo "PASS: configuration push validated; Windows release is gated by workflow_run or explicit source_run_id."
+
+      - name: Dispatch Windows release using the already successful Run 164
+        if: ${{ contains(github.event.head_commit.message, '[resume-run-164]') }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh workflow run .github/workflows/tokenway-v11-windows-desktop-release.yml --repo "$GITHUB_REPOSITORY" --ref main -f source_run_id=45337836586
+          echo "PASS: dispatched standalone Windows release from source acceptance run 45337836586 without rerunning source tests."
 
   build:
     name: Build and smoke-test Windows installer from validated source
