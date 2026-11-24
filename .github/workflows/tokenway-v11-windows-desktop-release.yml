@@ -4,6 +4,7 @@ on:
   workflow_run:
     workflows:
       - "TokenWay Finance R7 — full V11 validation on public runner"
+      - "TokenWay Finance Workflow Syntax Guard"
     types:
       - completed
   workflow_dispatch:
@@ -12,11 +13,6 @@ on:
         description: "Successful TokenWay V11 source acceptance run ID"
         required: true
         type: string
-  push:
-    branches:
-      - main
-    paths:
-      - ".github/workflows/tokenway-v11-windows-desktop-release.yml"
 
 permissions:
   contents: read
@@ -27,34 +23,13 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  verify-config-push:
-    name: Validate config push and resume the pinned accepted desktop release
-    if: ${{ github.event_name == 'push' }}
-    runs-on: ubuntu-latest
-    permissions:
-      actions: write
-      contents: read
-    steps:
-      - name: Confirm no desktop release is built from an unvalidated workflow edit
-        run: |
-          echo "PASS: configuration push validated; Windows release is gated by workflow_run or explicit source_run_id."
-
-      - name: Dispatch Windows release using the already successful Run 164
-        if: ${{ contains(github.event.head_commit.message, '[resume-run-164]') }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          gh workflow run .github/workflows/tokenway-v11-windows-desktop-release.yml --repo "$GITHUB_REPOSITORY" --ref main -f source_run_id=45337836586
-          echo "PASS: dispatched standalone Windows release from source acceptance run 45337836586 without rerunning source tests."
-
   build:
     name: Build and smoke-test Windows installer from validated source
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' || github.event.workflow_run.conclusion == 'failure' }}
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.name == 'TokenWay Finance R7 — full V11 validation on public runner' && (github.event.workflow_run.conclusion == 'success' || github.event.workflow_run.conclusion == 'failure')) || (github.event.workflow_run.name == 'TokenWay Finance Workflow Syntax Guard' && github.event.workflow_run.conclusion == 'success' && contains(github.event.workflow_run.head_commit.message, '[resume-run-164]')) }}
     runs-on: windows-latest
     timeout-minutes: 90
     env:
-      SOURCE_RUN_ID: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.id || inputs.source_run_id }}
+      SOURCE_RUN_ID: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.name == 'TokenWay Finance Workflow Syntax Guard' && '45337836586' || github.event_name == 'workflow_run' && github.event.workflow_run.id || inputs.source_run_id }}
     steps:
       - name: Set up Node.js 22
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
