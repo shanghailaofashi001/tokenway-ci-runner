@@ -23,7 +23,7 @@ def digest_tree():
     excluded_env = {".env", ".env.local", ".env.production", ".env.development"}
     for path in sorted(root.rglob("*")):
         relative_path = path.relative_to(root)
-        if any(part in excluded_dirs for part in relative_path.parts):
+        if any(part in excluded_dirs for part in relative_path.parts[:-1]) or (path.is_dir() and path.name in excluded_dirs):
             continue
         name = path.name
         if name in excluded_env or (name.startswith(".env.") and name not in env_examples):
