@@ -55,15 +55,20 @@ for line in pathlib.Path(logfile).read_text(encoding="utf-8", errors="replace").
     if event.get("Action") == "fail" and event.get("Test"):
         tests.add(event["Test"])
 
+selected_integration_package = package
+if tags == "tokenway_test" and package == "model":
+    selected_integration_package = "wallet_db"
+elif tags == "tokenway_test" and package == "controller":
+    selected_integration_package = "epay_db"
+
 selector = {
-    "go_module_scope": "root",
-    "root_test_packages": "github.com/QuantumNous/new-api/" + package,
-    "integration_package": package,
-    "root_test_pattern": pattern,
+    "integration_package": selected_integration_package,
+    "integration_test_pattern": pattern,
     "targeted_only": True,
 }
 if tests:
-    selector["root_test_pattern"] = "^(" + "|".join(re.escape(name) for name in sorted(tests)) + ")$"
+    exact_pattern = "^(" + "|".join(re.escape(name) for name in sorted(tests)) + ")$"
+    selector["integration_test_pattern"] = exact_pattern
 if dialect:
     selector["task_db_dialect"] = dialect
 if tags:
