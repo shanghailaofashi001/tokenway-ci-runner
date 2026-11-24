@@ -30,6 +30,7 @@ PY
 fi
 
 root_test_pattern="${TOKENWAY_ROOT_TEST_PATTERN:-}"
+separate_integration_suites="${TOKENWAY_SEPARATE_INTEGRATION_SUITES:-false}"
 if [[ -z "$root_test_pattern" && "${GITHUB_EVENT_NAME:-}" == "push" && -n "${GITHUB_EVENT_PATH:-}" && -f "$GITHUB_EVENT_PATH" ]]; then
   root_test_pattern="$(python3 - "$GITHUB_EVENT_PATH" <<'PY'
 import json
@@ -123,10 +124,13 @@ if [[ "$scope" == "all" || "$scope" == "root" ]]; then
     fi
     for required in \
       github.com/QuantumNous/new-api/e2e \
+      github.com/QuantumNous/new-api/controller \
       github.com/QuantumNous/new-api/middleware \
       github.com/QuantumNous/new-api/oauth \
       github.com/QuantumNous/new-api/pkg/wsmanager \
+      github.com/QuantumNous/new-api/relay \
       github.com/QuantumNous/new-api/relay/channel/vertex \
+      github.com/QuantumNous/new-api/service \
       github.com/QuantumNous/new-api/setting/system_setting; do
       if ! printf '%s\n' "${packages[@]}" | grep -Fxq "$required"; then
         echo "FAIL: required Root test package was not discovered: $required" >&2
@@ -179,6 +183,27 @@ run_root_package() (
     test_args+=(-run "$root_test_pattern")
   elif [[ "${TOKENWAY_RECOVERY_ONLY:-false}" == "true" && -z "$root_input" ]]; then
     test_args+=(-run '^TestProcessRequestBillingRecoverySettlesRefundsAndReviewsUnknownOutcomes$')
+  fi
+
+  package_skip_pattern=""
+  if [[ "$separate_integration_suites" == "true" ]]; then
+    case "$pkg" in
+      github.com/QuantumNous/new-api/service)
+        package_skip_pattern="^(TestProcessRequestBillingRecoverySettlesRefundsAndReviewsUnknownOutcomes|TestSettle.*|TestRefund.*|TestUpdateBatchTasks.*|TestUpdateSunoTasksStalePollsRefundExactlyOnce|TestSweepTimedOutTasks.*|TestTaskReportsOnceAtTheFinalState)"
+        ;;
+      github.com/QuantumNous/new-api/controller)
+        package_skip_pattern="^(TestImmediateTaskSettlementDatabase|TestExecuteTaskSubmission.*|TestResponsesWS.*|TestResponsesWebSocket.*)"
+        ;;
+      github.com/QuantumNous/new-api/relay)
+        package_skip_pattern="^TestResponsesWS.*"
+        ;;
+      github.com/QuantumNous/new-api/pkg/wsmanager)
+        package_skip_pattern="^(TestCloseChannel.*|TestUnregisterPreventsClose|TestRegisteredCloseIsIdempotent|TestPublishCloseChannelsNoopsWhenRedisDisabled|TestRedisChannelCloseEventsStayWithinDatabase)"
+        ;;
+    esac
+  fi
+  if [[ -n "$package_skip_pattern" ]]; then
+    test_args+=(-skip "$package_skip_pattern")
   fi
 
   if timeout --signal=TERM --kill-after=30s 17m go test "${test_args[@]}" "$pkg" > "$logfile" 2>&1; then
@@ -289,6 +314,43 @@ done
   done
 } | tee "$log_dir/summary.txt"
 grep '^FAIL:' "$log_dir/summary.txt" > "$log_dir/failures.txt" || true
+
+# Emit machine-readable failure routing so a failed module/package can be
+# rerun without repeating unrelated successful suites.
+python3 - "$log_dir" <<'PY'
+import json
+import pathlib
+import re
+import sys
+
+log_dir = pathlib.Path(sys.argv[1])
+results = []
+for path in sorted(log_dir.glob("*.status")):
+    line = path.read_text(encoding="utf-8").strip()
+    if not line:
+        continue
+    failed = line.startswith("FAIL:")
+    match = re.match(r"(?:PASS|FAIL): (.+?)(?: \(exit \d+\))?$", line)
+    subject = match.group(1) if match else path.stem
+    if subject.endswith(" full test suite"):
+        module = subject.removesuffix(" full test suite")
+        suite = "go-module"
+        selector = {"go_module_scope": module}
+    else:
+        module = "root"
+        suite = "root-package"
+        selector = {"go_module_scope": "root", "root_test_packages": subject}
+    results.append({"status": "failed" if failed else "passed", "suite": suite,
+                    "module": module, "package": subject if suite == "root-package" else None,
+                    "rerun_selector": selector, "status_file": path.name})
+failures = [item for item in results if item["status"] == "failed"]
+report = {"schema_version": 1, "overall": "failed" if failures else "passed",
+          "failed_count": len(failures), "results": results,
+          "targeted_rerun": [item["rerun_selector"] for item in failures]}
+(log_dir / "failure-classification.json").write_text(
+    json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+print(f"Wrote failure-classification.json: {len(failures)} failed suite(s) across {len(results)} result(s).")
+PY
 
 if (( failed != 0 )); then
   echo "Go validation still has failures. Exact affected package/module names and logs are in $log_dir."
