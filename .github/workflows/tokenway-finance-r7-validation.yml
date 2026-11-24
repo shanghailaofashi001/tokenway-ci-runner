@@ -1,4 +1,4 @@
-name: TokenWay Finance R7 — full V11 validation on public runner
+name: TokenWay Finance R7 — targeted diagnostics (legacy serial runner)
 
 on:
   workflow_dispatch:
@@ -346,31 +346,6 @@ jobs:
           print('PASS: 16 original TokenWay homepage WebP assets restored')
           PY
 
-
-      - name: Apply and validate TokenWay V11 Electron desktop branding
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 -m venv "$RUNNER_TEMP/tokenway-desktop-venv"
-          "$RUNNER_TEMP/tokenway-desktop-venv/bin/python" -m pip install --disable-pip-version-check Pillow
-          "$RUNNER_TEMP/tokenway-desktop-venv/bin/python" -m py_compile .tokenway-validation/apply-tokenway-electron-branding.py
-          "$RUNNER_TEMP/tokenway-desktop-venv/bin/python" .tokenway-validation/apply-tokenway-electron-branding.py source
-          node --check source/electron/main.js
-          node --check source/electron/preload.js
-          test -s source/electron/tokenway.ico
-          test -s source/electron/tray-icon-windows.png
-          git -C source diff --check
-          echo "PASS: TokenWay V11 Electron app identity, backend resource mapping and original T-mark icons validated."
-
-      - name: Align the packaged self-service Electron workflow with TokenWay V11
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 -m py_compile .tokenway-validation/apply-tokenway-electron-workflow.py
-          python3 .tokenway-validation/apply-tokenway-electron-workflow.py source
-          grep -Fq 'GOFLAGS=-mod=vendor' source/.github/workflows/electron-build.yml
-          grep -Fq 'tokenway-v11.exe' source/.github/workflows/electron-build.yml
-          echo "PASS: repository-supplied Windows build workflow now builds the same V11 executable and fixed version."
 
       - name: Decode and verify exact R7 finance patch
         shell: bash
@@ -1143,14 +1118,6 @@ jobs:
               "tokenkit/vendor/modules.txt",
               "web/package.json",
               "web/src/assets/tokenway-home/hero-scene.webp",
-              "electron/main.js",
-              "electron/preload.js",
-              "electron/package.json",
-              "electron/package-lock.json",
-              "electron/icon.png",
-              "electron/tokenway.ico",
-              "electron/tray-icon-windows.png",
-              ".github/workflows/electron-build.yml",
               "controller/nowpayments.go",
               "model/wallet_ledger.go",
               "model/request_billing_journal.go",
@@ -1719,17 +1686,6 @@ jobs:
                   "snapshot_commit": brand_sha,
                   "homepage_hero_asset": "web/src/assets/tokenway-home/hero-scene.webp",
                   "original_brand_media_preserved": True,
-              },
-              "desktop": {
-                  "product_name": "TokenWay V11",
-                  "version": "11.0.0",
-                  "application_id": "com.tokenway.ai.desktop",
-                  "electron_entry": "electron/main.js",
-                  "windows_backend_binary": "tokenway-v11.exe",
-                  "windows_backend_resource": "bin/tokenway-v11.exe",
-                  "windows_targets": ["nsis", "portable"],
-                  "original_tokenway_t_mark_used_for_icons": True,
-                  "windows_installer_is_code_signed": False,
               },
               "frontend_dependencies": dependency_hashes,
               "build_environment": {
