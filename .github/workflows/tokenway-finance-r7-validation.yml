@@ -311,6 +311,30 @@ jobs:
           install -D private/.tokenway-patches/service/request_billing_recovery_test.go source/service/request_billing_recovery_test.go
           install -D private/.tokenway-patches/service/funding_source.go source/service/funding_source.go
           install -D private/.tokenway-patches/service/request_billing_recovery.go source/service/request_billing_recovery.go
+          # The pinned R7 billing_session.go uses these SubscriptionFunding sequence fields.
+          # The legacy private helper is intentionally retained for wallet retry logic;
+          # restore the newer R7 subscription sequencing fields before compiling.
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("source/service/funding_source.go")
+          source = path.read_text(encoding="utf-8")
+          old = """\tPlanId            int
+          \tPlanTitle         string
+          }"""
+          new = """\tPlanId            int
+          \tPlanTitle         string
+          \treserveSeq        int
+          \tlastReserveSeq    int
+          \tlastReserveAmount int
+          }"""
+          if source.count(old) != 1:
+              raise SystemExit(f"expected exactly one SubscriptionFunding field block, found {source.count(old)}")
+          path.write_text(source.replace(old, new, 1), encoding="utf-8")
+          PY
+          grep -Fq 'reserveSeq        int' source/service/funding_source.go
+          grep -Fq 'lastReserveSeq    int' source/service/funding_source.go
+          grep -Fq 'lastReserveAmount int' source/service/funding_source.go
+          grep -Fq 'nextReserveSeq := w.reserveSeq + 1' source/service/funding_source.go
           test -s source/internal/testsupport/database.go
           test -s source/model/test_database_helpers_test.go
           test -s source/model/wallet_ledger_dialect_test.go
@@ -322,10 +346,9 @@ jobs:
           test -s source/service/request_billing_recovery_test.go
           test -s source/service/funding_source.go
           test -s source/service/request_billing_recovery.go
-          cmp -s private/.tokenway-patches/service/funding_source.go source/service/funding_source.go
-          cmp -s private/.tokenway-patches/service/request_billing_recovery.go source/service/request_billing_recovery.go
           grep -Fq 'nextReserveSeq := w.reserveSeq + 1' source/service/funding_source.go
           grep -Fq 'w.reserveSeq = nextReserveSeq' source/service/funding_source.go
+          grep -Fq 'reserveSeq        int' source/service/funding_source.go
           grep -Fq 'MarkRequestBillingReview(journal.RequestID' source/service/request_billing_recovery.go
           python3 - <<'PY'
           from pathlib import Path
