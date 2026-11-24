@@ -148,28 +148,3 @@ if (( failed != 0 )); then
   echo "One or more integration suites failed; see $results and per-suite logs." >&2
   exit 1
 fi
- "$dialect" || failed=1
-done
-run_suite relay '^TestResponsesWS.*$' || failed=1
-run_suite pkg/wsmanager '^(TestCloseChannel.*|TestUnregisterPreventsClose|TestRegisteredCloseIsIdempotent|TestPublishCloseChannelsNoopsWhenRedisDisabled|TestRedisChannelCloseEventsStayWithinDatabase)$' || failed=1
-
-python3 - "$results" "$log_dir/failure-classification.json" <<'PY'
-import json, pathlib, sys
-source, destination = map(pathlib.Path, sys.argv[1:])
-records = [json.loads(line) for line in source.read_text(encoding="utf-8").splitlines() if line.strip()]
-failures = [item for item in records if item["status"] == "failed"]
-report = {
-    "schema_version": 1,
-    "overall": "failed" if failures else "passed",
-    "failed_count": len(failures),
-    "results": records,
-    "targeted_rerun": [item["rerun_selector"] for item in failures],
-}
-destination.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-print(f"Integration failure classification: {len(failures)} failed suite(s) / {len(records)} total.")
-PY
-
-if (( failed != 0 )); then
-  echo "One or more integration suites failed; see $results and per-suite logs." >&2
-  exit 1
-fi
