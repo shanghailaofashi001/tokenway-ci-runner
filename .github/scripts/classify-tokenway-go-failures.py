@@ -18,7 +18,7 @@ def failed_test_names(log_path: pathlib.Path) -> list[str]:
         try:
             event = json.loads(line)
         except json.JSONDecodeError:
-            match = re.match(r"--- FAIL: (Test\\w+)", line)
+            match = re.match(r"--- FAIL: (Test\w+)", line)
             if match:
                 names.add(match.group(1))
             continue
@@ -35,7 +35,7 @@ def failed_module_packages(log_path: pathlib.Path) -> dict[str, set[str]]:
         try:
             event = json.loads(line)
         except json.JSONDecodeError:
-            match = re.match(r"^FAIL\\s+(\\S+)", line)
+            match = re.match(r"^FAIL\s+(\S+)", line)
             if match:
                 packages.setdefault(match.group(1), set())
             continue
@@ -55,8 +55,8 @@ for status_path in sorted(log_dir.glob("*.status")):
     if not line:
         continue
     failed = line.startswith("FAIL:")
-    subject = re.sub(r"^(?:PASS|FAIL):\\s*", "", line)
-    subject = re.sub(r"\\s+\\(exit \\d+\\)$", "", subject)
+    subject = re.sub(r"^(?:PASS|FAIL):\s*", "", line)
+    subject = re.sub(r"\s+\(exit \d+\)$", "", subject)
 
     if subject.endswith(" full test suite"):
         module = subject.removesuffix(" full test suite")
@@ -134,5 +134,5 @@ report = {
     "targeted_rerun": [item["rerun_selector"] for item in failures],
 }
 output = log_dir / "failure-classification.json"
-output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\\n", encoding="utf-8")
+output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 print(f"Go failure classification: {len(failures)} failed suite(s) / {len(results)} total (status: {report['overall']}).")
