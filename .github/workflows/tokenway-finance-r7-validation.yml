@@ -680,7 +680,7 @@ jobs:
           echo "Changed/new Go files are gofmt-clean."
 
       - name: Restore and vendor Go modules
-        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_KUAIPAO_FRONTEND_ONLY != 'true' }}
+        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' }}
         id: go_vendor
         shell: bash
         run: |
