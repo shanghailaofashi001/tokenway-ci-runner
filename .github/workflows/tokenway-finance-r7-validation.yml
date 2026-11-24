@@ -310,10 +310,8 @@ jobs:
           install -D private/.tokenway-patches/service/funding_source_test.go source/service/funding_source_test.go
           install -D private/.tokenway-patches/service/request_billing_recovery_test.go source/service/request_billing_recovery_test.go
           install -D private/.tokenway-patches/service/funding_source.go source/service/funding_source.go
-          install -D private/.tokenway-patches/service/request_billing_recovery.go source/service/request_billing_recovery.go
           # The pinned R7 billing_session.go uses these SubscriptionFunding sequence fields.
-          # The legacy private helper is intentionally retained for wallet retry logic;
-          # restore the newer R7 subscription sequencing fields before compiling.
+          # Preserve the retry-safe wallet funding helper and merge the subscription sequence state required by the pinned R7 BillingSession.
           python3 - <<'PY'
           from pathlib import Path
           path = Path("source/service/funding_source.go")
@@ -347,7 +345,11 @@ jobs:
           grep -Fq 'nextReserveSeq := w.reserveSeq + 1' source/service/funding_source.go
           grep -Fq 'w.reserveSeq = nextReserveSeq' source/service/funding_source.go
           grep -Fq 'reserveSeq        int' source/service/funding_source.go
-          grep -Fq 'MarkRequestBillingReview(journal.RequestID' source/service/request_billing_recovery.go
+          # Keep the recovery implementation from the pinned R7 finance patch.
+          grep -Fq 'const requestBillingUnknownOutcomeGrace' source/service/request_billing_recovery.go
+          grep -Fq 'SettleRequestBillingWithTokenQuota' source/service/request_billing_recovery.go
+          grep -Fq 'RefundRequestBillingWithTokenQuota' source/service/request_billing_recovery.go
+          grep -Fq 'MarkRequestBillingReviewIfStale' source/service/request_billing_recovery.go
           python3 - <<'PY'
           from pathlib import Path
           path = Path("source/common/str.go")
