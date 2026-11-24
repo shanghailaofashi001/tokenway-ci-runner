@@ -15,9 +15,22 @@ manifest_path = pathlib.Path(sys.argv[3]).resolve()
 
 def digest_tree():
     digest = hashlib.sha256()
+    excluded_dirs = {
+        ".git", "node_modules", "dist", "coverage", ".cache", ".vite",
+        ".tanstack", ".turbo", ".next", ".output", "tmp", "logs",
+    }
+    env_examples = {".env.example", ".env.sample", ".env.template"}
+    excluded_env = {".env", ".env.local", ".env.production", ".env.development"}
     for path in sorted(root.rglob("*")):
         relative_path = path.relative_to(root)
-        if ".git" in relative_path.parts or "node_modules" in relative_path.parts:
+        if any(part in excluded_dirs for part in relative_path.parts):
+            continue
+        name = path.name
+        if name in excluded_env or (name.startswith(".env.") and name not in env_examples):
+            continue
+        if name == ".DS_Store" or name.endswith(".log"):
+            continue
+        if path.is_file() and path.suffix.lower() in {".sqlite", ".sqlite3", ".db"}:
             continue
         relative = relative_path.as_posix()
         if path.is_symlink():
