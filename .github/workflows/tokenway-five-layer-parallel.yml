@@ -766,7 +766,7 @@ jobs:
           for name in paths:
               path = pathlib.PurePosixPath(name)
               if name.endswith(".go") and not any(part in excluded for part in path.parts):
-                  print(name)
+                  print("source/" + name)
           PY
           )
           if (("${#go_files[@]}")); then
