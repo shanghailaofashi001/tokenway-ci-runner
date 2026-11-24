@@ -1146,6 +1146,12 @@ jobs:
               "model/test_database_helpers_test.go",
               "controller/access_token_audit_test.go",
               "controller/model_management_test.go",
+              "service/task_billing_test.go",
+              "service/task_polling_test.go",
+              "controller/relay_task_plugin_test.go",
+              "controller/responses_websocket_test.go",
+              "relay/responses_websocket_test.go",
+              "pkg/wsmanager/wsmanager_test.go",
           ]
           for relative in required_files:
               path = destination / relative
@@ -1210,6 +1216,7 @@ jobs:
                   "Root test packages run in isolated processes with package-specific disposable SQL databases; Relaykit and Tokenkit run as independent parallel modules",
                   "A shared loopback-only SQL test harness creates per-test databases and applies production model migrations for schema-sensitive tests",
                   "Wallet ledger and signed Epay callback integration tests on SQLite, MySQL and PostgreSQL",
+                  "Request refunds and settlements, asynchronous task terminal-state settlement/refunds, Responses WebSocket connection lifecycle/accounting, and Redis channel-close isolation integration regressions",
                   "Frontend production build, TypeScript typecheck, unit tests, Oxlint, format/copyright and TokenWay media contracts",
               ],
               "contents": {
