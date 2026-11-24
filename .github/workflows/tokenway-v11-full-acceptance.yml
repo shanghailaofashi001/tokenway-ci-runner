@@ -53,10 +53,6 @@ jobs:
           --health-timeout=5s
           --health-retries=18
     env:
-      TEST_MYSQL_DSN: "root:tokenway@tcp(127.0.0.1:3306)/tokenway_test?charset=utf8mb4&parseTime=True&loc=Local"
-      TEST_POSTGRES_DSN: "postgres://postgres:tokenway@127.0.0.1:5432/tokenway_test?sslmode=disable&TimeZone=UTC"
-      TEST_FIXED_MYSQL_DSN: "root:tokenway@tcp(127.0.0.1:3306)/tokenway_test?charset=utf8mb4&parseTime=True&loc=Local"
-      TEST_FIXED_POSTGRES_DSN: "postgres://postgres:tokenway@127.0.0.1:5432/tokenway_test?sslmode=disable&TimeZone=UTC"
       GOMAXPROCS: "2"
     steps:
       - name: Checkout public CI orchestrator
@@ -167,6 +163,9 @@ jobs:
 
       - name: Layer 3A - Wallet ledger and migration matrix (SQLite/MySQL/PostgreSQL)
         working-directory: validation-context/source
+        env:
+          TEST_MYSQL_DSN: "root:tokenway@tcp(127.0.0.1:3306)/tokenway_test?charset=utf8mb4&parseTime=True&loc=Local"
+          TEST_POSTGRES_DSN: "postgres://postgres:tokenway@127.0.0.1:5432/tokenway_test?sslmode=disable&TimeZone=UTC"
         shell: bash
         run: |
           set -euo pipefail
@@ -175,6 +174,9 @@ jobs:
 
       - name: Layer 3B - Fixed-price billing and refund matrix
         working-directory: validation-context/source
+        env:
+          TEST_FIXED_MYSQL_DSN: "root:tokenway@tcp(127.0.0.1:3306)/tokenway_test?charset=utf8mb4&parseTime=True&loc=Local"
+          TEST_FIXED_POSTGRES_DSN: "postgres://postgres:tokenway@127.0.0.1:5432/tokenway_test?sslmode=disable&TimeZone=UTC"
         shell: bash
         run: |
           set -euo pipefail
@@ -182,6 +184,9 @@ jobs:
 
       - name: Layer 3C - Pre-consume and settlement matrix
         working-directory: validation-context/source
+        env:
+          TEST_MYSQL_DSN: "root:tokenway@tcp(127.0.0.1:3306)/tokenway_test?charset=utf8mb4&parseTime=True&loc=Local"
+          TEST_POSTGRES_DSN: "postgres://postgres:tokenway@127.0.0.1:5432/tokenway_test?sslmode=disable&TimeZone=UTC"
         shell: bash
         run: |
           set -euo pipefail
@@ -189,12 +194,103 @@ jobs:
 
       - name: Layer 3D - Signed Epay callback and duplicate-credit matrix
         working-directory: validation-context/source
+        env:
+          TEST_MYSQL_DSN: "root:tokenway@tcp(127.0.0.1:3306)/tokenway_test?charset=utf8mb4&parseTime=True&loc=Local"
+          TEST_POSTGRES_DSN: "postgres://postgres:tokenway@127.0.0.1:5432/tokenway_test?sslmode=disable&TimeZone=UTC"
         shell: bash
         run: |
           set -euo pipefail
           go test -p 1 -count=1 -tags=tokenway_test ./controller \
             -run '^TestEpaySuccessfulTopUpCallbackIsSignedAndIdempotentAcrossDatabases$'
-          echo "Layer 3 passed: wallet, billing, settlement and signed callback matrices completed."
+          echo "Layer 3D passed: signed Epay callback matrix completed."
+
+      - name: Layer 3E - Redemption batch API on isolated, empty SQLite/MySQL/PostgreSQL databases
+        working-directory: validation-context/source
+        env:
+          TEST_MYSQL_DSN: "root:tokenway@tcp(127.0.0.1:3306)/tokenway_redemption_test?charset=utf8mb4&parseTime=True&loc=Local"
+          TEST_MYSQL_LOG_DSN: "root:tokenway@tcp(127.0.0.1:3306)/tokenway_redemption_log_test?charset=utf8mb4&parseTime=True&loc=Local"
+          TEST_POSTGRES_DSN: "postgres://postgres:tokenway@127.0.0.1:5432/tokenway_redemption_test?sslmode=disable&TimeZone=UTC"
+          TEST_POSTGRES_LOG_DSN: "postgres://postgres:tokenway@127.0.0.1:5432/tokenway_redemption_log_test?sslmode=disable&TimeZone=UTC"
+        shell: bash
+        run: |
+          set -euo pipefail
+          MYSQL_CONTAINER="$(docker ps -q --filter 'ancestor=mysql:8.4' | head -n1)"
+          POSTGRES_CONTAINER="$(docker ps -q --filter 'ancestor=postgres:17' | head -n1)"
+          test -n "$MYSQL_CONTAINER"
+          test -n "$POSTGRES_CONTAINER"
+          docker exec "$MYSQL_CONTAINER" mysql -uroot -ptokenway -e "CREATE DATABASE IF NOT EXISTS tokenway_redemption_test; CREATE DATABASE IF NOT EXISTS tokenway_redemption_log_test;"
+          docker exec "$POSTGRES_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE tokenway_redemption_test'
+          docker exec "$POSTGRES_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE tokenway_redemption_log_test'
+          go test -p 1 -count=1 ./controller -run '^TestDeleteRedemptionBatch
+        working-directory: validation-context/source
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -p 2 -count=1 ./controller ./relay/... \
+            -run 'Test.*(WebSocket|PluginNative|TaskPlugin|Protocol|RelayTask)'
+          test -d web/dist
+          test -n "$(find web/dist -type f -print -quit)"
+          echo "Layer 4B passed: backend contracts and frontend artifact verified."
+
+      - name: Layer 5 - Build and verify source archive locally (never upload private source)
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "TOKENWAY_PATCH_SHA=$TOKENWAY_PRIVATE_SHA"
+            echo "TOKENWAY_UPSTREAM_SHA=$TOKENWAY_UPSTREAM_SHA"
+          } > validation-context/source/.tokenway-validation-identity
+          cat > validation-context/source/TOKENWAY-BUILD-INFO.md <<EOF
+          # TOKENWAY AI validated source
+
+          - Patch repository commit: $TOKENWAY_PRIVATE_SHA
+          - Upstream repository: QuantumNous/new-api
+          - Upstream commit: $TOKENWAY_UPSTREAM_SHA
+          - Validation: five-layer public hosted-runner workflow
+          - Frontend assets: built in this run
+          - Database integration: SQLite, MySQL 8.4 and PostgreSQL 17
+          EOF
+          python3 - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile, ZIP_DEFLATED
+          import hashlib
+          import os
+          import tempfile
+
+          root = Path("validation-context/source")
+          archive = Path(tempfile.gettempdir()) / "tokenway-v11-full-acceptance.zip"
+          with ZipFile(archive, "w", ZIP_DEFLATED, compresslevel=6) as zf:
+              for base, dirs, files in os.walk(root):
+                  dirs[:] = [d for d in dirs if d not in {".git", "node_modules", "data"}]
+                  for name in files:
+                      path = Path(base) / name
+                      if path.suffix == ".db":
+                          continue
+                      zf.write(path, path.relative_to(root))
+              bad = zf.testzip()
+              if bad:
+                  raise SystemExit(f"ZIP integrity failure: {bad}")
+          data = archive.read_bytes()
+          digest = hashlib.sha256(data).hexdigest()
+          print(f"archive_bytes={len(data)}")
+          print(f"archive_sha256={digest}")
+          archive.unlink()
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+              summary.write("## TOKENWAY V11 five-layer acceptance\n\n")
+              summary.write(f"- Private source commit: {os.environ['TOKENWAY_PRIVATE_SHA']}\n")
+              summary.write(f"- Upstream commit: {os.environ['TOKENWAY_UPSTREAM_SHA']}\n")
+              summary.write("- Layer 1: assembly, formatting, dependency verification and three-module compilation passed\n")
+              summary.write("- Layer 2: Root, Relaykit and Tokenkit test suites passed\n")
+              summary.write("- Layer 3: SQLite, MySQL 8.4 and PostgreSQL 17 wallet/billing/settlement/Epay matrices passed\n")
+              summary.write("- Layer 4: frontend production build and API/plugin/WebSocket contracts passed\n")
+              summary.write("- Layer 5: local source ZIP integrity verification passed\n")
+              summary.write(f"- Local archive size: {len(data)} bytes\n")
+              summary.write(f"- Local archive SHA-256: {digest}\n\n")
+              summary.write("Private source and archives remained on the ephemeral runner and were not uploaded as artifacts.\n")
+          PY
+          echo "Layer 5 passed: package integrity verified locally; no private source artifact was uploaded."
+
+          echo "Layer 3 passed: isolated redemption-batch database tests completed across SQLite, MySQL and PostgreSQL."
 
       - name: Layer 4B - API, plugin and WebSocket contract tests
         working-directory: validation-context/source
