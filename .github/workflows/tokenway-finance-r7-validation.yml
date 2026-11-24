@@ -309,6 +309,18 @@ jobs:
           install -D private/.tokenway-patches/model/user_quota_adjustment_test.go source/model/user_quota_adjustment_test.go
           install -D private/.tokenway-patches/service/funding_source_test.go source/service/funding_source_test.go
           install -D private/.tokenway-patches/service/request_billing_recovery_test.go source/service/request_billing_recovery_test.go
+          # Match the R7 recovery policy: unknown upstream outcomes age by last activity (updated_at), not creation time.
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("source/service/request_billing_recovery_test.go")
+          source = path.read_text(encoding="utf-8")
+          old = 'Update("created_at", now-301)'
+          new = 'Update("updated_at", now-model.RequestBillingUnknownOutcomeStaleAfterSeconds-1)'
+          if source.count(old) != 1:
+              raise SystemExit(f"expected exactly one unknown-outcome stale fixture anchor, found {source.count(old)}")
+          path.write_text(source.replace(old, new, 1), encoding="utf-8")
+          PY
+          grep -Fq 'Update("updated_at", now-model.RequestBillingUnknownOutcomeStaleAfterSeconds-1)' source/service/request_billing_recovery_test.go
           install -D private/.tokenway-patches/service/funding_source.go source/service/funding_source.go
           # The pinned R7 billing_session.go uses these SubscriptionFunding sequence fields.
           # Preserve the retry-safe wallet funding helper and merge the subscription sequence state required by the pinned R7 BillingSession.
