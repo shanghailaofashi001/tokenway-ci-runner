@@ -13,6 +13,25 @@ mode = sys.argv[1]
 root = pathlib.Path(sys.argv[2]).resolve()
 manifest_path = pathlib.Path(sys.argv[3]).resolve()
 
+def changed_source_files():
+    tracked = subprocess.check_output(
+        ["git", "-C", str(root), "diff", "--name-only", "--diff-filter=ACMRT", "HEAD"],
+        text=True,
+    )
+    untracked = subprocess.check_output(
+        ["git", "-C", str(root), "ls-files", "--others", "--exclude-standard"],
+        text=True,
+    )
+    excluded = {
+        ".git", "vendor", "node_modules", "dist", "coverage", ".cache",
+        ".vite", ".tanstack", ".turbo", ".next", ".output", "tmp", "logs",
+    }
+    paths = set(tracked.splitlines()) | set(untracked.splitlines())
+    return sorted(
+        path for path in paths
+        if path and not any(part in excluded for part in pathlib.PurePosixPath(path).parts)
+    )
+
 def digest_tree():
     digest = hashlib.sha256()
     excluded_dirs = {
@@ -55,5 +74,6 @@ else:
         "source_repository": "QuantumNous/new-api",
         "source_commit": commit,
         "source_tree_sha256": actual,
+        "changed_files": changed_source_files(),
     }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(f"FROZEN: source commit {commit}, tree SHA-256 {actual}")
