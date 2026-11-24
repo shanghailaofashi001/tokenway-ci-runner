@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export PYTHONPATH="$script_dir${PYTHONPATH:+:$PYTHONPATH}"
+
 log_dir="${RUNNER_TEMP:-/tmp}/tokenway-integration-validation-logs"
 mkdir -p "$log_dir" web/dist
 if [[ ! -s web/dist/index.html ]]; then
@@ -49,7 +52,9 @@ run_suite() {
   fi
 
   python3 - "$results" "$package" "$pattern" "$dialect" "$tags" "$status" "$logfile" <<'PY'
-import json, pathlib, re, sys
+import json, pathlib, sys
+from tokenway_go_test_selector import targeted_test_pattern
+
 out, package, pattern, dialect, tags, raw_status, logfile = sys.argv[1:]
 status = int(raw_status)
 tests = set()
@@ -73,7 +78,7 @@ selector = {
     "integration_test_pattern": pattern,
 }
 if tests:
-    selector["integration_test_pattern"] = "^(" + "|".join(re.escape(name) for name in sorted(tests)) + ")$"
+    selector["integration_test_pattern"] = targeted_test_pattern(tests)
 if dialect:
     selector["task_db_dialect"] = dialect
 if tags:
