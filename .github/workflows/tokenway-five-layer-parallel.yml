@@ -1703,4 +1703,5 @@ jobs:
     needs: [assemble_source, layer1_go_static, layer2_unit, layer3_integration, layer4_frontend, layer5_package]
     steps:
       - name: Confirm all five layers and same-run SHA-256 package passed
-        run: echo "PASS: all five independent acceptance layers used the same immutable source snapshot; final source archive was packaged and checksummed."
+        run: |
+          echo "PASS: all five independent acceptance layers used the same immutable source snapshot; final source archive was packaged and checksummed."
