@@ -221,7 +221,10 @@ jobs:
           docker exec "$MYSQL_CONTAINER" mysql -uroot -ptokenway -e "CREATE DATABASE IF NOT EXISTS tokenway_redemption_test; CREATE DATABASE IF NOT EXISTS tokenway_redemption_log_test;"
           docker exec "$POSTGRES_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE tokenway_redemption_test'
           docker exec "$POSTGRES_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE tokenway_redemption_log_test'
-          go test -p 1 -count=1 ./controller -run '^TestDeleteRedemptionBatch
+          go test -p 1 -count=1 ./controller -run '^TestDeleteRedemptionBatch$'
+          echo "Layer 3E passed: isolated redemption batch tests completed across SQLite, MySQL and PostgreSQL."
+
+      - name: Layer 4B - API, plugin and WebSocket contract tests
         working-directory: validation-context/source
         shell: bash
         run: |
