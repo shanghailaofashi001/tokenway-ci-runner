@@ -614,32 +614,6 @@ jobs:
           printf '<!doctype html><html></html>\n' > web/dist/index.html
           go test -v -timeout 3m ./relay/channel/advancedcustom -count=1 -run '^(TestKuaipaoPresetRoutesJoinBaseURLWithoutDuplicateV1|TestKuaipaoModelListManagementRoutesJoinBaseURLAndUseBearerAuth)$'
 
-      - name: Run finance controller regression tests
-        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && (github.event_name != 'push' || !contains(github.event.head_commit.message, '[resume-full-go]')) && env.TOKENWAY_KUAIPAO_ONLY != 'true' && env.TOKENWAY_FINANCE_TARGETED_ONLY != 'true' }}
-        working-directory: source
-        run: |
-          set -euo pipefail
-          export GOPROXY=off GOSUMDB=off GOFLAGS="-mod=vendor -p=1" GOTOOLCHAIN=local
-          mkdir -p web/dist
-          printf '<!doctype html><html></html>\n' > web/dist/index.html
-          go test -v -timeout 5m ./controller -count=1 -run 'Test(NowPayments.*|GetNowPayments.*|GetPayMoney.*|ChatHistorySync.*|ApplyWalletQuotaDelta.*|ApplyTaskWalletQuotaDelta.*|BackfillWalletOpeningBalances.*|TransferAffQuotaToQuota.*|LegacyUserQuotaHelpersAlwaysWriteWalletLedger|RecordWalletOpeningBalanceTxWritesOnlyOpeningLedger|UserCheckinCreditsWalletAndLedgerInOneTransaction|RedeemCreditsQuotaExactlyOnce|RedeemRejectsWalletOverflow|RequestBillingJournal.*|UnknownRequestOutcome.*|ApplySubscriptionUsageDelta.*|CleanupSubscriptionPreConsumeRecordsRetainsUnresolvedReservations|PostConsumeUserSubscriptionDeltaRejectsOverflowAndInvalidState|PreConsumeUserSubscription.*|RefundSubscriptionPreConsumeIsAtomicAndIdempotent|SettleSubscriptionPreConsumeIsIdempotentAndClosesRefundPath|SubscriptionExtraReserveIsTrackedAndRefundedAtomically|SubscriptionPreConsumeHeartbeatWinsStaleReview|SubscriptionPreConsumeReviewBlocksSettlementAndRefund|SubscriptionRefundEscapesRequestIDLikeWildcards|SubscriptionSettlementIntentCanBeRecovered|ApplyTaskSubscriptionQuotaDelta.*|TaskSubscriptionSettlementAtomicallyAdjustsTokenAndUsageCounters|BillingRecoveryUsesSingleCombinedScheduledHandler)'
-
-      - name: Run finance model regression tests
-        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && (github.event_name != 'push' || !contains(github.event.head_commit.message, '[resume-full-go]')) && env.TOKENWAY_KUAIPAO_ONLY != 'true' && env.TOKENWAY_FINANCE_TARGETED_ONLY != 'true' }}
-        working-directory: source
-        run: |
-          set -euo pipefail
-          export GOPROXY=off GOSUMDB=off GOFLAGS="-mod=vendor -p=1" GOTOOLCHAIN=local
-          go test -v -timeout 5m ./model -count=1 -run 'Test(NowPayments.*|GetNowPayments.*|ApplyWalletQuotaDelta.*|ApplyTaskWalletQuotaDelta.*|BackfillWalletOpeningBalances.*|TransferAffQuotaToQuota.*|LegacyUserQuotaHelpersAlwaysWriteWalletLedger|RecordWalletOpeningBalanceTxWritesOnlyOpeningLedger|UserCheckinCreditsWalletAndLedgerInOneTransaction|RedeemCreditsQuotaExactlyOnce|RedeemRejectsWalletOverflow|RequestBillingJournal.*|UnknownRequestOutcome.*|ApplySubscriptionUsageDelta.*|CleanupSubscriptionPreConsumeRecordsRetainsUnresolvedReservations|PostConsumeUserSubscriptionDeltaRejectsOverflowAndInvalidState|PreConsumeUserSubscription.*|RefundSubscriptionPreConsumeIsAtomicAndIdempotent|SettleSubscriptionPreConsumeIsIdempotentAndClosesRefundPath|SubscriptionExtraReserveIsTrackedAndRefundedAtomically|SubscriptionPreConsumeHeartbeatWinsStaleReview|SubscriptionPreConsumeReviewBlocksSettlementAndRefund|SubscriptionRefundEscapesRequestIDLikeWildcards|SubscriptionSettlementIntentCanBeRecovered|ApplyTaskSubscriptionQuotaDelta.*|TaskSubscriptionSettlementAtomicallyAdjustsTokenAndUsageCounters|BillingRecoveryUsesSingleCombinedScheduledHandler)'
-
-      - name: Run finance service regression tests
-        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && (github.event_name != 'push' || !contains(github.event.head_commit.message, '[resume-full-go]')) && env.TOKENWAY_KUAIPAO_ONLY != 'true' && env.TOKENWAY_FINANCE_TARGETED_ONLY != 'true' }}
-        working-directory: source
-        run: |
-          set -euo pipefail
-          export GOPROXY=off GOSUMDB=off GOFLAGS="-mod=vendor -p=1" GOTOOLCHAIN=local
-          go test -v -timeout 5m ./service -count=1 -run 'Test(NowPayments.*|GetNowPayments.*|ApplyWalletQuotaDelta.*|ApplyTaskWalletQuotaDelta.*|BackfillWalletOpeningBalances.*|TransferAffQuotaToQuota.*|LegacyUserQuotaHelpersAlwaysWriteWalletLedger|RecordWalletOpeningBalanceTxWritesOnlyOpeningLedger|UserCheckinCreditsWalletAndLedgerInOneTransaction|RedeemCreditsQuotaExactlyOnce|RedeemRejectsWalletOverflow|RequestBillingJournal.*|UnknownRequestOutcome.*|ApplySubscriptionUsageDelta.*|CleanupSubscriptionPreConsumeRecordsRetainsUnresolvedReservations|PostConsumeUserSubscriptionDeltaRejectsOverflowAndInvalidState|PreConsumeUserSubscription.*|RefundSubscriptionPreConsumeIsAtomicAndIdempotent|SettleSubscriptionPreConsumeIsIdempotentAndClosesRefundPath|SubscriptionExtraReserveIsTrackedAndRefundedAtomically|SubscriptionPreConsumeHeartbeatWinsStaleReview|SubscriptionPreConsumeReviewBlocksSettlementAndRefund|SubscriptionRefundEscapesRequestIDLikeWildcards|SubscriptionSettlementIntentCanBeRecovered|ApplyTaskSubscriptionQuotaDelta.*|TaskSubscriptionSettlementAtomicallyAdjustsTokenAndUsageCounters|BillingRecoveryUsesSingleCombinedScheduledHandler)'
-
       - name: Run tagged SQLite MySQL PostgreSQL wallet and Epay integration regressions
         if: ${{ success() && env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_KUAIPAO_ONLY != 'true' && env.TOKENWAY_FINANCE_TARGETED_ONLY != 'true' }}
         working-directory: source
@@ -679,31 +653,14 @@ jobs:
           (cd relaykit && go build ./...)
           (cd tokenkit && go build ./...)
 
-      - name: Isolate tiered batch settlement regression before resuming full Go tests
-        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && (github.event_name != 'push' || (!contains(github.event.head_commit.message, '[router-only]') && !contains(github.event.head_commit.message, '[frontend-only]'))) && env.TOKENWAY_KUAIPAO_ONLY != 'true' && env.TOKENWAY_FINANCE_TARGETED_ONLY != 'true' }}
-        working-directory: source
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          export GOPROXY=off GOSUMDB=off GOFLAGS="-mod=vendor -p=1" GOTOOLCHAIN=local GOMAXPROCS=2
-          logfile="$RUNNER_TEMP/tokenway-go-test-logs-tiered-settlement.jsonl"
-          if timeout --signal=TERM --kill-after=15s 8m go test -json -timeout 5m ./service -run '^TestUpdateBatchTasksSettlesTieredUsageForTerminalStates$' -count=1 2>&1 | tee "$logfile"; then
-            echo "PASS: isolated tiered batch settlement regression"
-          else
-            status=$?
-            echo "FAIL: isolated tiered batch settlement regression (exit $status)"
-            tail -n 160 "$logfile" || true
-            exit "$status"
-          fi
-
-      - name: Resume failed Go packages only and finish remaining modules
+      - name: Run all discovered Root test packages and parallel isolated Go modules
         if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && (github.event_name != 'push' || !contains(github.event.head_commit.message, '[frontend-only]')) && env.TOKENWAY_KUAIPAO_ONLY != 'true' }}
         working-directory: source
         shell: bash
         run: |
           set -Eeuo pipefail
           export GOPROXY=off GOSUMDB=off GOTOOLCHAIN=local GOMAXPROCS=1 GOFLAGS="-mod=vendor -p=1"
-          log_dir="$RUNNER_TEMP/tokenway-go-targeted-logs"
+          log_dir="$RUNNER_TEMP/tokenway-go-validation-logs"
           mkdir -p "$log_dir"
           : > "$log_dir/summary.txt"
           : > "$log_dir/failures.txt"
@@ -724,12 +681,9 @@ jobs:
             export TEST_FIXED_POSTGRES_LOG_DSN="$TEST_POSTGRES_DSN"
           }
 
-          # Run #50 passed every targeted package except router. Keep this retry
-          # focused; a manual/full run still exercises the original package set.
           if [[ "${TOKENWAY_RECOVERY_ONLY:-false}" == "true" ]]; then
             packages=(github.com/QuantumNous/new-api/service)
           elif [[ "${TOKENWAY_FINANCE_TARGETED_ONLY:-false}" == "true" ]]; then
-            # Only the two modules affected by this root-cause fix; do not rerun passing packages.
             packages=(
               github.com/QuantumNous/new-api/common
               github.com/QuantumNous/new-api/service
@@ -737,21 +691,36 @@ jobs:
           elif [[ "${TOKENWAY_ROUTER_ONLY:-false}" == "true" ]]; then
             packages=(github.com/QuantumNous/new-api/router)
           else
-            packages=(
-              github.com/QuantumNous/new-api/common
-              github.com/QuantumNous/new-api/router
-              github.com/QuantumNous/new-api/controller
-              github.com/QuantumNous/new-api/model
-              github.com/QuantumNous/new-api/relay
-              github.com/QuantumNous/new-api/service
+            mapfile -t packages < <(
+              go list -f '{{if or .TestGoFiles .XTestGoFiles}}{{.ImportPath}}{{end}}' ./... |
+                sed '/^$/d' |
+                sort -u
             )
+            if (("${#packages[@]}" < 40)); then
+              echo "FAIL: discovered only ${#packages[@]} Root test packages; expected at least 40."
+              exit 1
+            fi
+            for required in \
+              github.com/QuantumNous/new-api/e2e \
+              github.com/QuantumNous/new-api/middleware \
+              github.com/QuantumNous/new-api/oauth \
+              github.com/QuantumNous/new-api/pkg/wsmanager \
+              github.com/QuantumNous/new-api/relay/channel/vertex \
+              github.com/QuantumNous/new-api/setting/system_setting; do
+              if ! printf '%s\\n' "${packages[@]}" | grep -Fxq "$required"; then
+                echo "FAIL: required Root test package was not discovered: $required"
+                exit 1
+              fi
+            done
+            echo "Discovered ${#packages[@]} Root packages with Go tests (including e2e and channel adapters):"
+            printf 'ROOT TEST PACKAGE: %s\\n' "${packages[@]}"
           fi
+
           for pkg in "${packages[@]}"; do
-            echo "TARGETED RETEST: $pkg"
-            logfile="$log_dir/${pkg##*/}.jsonl"
+            echo "ROOT PACKAGE TESTS: $pkg"
+            logfile="$log_dir/${pkg//\\//-}.jsonl"
             test_args=(-json -timeout 15m -parallel=1 -count=1)
             if [[ "${TOKENWAY_RECOVERY_ONLY:-false}" == "true" ]]; then
-              # This regression uses the service package's isolated in-memory SQLite TestMain.
               test_args+=(-run '^TestProcessRequestBillingRecoverySettlesRefundsAndReviewsUnknownOutcomes$')
             else
               prepare_databases
@@ -761,54 +730,73 @@ jobs:
             else
               status=$?
               echo "FAIL: $pkg (exit $status)" | tee -a "$log_dir/failures.txt" "$log_dir/summary.txt"
-              echo "---- targeted failure diagnostics: $pkg ----"
-              grep -E '"Action":"fail"|--- FAIL:|^FAIL|panic:|Error Trace:|Error:|no such table|database is locked|timed out|deadlock' "$logfile" | tail -n 100 || tail -n 100 "$logfile"
-              if [[ "$pkg" == "github.com/QuantumNous/new-api/router" ]]; then
-                python3 - "$logfile" <<'PY'
-          import json, sys
-          target = "TestAccessTokenRouteRulesCoverEveryDashboardRoute"
+              python3 - "$logfile" <<'PY'
+          import json
+          import sys
+
+          records = []
           for line in open(sys.argv[1], encoding="utf-8"):
               try:
                   event = json.loads(line)
               except json.JSONDecodeError:
                   continue
-              if event.get("Test") == target and event.get("Action") == "output":
-                  print("ROUTE-ASSERTION:", event.get("Output", "").rstrip())
+              records.append(event)
+          failed_tests = {
+              event.get("Test")
+              for event in records
+              if event.get("Action") == "fail" and event.get("Test")
+          }
+          package_failed = any(event.get("Action") == "fail" and not event.get("Test") for event in records)
+          for event in records:
+              if event.get("Action") != "output":
+                  continue
+              test_name = event.get("Test")
+              if package_failed or not failed_tests or test_name in failed_tests:
+                  output = event.get("Output", "").rstrip()
+                  if output:
+                      print(f"[{test_name or 'package'}] {output}")
           PY
-              fi
               failed=1
             fi
           done
 
-          # Run #50 passed both auxiliary modules; they are not part of a
-          # router-only retry and remain included in a manual/full run.
-          if [[ "${TOKENWAY_FINANCE_TARGETED_ONLY:-false}" == "true" ]]; then
-            echo "SKIP: Relaykit and Tokenkit were not changed by this finance fix; preserve their passing results."
-          elif [[ "${TOKENWAY_ROUTER_ONLY:-false}" == "true" ]]; then
-            echo "SKIP: relaykit and tokenkit passed run #50 and were not changed."
+          # These modules have no shared DB/Redis fixtures. Separate Go test
+          # processes keep module globals isolated while both suites run together.
+          if [[ "${TOKENWAY_FINANCE_TARGETED_ONLY:-false}" == "true" || "${TOKENWAY_ROUTER_ONLY:-false}" == "true" ]]; then
+            echo "SKIP: unchanged nested modules; preserve previously passed Relaykit and Tokenkit results."
           else
-            for module in relaykit tokenkit; do
-              prepare_databases
-              logfile="$log_dir/$module.log"
-              echo "MODULE TESTS: $module"
-              if (cd "$module" && timeout --signal=TERM --kill-after=30s 22m go test -mod=vendor -p=2 -count=1 ./...) > "$logfile" 2>&1; then
-                echo "PASS: $module full test suite" | tee -a "$log_dir/summary.txt"
-              else
-                status=$?
-                echo "FAIL: $module full test suite (exit $status)" | tee -a "$log_dir/failures.txt" "$log_dir/summary.txt"
-                tail -n 120 "$logfile" || true
-                failed=1
-              fi
-            done
+            relaykit_log="$log_dir/relaykit.log"
+            tokenkit_log="$log_dir/tokenkit.log"
+            (cd relaykit && timeout --signal=TERM --kill-after=30s 22m go test -mod=vendor -p=1 -count=1 ./...) > "$relaykit_log" 2>&1 &
+            relaykit_pid=$!
+            (cd tokenkit && timeout --signal=TERM --kill-after=30s 22m go test -mod=vendor -p=1 -count=1 ./...) > "$tokenkit_log" 2>&1 &
+            tokenkit_pid=$!
+
+            if wait "$relaykit_pid"; then
+              echo "PASS: relaykit full test suite (parallel isolated process)" | tee -a "$log_dir/summary.txt"
+            else
+              status=$?
+              echo "FAIL: relaykit full test suite (exit $status)" | tee -a "$log_dir/failures.txt" "$log_dir/summary.txt"
+              tail -n 160 "$relaykit_log" || true
+              failed=1
+            fi
+            if wait "$tokenkit_pid"; then
+              echo "PASS: tokenkit full test suite (parallel isolated process)" | tee -a "$log_dir/summary.txt"
+            else
+              status=$?
+              echo "FAIL: tokenkit full test suite (exit $status)" | tee -a "$log_dir/failures.txt" "$log_dir/summary.txt"
+              tail -n 160 "$tokenkit_log" || true
+              failed=1
+            fi
           fi
 
-          echo "Targeted Go summary:"
+          echo "Go validation summary:"
           cat "$log_dir/summary.txt"
           if [ "$failed" -ne 0 ]; then
-            echo "Targeted Go validation still has failures."
+            echo "Go validation still has failures."
             exit 1
           fi
-          echo "All selected root package regressions and applicable module tests passed."
+          echo "All discovered Root test packages and applicable isolated modules passed."
       - name: Set up Bun 1.4.4
         if: ${{ env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_FINANCE_TARGETED_ONLY != 'true' }}
         shell: bash
@@ -1125,7 +1113,7 @@ jobs:
               },
               "validated_layers": [
                   "Go formatting, dependency verification, offline dependency graph, vet and build",
-                  "Root finance regression packages, Relaykit and Tokenkit module test suites",
+                  "All discovered Root Go test packages (including e2e and channel adapters), plus Relaykit and Tokenkit module test suites",
                   "Wallet ledger and signed Epay callback integration tests on SQLite, MySQL and PostgreSQL",
                   "Frontend production build, TypeScript typecheck, unit tests, Oxlint, format/copyright and TokenWay media contracts",
               ],
