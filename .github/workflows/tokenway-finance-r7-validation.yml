@@ -97,6 +97,7 @@ jobs:
       TOKENWAY_GO_STATIC_ONLY: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[go-static-only]') }}
       TOKENWAY_PACKAGE_ONLY: 'false' # Disabled: final archives must come from the same successful acceptance run.
       TOKENWAY_KUAIPAO_ONLY: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[kuaipao-only]') }}
+      TOKENWAY_KUAIPAO_FRONTEND_ONLY: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[kuaipao-frontend-only]') }}
       TOKENWAY_RECOVERY_ONLY: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[recovery-only]') }}
       TOKENWAY_FINANCE_TARGETED_ONLY: ${{ github.event_name == 'push' && (contains(github.event.head_commit.message, '[finance-targeted-only]') || contains(github.event.head_commit.message, '[recovery-only]')) }}
       TOKENWAY_GO_MODULE_SCOPE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.go_module_scope || (github.event_name == 'push' && contains(github.event.head_commit.message, '[relaykit-only]') && 'relaykit' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[tokenkit-only]') && 'tokenkit' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[root-only]') && 'root' || 'all'))) }}
@@ -411,7 +412,7 @@ jobs:
           grep -Fq 'Resolve channel names before streamLogs opens its row cursor.' model/log.go
 
       - name: Install TokenWay finance and database integration test sources
-        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_KUAIPAO_ONLY != 'true' && (env.TOKENWAY_GO_MODULE_SCOPE == 'all' || env.TOKENWAY_GO_MODULE_SCOPE == 'root') }}
+        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_KUAIPAO_ONLY != 'true' && (env.TOKENWAY_GO_MODULE_SCOPE == 'all' || env.TOKENWAY_GO_MODULE_SCOPE == 'root') && env.TOKENWAY_KUAIPAO_FRONTEND_ONLY != 'true' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -590,14 +591,14 @@ jobs:
         run: python3 ../.tokenway-validation/apply-task-quota-persistence-guard.py
 
       - name: Set up isolated Go 1.26.10 toolchain
-        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' }}
+        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_KUAIPAO_FRONTEND_ONLY != 'true' }}
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
         with:
           go-version: "1.26.10"
           cache: false
 
       - name: Enforce Go toolchain isolation
-        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' }}
+        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_KUAIPAO_FRONTEND_ONLY != 'true' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -608,7 +609,7 @@ jobs:
           echo "Go 1.26.10 is active; system Go 1.23 is not used."
 
       - name: Verify Go formatting on all changed and added files
-        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' }}
+        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_KUAIPAO_FRONTEND_ONLY != 'true' }}
         working-directory: source
         shell: bash
         run: |
@@ -629,7 +630,7 @@ jobs:
           echo "Changed/new Go files are gofmt-clean."
 
       - name: Restore and vendor Go modules
-        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' }}
+        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_KUAIPAO_FRONTEND_ONLY != 'true' }}
         id: go_vendor
         shell: bash
         run: |
@@ -672,7 +673,7 @@ jobs:
           go test -v -timeout 3m ./controller -count=1 -run '^(TestGetNowPaymentsUSDPriceUsesWalletCurrencyExchangeRate|TestGetPayMoneyUsesCNYAsWalletBaseCurrency|TestChatHistorySyncPayloadValidation)$'
 
       - name: Verify offline dependency graph
-        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' }}
+        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_KUAIPAO_FRONTEND_ONLY != 'true' }}
         id: offline_graph
         shell: bash
         run: |
@@ -752,7 +753,7 @@ jobs:
           echo "===== Signed Epay callback database matrix ====="
           go test -v -timeout 8m ./controller -run TestEpaySuccessfulTopUpCallbackIsSignedAndIdempotentAcrossDatabases -count=1
       - name: Vet and build root, relaykit, and tokenkit modules concurrently
-        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && (env.TOKENWAY_GO_STATIC_ONLY == 'true' || github.event_name != 'push' || !contains(github.event.head_commit.message, '[resume-full-go]')) && env.TOKENWAY_KUAIPAO_ONLY != 'true' && env.TOKENWAY_RECOVERY_ONLY != 'true' }}
+        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && (env.TOKENWAY_GO_STATIC_ONLY == 'true' || github.event_name != 'push' || !contains(github.event.head_commit.message, '[resume-full-go]')) && env.TOKENWAY_KUAIPAO_ONLY != 'true' && env.TOKENWAY_RECOVERY_ONLY != 'true' && env.TOKENWAY_KUAIPAO_FRONTEND_ONLY != 'true' }}
         working-directory: source
         shell: bash
         run: |
@@ -797,7 +798,7 @@ jobs:
           echo "PASS: go vet and go build completed for root, relaykit, and tokenkit."
 
       - name: Run all discovered Root test packages and parallel isolated Go modules
-        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && (github.event_name != 'push' || !contains(github.event.head_commit.message, '[frontend-only]')) && env.TOKENWAY_KUAIPAO_ONLY != 'true' }}
+        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && (github.event_name != 'push' || !contains(github.event.head_commit.message, '[frontend-only]')) && env.TOKENWAY_KUAIPAO_ONLY != 'true' && env.TOKENWAY_KUAIPAO_FRONTEND_ONLY != 'true' }}
         working-directory: source
         shell: bash
         run: bash ../.github/scripts/run-go-test-modules.sh
@@ -812,7 +813,7 @@ jobs:
           retention-days: 14
 
       - name: Set up Bun 1.4.4
-        if: ${{ env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_FINANCE_TARGETED_ONLY != 'true' && env.TOKENWAY_TARGETED_ONLY != 'true' }}
+        if: ${{ env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_FINANCE_TARGETED_ONLY != 'true' && (env.TOKENWAY_TARGETED_ONLY != 'true' || env.TOKENWAY_KUAIPAO_FRONTEND_ONLY == 'true') }}
         shell: bash
         run: |
           set -euo pipefail
@@ -844,7 +845,7 @@ jobs:
           test "$("$bun_dir/bun" --version)" = "1.4.4"
 
       - name: Install frontend dependencies
-        if: ${{ env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_FINANCE_TARGETED_ONLY != 'true' && env.TOKENWAY_TARGETED_ONLY != 'true' }}
+        if: ${{ env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_FINANCE_TARGETED_ONLY != 'true' && (env.TOKENWAY_TARGETED_ONLY != 'true' || env.TOKENWAY_KUAIPAO_FRONTEND_ONLY == 'true') }}
         working-directory: source/web
         run: bun install --frozen-lockfile
 
@@ -876,7 +877,7 @@ jobs:
 
 
       - name: Run only migrated Kuaipao frontend regressions
-        if: ${{ env.TOKENWAY_KUAIPAO_ONLY == 'true' }}
+        if: ${{ (env.TOKENWAY_KUAIPAO_ONLY == 'true' || env.TOKENWAY_KUAIPAO_FRONTEND_ONLY == 'true') }}
         working-directory: source/web
         shell: bash
         run: |
