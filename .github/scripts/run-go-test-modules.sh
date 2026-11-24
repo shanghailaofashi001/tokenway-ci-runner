@@ -30,7 +30,7 @@ PY
 fi
 
 root_test_pattern="${TOKENWAY_ROOT_TEST_PATTERN:-}"
-root_skip_pattern="${TOKENWAY_ROOT_TEST_SKIP_PATTERN:-}"
+separate_integration_suites="${TOKENWAY_SEPARATE_INTEGRATION_SUITES:-false}"
 if [[ -z "$root_test_pattern" && "${GITHUB_EVENT_NAME:-}" == "push" && -n "${GITHUB_EVENT_PATH:-}" && -f "$GITHUB_EVENT_PATH" ]]; then
   root_test_pattern="$(python3 - "$GITHUB_EVENT_PATH" <<'PY'
 import json
@@ -186,7 +186,7 @@ run_root_package() (
   fi
 
   package_skip_pattern=""
-  if [[ -n "$root_skip_pattern" ]]; then
+  if [[ "$separate_integration_suites" == "true" ]]; then
     case "$pkg" in
       github.com/QuantumNous/new-api/service)
         package_skip_pattern='^(TestProcessRequestBillingRecoverySettlesRefundsAndReviewsUnknownOutcomes|TestSettle.*|TestRefund.*|TestUpdateBatchTasks.*|TestUpdateSunoTasksStalePollsRefundExactlyOnce|TestSweepTimedOutTasks.*|TestTaskReportsOnceAtTheFinalState)  if timeout --signal=TERM --kill-after=30s 17m go test "${test_args[@]}" "$pkg" > "$logfile" 2>&1; then
