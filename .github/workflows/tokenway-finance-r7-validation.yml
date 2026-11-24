@@ -27,6 +27,10 @@ on:
         type: boolean
         default: false
       run_database_matrix:
+        description: "Include the tagged SQLite/MySQL/PostgreSQL wallet and EPay integration matrix"
+        required: false
+        type: boolean
+        default: false
       task_db_dialect:
         description: "Database dialect for a targeted task-settlement integration rerun"
         required: false
@@ -37,10 +41,6 @@ on:
           - mysql
           - postgres
         default: all
-        description: "Include the tagged SQLite/MySQL/PostgreSQL wallet and EPay integration matrix"
-        required: false
-        type: boolean
-        default: false
   pull_request:
     branches:
       - main
