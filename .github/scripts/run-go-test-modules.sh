@@ -269,7 +269,7 @@ run_module() (
       echo "FAIL: nested module package selector contained no import paths." >&2
       exit 2
     fi
-    if ! discovered="$(cd "$module" && go list -f '{{if or .TestGoFiles .XTestGoFiles}}{{.ImportPath}}{{end}}' ./...)"; then
+    if ! discovered="$(cd "$module" && go list -f '{{.ImportPath}}' ./...)"; then
       echo "FAIL: unable to discover $module test packages for targeted validation." >&2
       exit 1
     fi
