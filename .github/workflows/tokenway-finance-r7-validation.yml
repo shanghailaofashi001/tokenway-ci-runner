@@ -124,7 +124,7 @@ jobs:
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
           repository: shanghailaofashi001/tokenway-v11-dev
-          ref: 2493c5b4c25437f71cc2d482dfcab71089260e18
+          ref: 3d9d54328f9e6a02d79bcc7ca606cf55f08c1a7c
           token: ${{ secrets.TOKENWAY_SOURCE_READ_TOKEN }}
           path: private
           fetch-depth: 1
@@ -326,6 +326,16 @@ jobs:
           test -s source/electron/tray-icon-windows.png
           git -C source diff --check
           echo "PASS: TokenWay V11 Electron app identity, backend resource mapping and original T-mark icons validated."
+
+      - name: Align the packaged self-service Electron workflow with TokenWay V11
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile .tokenway-validation/apply-tokenway-electron-workflow.py
+          python3 .tokenway-validation/apply-tokenway-electron-workflow.py source
+          grep -Fq 'GOFLAGS=-mod=vendor' source/.github/workflows/electron-build.yml
+          grep -Fq 'tokenway-v11.exe' source/.github/workflows/electron-build.yml
+          echo "PASS: repository-supplied Windows build workflow now builds the same V11 executable and fixed version."
 
       - name: Decode and verify exact R7 finance patch
         shell: bash
@@ -1079,6 +1089,7 @@ jobs:
               "electron/icon.png",
               "electron/tokenway.ico",
               "electron/tray-icon-windows.png",
+              ".github/workflows/electron-build.yml",
               "controller/nowpayments.go",
               "model/wallet_ledger.go",
               "model/request_billing_journal.go",
