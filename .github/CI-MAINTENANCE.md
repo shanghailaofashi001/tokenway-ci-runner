@@ -22,13 +22,14 @@ Every Root test package executes in its own go test process, with a package-spec
 
 ## Targeted reruns
 
-For a UI-triggered workflow_dispatch, set go_module_scope to all, root, relaykit or tokenkit; root_test_packages accepts exact comma- or space-separated Go import paths. Set targeted_only=true to skip unrelated integration/frontend stages. Set run_database_matrix=true only when the SQL integration matrix is part of the affected area.
+For a UI-triggered workflow_dispatch, set go_module_scope to all, root, relaykit or tokenkit; root_test_packages accepts exact comma- or space-separated Go import paths. root_test_pattern optionally supplies a Go -run regular expression and must be paired with root_test_packages. Set targeted_only=true to skip unrelated integration/frontend stages. Set run_database_matrix=true only when the SQL integration matrix is part of the affected area.
 
 For push-triggered recovery, use commit-message markers:
 - [root-packages=github.com/QuantumNous/new-api/controller,github.com/QuantumNous/new-api/model] selects exact Root packages.
+- [root-test-filter=^TestManageUserQuotaConcurrentSnapshots$] selects an exact Go -run pattern for the selected Root packages.
 - [targeted-only] skips unrelated front-end and integration layers.
 - [database-matrix] also runs the tagged three-database wallet/EPay matrix.
 - [root-only], [relaykit-only] or [tokenkit-only] limits the module.
-A Root package target is validated against go list; unknown or stale package names fail immediately. Failures retain the package/module name and JSON test log as a short-lived diagnostic artifact.
+A Root package target is validated against go list; unknown or stale package names fail immediately. A test pattern is passed directly to Go's -run flag and does not alter any test assertions. Failures retain the package/module name and JSON test log as a short-lived diagnostic artifact.
 
 After the focused run passes, run one full acceptance on the final commit. No test, assertion, provider validation, or business guard is removed to make the pipeline green. Previously passed results remain recorded against their original commit; a final release archive is always tied to the exact commit that passed the complete acceptance workflow.
