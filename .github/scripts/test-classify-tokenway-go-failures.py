@@ -6,7 +6,12 @@ import subprocess
 import sys
 import tempfile
 
+from tokenway_go_test_selector import targeted_test_pattern
+
 classifier = pathlib.Path(__file__).with_name("classify-tokenway-go-failures.py")
+
+if targeted_test_pattern({"TestDecodeBroken", "TestDecodeParent/sub-case"}) != "^(TestDecodeBroken|TestDecodeParent)$":
+    raise SystemExit("shared selector helper did not reduce subtests to their parent test functions")
 
 with tempfile.TemporaryDirectory(prefix="tokenway-failure-routing-") as temporary:
     root = pathlib.Path(temporary)
