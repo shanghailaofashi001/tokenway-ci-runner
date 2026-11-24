@@ -32,6 +32,7 @@ PY
 fi
 
 root_test_pattern="${TOKENWAY_ROOT_TEST_PATTERN:-}"
+separate_integration_suites="${TOKENWAY_SEPARATE_INTEGRATION_SUITES:-false}"
 if [[ -z "$root_test_pattern" && "${GITHUB_EVENT_NAME:-}" == "push" && -n "${GITHUB_EVENT_PATH:-}" && -f "$GITHUB_EVENT_PATH" ]]; then
   root_test_pattern="$(python3 - "$GITHUB_EVENT_PATH" <<'PY'
 import json
@@ -184,6 +185,483 @@ run_root_package() (
     test_args+=(-run "$root_test_pattern")
   elif [[ "${TOKENWAY_RECOVERY_ONLY:-false}" == "true" && -z "$root_input" ]]; then
     test_args+=(-run '^TestProcessRequestBillingRecoverySettlesRefundsAndReviewsUnknownOutcomes$')
+  fi
+
+  if [[ "$separate_integration_suites" == "true" && "${TOKENWAY_TARGETED_ONLY:-false}" != "true" ]]; then
+    case "$pkg" in
+      github.com/QuantumNous/new-api/service)
+        test_args+=(-skip '^(TestProcessRequestBillingRecoverySettlesRefundsAndReviewsUnknownOutcomes|TestSettle.*|TestRefund.*|TestUpdateBatchTasks.*|TestUpdateSunoTasksStalePollsRefundExactlyOnce|TestSweepTimedOutTasks.*)
+    printf 'PASS: %s\n' "$pkg" > "$log_dir/${slug}.status"
+    echo "PASS: $pkg"
+    return 0
+  else
+    local status=$?
+    {
+      echo "FAIL: $pkg (exit $status)"
+      python3 - "$logfile" <<'PY'
+import json
+import sys
+
+events = []
+with open(sys.argv[1], encoding="utf-8") as stream:
+    for line in stream:
+        try:
+            events.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+
+failed_tests = {
+    event.get("Test")
+    for event in events
+    if event.get("Action") == "fail" and event.get("Test")
+}
+package_failed = any(
+    event.get("Action") == "fail" and not event.get("Test")
+    for event in events
+)
+for event in events:
+    if event.get("Action") != "output":
+        continue
+    test_name = event.get("Test")
+    if package_failed or not failed_tests or test_name in failed_tests:
+        output = event.get("Output", "").rstrip()
+        if output:
+            print(f"[{test_name or 'package'}] {output}")
+PY
+    } > "$failure_log"
+    printf 'FAIL: %s (exit %s)\n' "$pkg" "$status" > "$log_dir/${slug}.status"
+    cat "$failure_log" >&2
+    return "$status"
+  fi
+)
+
+run_module() (
+  set -Eeuo pipefail
+  local module="$1"
+  local logfile="$log_dir/${module}.log"
+  echo "Running isolated $module Go test process."
+  if (cd "$module" && timeout --signal=TERM --kill-after=30s 22m go test -mod=vendor -p=1 -count=1 ./...) > "$logfile" 2>&1; then
+    printf 'PASS: %s full test suite\n' "$module" > "$log_dir/${module}.status"
+    echo "PASS: $module full test suite"
+    return 0
+  else
+    local status=$?
+    {
+      echo "FAIL: $module full test suite (exit $status)"
+      tail -n 160 "$logfile" || true
+    } > "$log_dir/${module}.failure.txt"
+    printf 'FAIL: %s full test suite (exit %s)\n' "$module" "$status" > "$log_dir/${module}.status"
+    cat "$log_dir/${module}.failure.txt" >&2
+    return "$status"
+  fi
+)
+
+module_pids=()
+if [[ "$scope" == "relaykit" || ( "$scope" == "all" && -z "$root_input" && "${TOKENWAY_FINANCE_TARGETED_ONLY:-false}" != "true" && "${TOKENWAY_ROUTER_ONLY:-false}" != "true" && "${TOKENWAY_RECOVERY_ONLY:-false}" != "true" ) ]]; then
+  run_module relaykit &
+  module_pids+=("$!")
+fi
+if [[ "$scope" == "tokenkit" || ( "$scope" == "all" && -z "$root_input" && "${TOKENWAY_FINANCE_TARGETED_ONLY:-false}" != "true" && "${TOKENWAY_ROUTER_ONLY:-false}" != "true" && "${TOKENWAY_RECOVERY_ONLY:-false}" != "true" ) ]]; then
+  run_module tokenkit &
+  module_pids+=("$!")
+fi
+if [[ -n "$root_input" ]]; then
+  echo "Skipping nested modules for this targeted Root-package run."
+fi
+
+failed=0
+root_pids=()
+if (( ${#packages[@]} > 0 )); then
+  echo "Root package worker limit: $parallelism (each package is a separate process with its own MySQL/PostgreSQL databases)"
+  for pkg in "${packages[@]}"; do
+    run_root_package "$pkg" &
+    root_pids+=("$!")
+    if (( ${#root_pids[@]} >= parallelism )); then
+      if wait "${root_pids[0]}"; then :; else failed=1; fi
+      root_pids=("${root_pids[@]:1}")
+    fi
+  done
+  for pid in "${root_pids[@]}"; do
+    if wait "$pid"; then :; else failed=1; fi
+  done
+fi
+
+for pid in "${module_pids[@]}"; do
+  if wait "$pid"; then :; else failed=1; fi
+done
+
+{
+  echo "Go validation summary:"
+  for status_file in "$log_dir"/*.status; do
+    [[ -f "$status_file" ]] || continue
+    cat "$status_file"
+  done
+} | tee "$log_dir/summary.txt"
+grep '^FAIL:' "$log_dir/summary.txt" > "$log_dir/failures.txt" || true
+
+if (( failed != 0 )); then
+  echo "Go validation still has failures. Exact affected package/module names and logs are in $log_dir."
+  exit 1
+fi
+
+echo "All selected Root, Relaykit, and Tokenkit test suites passed."
+)
+        ;;
+      github.com/QuantumNous/new-api/controller)
+        test_args+=(-skip '^(TestImmediateTaskSettlementDatabase|TestExecuteTaskSubmission.*|TestResponsesWS.*|TestResponsesWebSocket.*)
+    printf 'PASS: %s\n' "$pkg" > "$log_dir/${slug}.status"
+    echo "PASS: $pkg"
+    return 0
+  else
+    local status=$?
+    {
+      echo "FAIL: $pkg (exit $status)"
+      python3 - "$logfile" <<'PY'
+import json
+import sys
+
+events = []
+with open(sys.argv[1], encoding="utf-8") as stream:
+    for line in stream:
+        try:
+            events.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+
+failed_tests = {
+    event.get("Test")
+    for event in events
+    if event.get("Action") == "fail" and event.get("Test")
+}
+package_failed = any(
+    event.get("Action") == "fail" and not event.get("Test")
+    for event in events
+)
+for event in events:
+    if event.get("Action") != "output":
+        continue
+    test_name = event.get("Test")
+    if package_failed or not failed_tests or test_name in failed_tests:
+        output = event.get("Output", "").rstrip()
+        if output:
+            print(f"[{test_name or 'package'}] {output}")
+PY
+    } > "$failure_log"
+    printf 'FAIL: %s (exit %s)\n' "$pkg" "$status" > "$log_dir/${slug}.status"
+    cat "$failure_log" >&2
+    return "$status"
+  fi
+)
+
+run_module() (
+  set -Eeuo pipefail
+  local module="$1"
+  local logfile="$log_dir/${module}.log"
+  echo "Running isolated $module Go test process."
+  if (cd "$module" && timeout --signal=TERM --kill-after=30s 22m go test -mod=vendor -p=1 -count=1 ./...) > "$logfile" 2>&1; then
+    printf 'PASS: %s full test suite\n' "$module" > "$log_dir/${module}.status"
+    echo "PASS: $module full test suite"
+    return 0
+  else
+    local status=$?
+    {
+      echo "FAIL: $module full test suite (exit $status)"
+      tail -n 160 "$logfile" || true
+    } > "$log_dir/${module}.failure.txt"
+    printf 'FAIL: %s full test suite (exit %s)\n' "$module" "$status" > "$log_dir/${module}.status"
+    cat "$log_dir/${module}.failure.txt" >&2
+    return "$status"
+  fi
+)
+
+module_pids=()
+if [[ "$scope" == "relaykit" || ( "$scope" == "all" && -z "$root_input" && "${TOKENWAY_FINANCE_TARGETED_ONLY:-false}" != "true" && "${TOKENWAY_ROUTER_ONLY:-false}" != "true" && "${TOKENWAY_RECOVERY_ONLY:-false}" != "true" ) ]]; then
+  run_module relaykit &
+  module_pids+=("$!")
+fi
+if [[ "$scope" == "tokenkit" || ( "$scope" == "all" && -z "$root_input" && "${TOKENWAY_FINANCE_TARGETED_ONLY:-false}" != "true" && "${TOKENWAY_ROUTER_ONLY:-false}" != "true" && "${TOKENWAY_RECOVERY_ONLY:-false}" != "true" ) ]]; then
+  run_module tokenkit &
+  module_pids+=("$!")
+fi
+if [[ -n "$root_input" ]]; then
+  echo "Skipping nested modules for this targeted Root-package run."
+fi
+
+failed=0
+root_pids=()
+if (( ${#packages[@]} > 0 )); then
+  echo "Root package worker limit: $parallelism (each package is a separate process with its own MySQL/PostgreSQL databases)"
+  for pkg in "${packages[@]}"; do
+    run_root_package "$pkg" &
+    root_pids+=("$!")
+    if (( ${#root_pids[@]} >= parallelism )); then
+      if wait "${root_pids[0]}"; then :; else failed=1; fi
+      root_pids=("${root_pids[@]:1}")
+    fi
+  done
+  for pid in "${root_pids[@]}"; do
+    if wait "$pid"; then :; else failed=1; fi
+  done
+fi
+
+for pid in "${module_pids[@]}"; do
+  if wait "$pid"; then :; else failed=1; fi
+done
+
+{
+  echo "Go validation summary:"
+  for status_file in "$log_dir"/*.status; do
+    [[ -f "$status_file" ]] || continue
+    cat "$status_file"
+  done
+} | tee "$log_dir/summary.txt"
+grep '^FAIL:' "$log_dir/summary.txt" > "$log_dir/failures.txt" || true
+
+if (( failed != 0 )); then
+  echo "Go validation still has failures. Exact affected package/module names and logs are in $log_dir."
+  exit 1
+fi
+
+echo "All selected Root, Relaykit, and Tokenkit test suites passed."
+)
+        ;;
+      github.com/QuantumNous/new-api/relay)
+        test_args+=(-skip '^TestResponsesWS.*
+    printf 'PASS: %s\n' "$pkg" > "$log_dir/${slug}.status"
+    echo "PASS: $pkg"
+    return 0
+  else
+    local status=$?
+    {
+      echo "FAIL: $pkg (exit $status)"
+      python3 - "$logfile" <<'PY'
+import json
+import sys
+
+events = []
+with open(sys.argv[1], encoding="utf-8") as stream:
+    for line in stream:
+        try:
+            events.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+
+failed_tests = {
+    event.get("Test")
+    for event in events
+    if event.get("Action") == "fail" and event.get("Test")
+}
+package_failed = any(
+    event.get("Action") == "fail" and not event.get("Test")
+    for event in events
+)
+for event in events:
+    if event.get("Action") != "output":
+        continue
+    test_name = event.get("Test")
+    if package_failed or not failed_tests or test_name in failed_tests:
+        output = event.get("Output", "").rstrip()
+        if output:
+            print(f"[{test_name or 'package'}] {output}")
+PY
+    } > "$failure_log"
+    printf 'FAIL: %s (exit %s)\n' "$pkg" "$status" > "$log_dir/${slug}.status"
+    cat "$failure_log" >&2
+    return "$status"
+  fi
+)
+
+run_module() (
+  set -Eeuo pipefail
+  local module="$1"
+  local logfile="$log_dir/${module}.log"
+  echo "Running isolated $module Go test process."
+  if (cd "$module" && timeout --signal=TERM --kill-after=30s 22m go test -mod=vendor -p=1 -count=1 ./...) > "$logfile" 2>&1; then
+    printf 'PASS: %s full test suite\n' "$module" > "$log_dir/${module}.status"
+    echo "PASS: $module full test suite"
+    return 0
+  else
+    local status=$?
+    {
+      echo "FAIL: $module full test suite (exit $status)"
+      tail -n 160 "$logfile" || true
+    } > "$log_dir/${module}.failure.txt"
+    printf 'FAIL: %s full test suite (exit %s)\n' "$module" "$status" > "$log_dir/${module}.status"
+    cat "$log_dir/${module}.failure.txt" >&2
+    return "$status"
+  fi
+)
+
+module_pids=()
+if [[ "$scope" == "relaykit" || ( "$scope" == "all" && -z "$root_input" && "${TOKENWAY_FINANCE_TARGETED_ONLY:-false}" != "true" && "${TOKENWAY_ROUTER_ONLY:-false}" != "true" && "${TOKENWAY_RECOVERY_ONLY:-false}" != "true" ) ]]; then
+  run_module relaykit &
+  module_pids+=("$!")
+fi
+if [[ "$scope" == "tokenkit" || ( "$scope" == "all" && -z "$root_input" && "${TOKENWAY_FINANCE_TARGETED_ONLY:-false}" != "true" && "${TOKENWAY_ROUTER_ONLY:-false}" != "true" && "${TOKENWAY_RECOVERY_ONLY:-false}" != "true" ) ]]; then
+  run_module tokenkit &
+  module_pids+=("$!")
+fi
+if [[ -n "$root_input" ]]; then
+  echo "Skipping nested modules for this targeted Root-package run."
+fi
+
+failed=0
+root_pids=()
+if (( ${#packages[@]} > 0 )); then
+  echo "Root package worker limit: $parallelism (each package is a separate process with its own MySQL/PostgreSQL databases)"
+  for pkg in "${packages[@]}"; do
+    run_root_package "$pkg" &
+    root_pids+=("$!")
+    if (( ${#root_pids[@]} >= parallelism )); then
+      if wait "${root_pids[0]}"; then :; else failed=1; fi
+      root_pids=("${root_pids[@]:1}")
+    fi
+  done
+  for pid in "${root_pids[@]}"; do
+    if wait "$pid"; then :; else failed=1; fi
+  done
+fi
+
+for pid in "${module_pids[@]}"; do
+  if wait "$pid"; then :; else failed=1; fi
+done
+
+{
+  echo "Go validation summary:"
+  for status_file in "$log_dir"/*.status; do
+    [[ -f "$status_file" ]] || continue
+    cat "$status_file"
+  done
+} | tee "$log_dir/summary.txt"
+grep '^FAIL:' "$log_dir/summary.txt" > "$log_dir/failures.txt" || true
+
+if (( failed != 0 )); then
+  echo "Go validation still has failures. Exact affected package/module names and logs are in $log_dir."
+  exit 1
+fi
+
+echo "All selected Root, Relaykit, and Tokenkit test suites passed."
+)
+        ;;
+      github.com/QuantumNous/new-api/pkg/wsmanager)
+        test_args+=(-skip '^(TestCloseChannel.*|TestUnregisterPreventsClose|TestRegisteredCloseIsIdempotent|TestPublishCloseChannelsNoopsWhenRedisDisabled|TestRedisChannelCloseEventsStayWithinDatabase)
+    printf 'PASS: %s\n' "$pkg" > "$log_dir/${slug}.status"
+    echo "PASS: $pkg"
+    return 0
+  else
+    local status=$?
+    {
+      echo "FAIL: $pkg (exit $status)"
+      python3 - "$logfile" <<'PY'
+import json
+import sys
+
+events = []
+with open(sys.argv[1], encoding="utf-8") as stream:
+    for line in stream:
+        try:
+            events.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+
+failed_tests = {
+    event.get("Test")
+    for event in events
+    if event.get("Action") == "fail" and event.get("Test")
+}
+package_failed = any(
+    event.get("Action") == "fail" and not event.get("Test")
+    for event in events
+)
+for event in events:
+    if event.get("Action") != "output":
+        continue
+    test_name = event.get("Test")
+    if package_failed or not failed_tests or test_name in failed_tests:
+        output = event.get("Output", "").rstrip()
+        if output:
+            print(f"[{test_name or 'package'}] {output}")
+PY
+    } > "$failure_log"
+    printf 'FAIL: %s (exit %s)\n' "$pkg" "$status" > "$log_dir/${slug}.status"
+    cat "$failure_log" >&2
+    return "$status"
+  fi
+)
+
+run_module() (
+  set -Eeuo pipefail
+  local module="$1"
+  local logfile="$log_dir/${module}.log"
+  echo "Running isolated $module Go test process."
+  if (cd "$module" && timeout --signal=TERM --kill-after=30s 22m go test -mod=vendor -p=1 -count=1 ./...) > "$logfile" 2>&1; then
+    printf 'PASS: %s full test suite\n' "$module" > "$log_dir/${module}.status"
+    echo "PASS: $module full test suite"
+    return 0
+  else
+    local status=$?
+    {
+      echo "FAIL: $module full test suite (exit $status)"
+      tail -n 160 "$logfile" || true
+    } > "$log_dir/${module}.failure.txt"
+    printf 'FAIL: %s full test suite (exit %s)\n' "$module" "$status" > "$log_dir/${module}.status"
+    cat "$log_dir/${module}.failure.txt" >&2
+    return "$status"
+  fi
+)
+
+module_pids=()
+if [[ "$scope" == "relaykit" || ( "$scope" == "all" && -z "$root_input" && "${TOKENWAY_FINANCE_TARGETED_ONLY:-false}" != "true" && "${TOKENWAY_ROUTER_ONLY:-false}" != "true" && "${TOKENWAY_RECOVERY_ONLY:-false}" != "true" ) ]]; then
+  run_module relaykit &
+  module_pids+=("$!")
+fi
+if [[ "$scope" == "tokenkit" || ( "$scope" == "all" && -z "$root_input" && "${TOKENWAY_FINANCE_TARGETED_ONLY:-false}" != "true" && "${TOKENWAY_ROUTER_ONLY:-false}" != "true" && "${TOKENWAY_RECOVERY_ONLY:-false}" != "true" ) ]]; then
+  run_module tokenkit &
+  module_pids+=("$!")
+fi
+if [[ -n "$root_input" ]]; then
+  echo "Skipping nested modules for this targeted Root-package run."
+fi
+
+failed=0
+root_pids=()
+if (( ${#packages[@]} > 0 )); then
+  echo "Root package worker limit: $parallelism (each package is a separate process with its own MySQL/PostgreSQL databases)"
+  for pkg in "${packages[@]}"; do
+    run_root_package "$pkg" &
+    root_pids+=("$!")
+    if (( ${#root_pids[@]} >= parallelism )); then
+      if wait "${root_pids[0]}"; then :; else failed=1; fi
+      root_pids=("${root_pids[@]:1}")
+    fi
+  done
+  for pid in "${root_pids[@]}"; do
+    if wait "$pid"; then :; else failed=1; fi
+  done
+fi
+
+for pid in "${module_pids[@]}"; do
+  if wait "$pid"; then :; else failed=1; fi
+done
+
+{
+  echo "Go validation summary:"
+  for status_file in "$log_dir"/*.status; do
+    [[ -f "$status_file" ]] || continue
+    cat "$status_file"
+  done
+} | tee "$log_dir/summary.txt"
+grep '^FAIL:' "$log_dir/summary.txt" > "$log_dir/failures.txt" || true
+
+if (( failed != 0 )); then
+  echo "Go validation still has failures. Exact affected package/module names and logs are in $log_dir."
+  exit 1
+fi
+
+echo "All selected Root, Relaykit, and Tokenkit test suites passed."
+)
+        ;;
+    esac
   fi
 
   if timeout --signal=TERM --kill-after=30s 17m go test "${test_args[@]}" "$pkg" > "$logfile" 2>&1; then
