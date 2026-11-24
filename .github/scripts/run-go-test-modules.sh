@@ -8,6 +8,23 @@ mkdir -p "$log_dir"
 
 scope="${TOKENWAY_GO_MODULE_SCOPE:-all}"
 root_input="${TOKENWAY_ROOT_TEST_PACKAGES:-}"
+if [[ -z "$root_input" && "${GITHUB_EVENT_NAME:-}" == "push" && -n "${GITHUB_EVENT_PATH:-}" && -f "$GITHUB_EVENT_PATH" ]]; then
+  root_input="$(python3 - "$GITHUB_EVENT_PATH" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as event_file:
+    event = json.load(event_file)
+message = event.get("head_commit", {}).get("message", "")
+marker = "[root-packages="
+start = message.find(marker)
+if start >= 0:
+    end = message.find("]", start)
+    if end > start:
+        print(message[start + len(marker):end].strip())
+PY
+)"
+fi
 parallelism="${TOKENWAY_ROOT_TEST_PARALLELISM:-2}"
 if ! [[ "$parallelism" =~ ^[1-4]$ ]]; then
   echo "TOKENWAY_ROOT_TEST_PARALLELISM must be between 1 and 4, got: $parallelism" >&2

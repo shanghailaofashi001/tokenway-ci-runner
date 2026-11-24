@@ -95,10 +95,10 @@ jobs:
       TOKENWAY_KUAIPAO_ONLY: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[kuaipao-only]') }}
       TOKENWAY_RECOVERY_ONLY: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[recovery-only]') }}
       TOKENWAY_FINANCE_TARGETED_ONLY: ${{ github.event_name == 'push' && (contains(github.event.head_commit.message, '[finance-targeted-only]') || contains(github.event.head_commit.message, '[recovery-only]')) }}
-      TOKENWAY_GO_MODULE_SCOPE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.go_module_scope || 'all' }}
+      TOKENWAY_GO_MODULE_SCOPE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.go_module_scope || (github.event_name == 'push' && contains(github.event.head_commit.message, '[relaykit-only]') && 'relaykit' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[tokenkit-only]') && 'tokenkit' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[root-only]') && 'root' || 'all'))) }}
       TOKENWAY_ROOT_TEST_PACKAGES: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.root_test_packages || '' }}
-      TOKENWAY_TARGETED_ONLY: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.targeted_only == 'true' }}
-      TOKENWAY_RUN_DATABASE_MATRIX: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.targeted_only != 'true' || github.event.inputs.run_database_matrix == 'true' }}
+      TOKENWAY_TARGETED_ONLY: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.targeted_only == 'true') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[targeted-only]')) }}
+      TOKENWAY_RUN_DATABASE_MATRIX: ${{ (github.event_name == 'workflow_dispatch' && (github.event.inputs.targeted_only != 'true' || github.event.inputs.run_database_matrix == 'true')) || (github.event_name == 'push' && (!contains(github.event.head_commit.message, '[targeted-only]') || contains(github.event.head_commit.message, '[database-matrix]'))) }}
       TEST_MYSQL_DSN: root:tokenway-test@tcp(127.0.0.1:3306)/tokenway_test?charset=utf8mb4&parseTime=True&loc=Local
       TEST_POSTGRES_DSN: postgres://tokenway:tokenway-test@127.0.0.1:5432/tokenway_test?sslmode=disable
       TEST_MYSQL_LOG_DSN: root:tokenway-test@tcp(127.0.0.1:3306)/tokenway_test?charset=utf8mb4&parseTime=True&loc=Local
@@ -118,7 +118,7 @@ jobs:
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
           repository: shanghailaofashi001/tokenway-v11-dev
-          ref: d1de74b20a98ef7752e04298134735ecfe75248f
+          ref: f92a4616b893b41eb305de52d50cbb43918ebfd9
           token: ${{ secrets.TOKENWAY_SOURCE_READ_TOKEN }}
           path: private
           fetch-depth: 1
@@ -693,6 +693,15 @@ jobs:
         shell: bash
         run: bash ../.github/scripts/run-go-test-modules.sh
 
+      - name: Upload failed Go package diagnostics for targeted follow-up
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: tokenway-go-failure-diagnostics-${{ github.run_id }}
+          path: ${{ runner.temp }}/tokenway-go-validation-logs/
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Set up Bun 1.4.4
         if: ${{ env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_FINANCE_TARGETED_ONLY != 'true' && env.TOKENWAY_TARGETED_ONLY != 'true' }}
         shell: bash
@@ -949,6 +958,10 @@ jobs:
               "service/request_billing_recovery_test.go",
               "model/wallet_ledger_dialect_test.go",
               "controller/epay_callback_dialect_test.go",
+              "internal/testsupport/database.go",
+              "model/test_database_helpers_test.go",
+              "controller/access_token_audit_test.go",
+              "controller/model_management_test.go",
           ]
           for relative in required_files:
               path = destination / relative
@@ -1010,6 +1023,8 @@ jobs:
               "validated_layers": [
                   "Go formatting, dependency verification, offline dependency graph, vet and build",
                   "All discovered Root Go test packages (including e2e and channel adapters), plus Relaykit and Tokenkit module test suites",
+                  "Root test packages run in isolated processes with package-specific disposable SQL databases; Relaykit and Tokenkit run as independent parallel modules",
+                  "A shared loopback-only SQL test harness creates per-test databases and applies production model migrations for schema-sensitive tests",
                   "Wallet ledger and signed Epay callback integration tests on SQLite, MySQL and PostgreSQL",
                   "Frontend production build, TypeScript typecheck, unit tests, Oxlint, format/copyright and TokenWay media contracts",
               ],
@@ -1141,7 +1156,7 @@ jobs:
               "product":"TokenWay V11",
               "package_type":"Kuaipao-migrated validated source archive",
               "source_commit":"48a6c87f9e7757fdc58e5be9bcb4f8281ad0dfd0",
-              "finance_validation_snapshot":"d1de74b20a98ef7752e04298134735ecfe75248f",
+              "finance_validation_snapshot":"f92a4616b893b41eb305de52d50cbb43918ebfd9",
               "branding_snapshot":"d2494da77bc59b7edb4082bb2a594f24997b6ece",
               "kuaipao_migration_patch_sha256":hashlib.sha256(patch.read_bytes()).hexdigest(),
               "kuaipao_channels":["kuaipao_anthropic","kuaipao_openai_chat","kuaipao_openai_responses"],
@@ -1389,7 +1404,7 @@ jobs:
           brand_sha = git_head("private-validation")
           expected = {
               "source": "48a6c87f9e7757fdc58e5be9bcb4f8281ad0dfd0",
-              "private": "d1de74b20a98ef7752e04298134735ecfe75248f",
+              "private": "f92a4616b893b41eb305de52d50cbb43918ebfd9",
               "brand": "d2494da77bc59b7edb4082bb2a594f24997b6ece",
           }
           actual = {"source": source_sha, "private": private_sha, "brand": brand_sha}
