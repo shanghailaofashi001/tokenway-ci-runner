@@ -219,7 +219,7 @@ jobs:
           Get-FileHash -Algorithm SHA256 $installer.FullName
           Get-FileHash -Algorithm SHA256 $portable.FullName
 
-      - name: Silently install and smoke-test the packaged desktop app
+      - name: Silently install and separately smoke-test NSIS and portable builds
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -291,6 +291,88 @@ jobs:
             if ($appProcess -and -not $appProcess.HasExited) { taskkill /PID $appProcess.Id /T /F | Out-Null }
           }
 
+          # Run the portable build separately, with its own temporary APPDATA root.
+          # This proves the portable executable can launch its embedded backend and initialize
+          # a fresh database without colliding with the installed-app smoke test.
+          $portableAppData = Join-Path $env:RUNNER_TEMP 'tokenway-portable-appdata'
+          New-Item -ItemType Directory -Force -Path $portableAppData | Out-Null
+          $originalAppData = $env:APPDATA
+          $portableStdout = Join-Path $env:RUNNER_TEMP 'tokenway-portable.stdout.log'
+          $portableStderr = Join-Path $env:RUNNER_TEMP 'tokenway-portable.stderr.log'
+          $portableProcess = $null
+          try {
+            $portReleased = $false
+            for ($i = 0; $i -lt 20; $i++) {
+              $probe = [System.Net.Sockets.TcpClient]::new()
+              $busy = $false
+              try {
+                $connect = $probe.BeginConnect('127.0.0.1', 3000, $null, $null)
+                if ($connect.AsyncWaitHandle.WaitOne(500, $false) -and $probe.Connected) {
+                  $probe.EndConnect($connect)
+                  $busy = $true
+                }
+              } catch {
+                $busy = $false
+              } finally {
+                $probe.Dispose()
+              }
+              if (-not $busy) { $portReleased = $true; break }
+              Start-Sleep -Seconds 1
+            }
+            if (-not $portReleased) { throw 'Port 3000 was not released after stopping the installed desktop process.' }
+
+            $env:APPDATA = $portableAppData
+            $portableProcess = Start-Process -FilePath $env:TOKENWAY_PORTABLE -PassThru -RedirectStandardOutput $portableStdout -RedirectStandardError $portableStderr
+            $portableHealthy = $false
+            for ($i = 0; $i -lt 90; $i++) {
+              if ($portableProcess.HasExited) { break }
+              $client = [System.Net.Sockets.TcpClient]::new()
+              try {
+                $connect = $client.BeginConnect('127.0.0.1', 3000, $null, $null)
+                if ($connect.AsyncWaitHandle.WaitOne(1000, $false) -and $client.Connected) {
+                  $client.EndConnect($connect)
+                  $portableHealthy = $true
+                }
+              } catch {
+                $portableHealthy = $false
+              } finally {
+                $client.Dispose()
+              }
+              if ($portableHealthy) { break }
+              Start-Sleep -Seconds 1
+            }
+            if (-not $portableHealthy) {
+              if (Test-Path $portableStdout) { Get-Content $portableStdout -Tail 80 }
+              if (Test-Path $portableStderr) { Get-Content $portableStderr -Tail 80 }
+              throw 'Portable TokenWay V11 did not start its embedded backend on 127.0.0.1:3000 within 90 seconds.'
+            }
+
+            $portableDatabase = Join-Path (Join-Path (Join-Path $portableAppData 'TokenWay V11') 'data') 'tokenway-v11.db'
+            $portableDbReady = $false
+            for ($i = 0; $i -lt 15; $i++) {
+              if (Test-Path $portableDatabase) {
+                $portableDb = Get-Item $portableDatabase
+                if ($portableDb.Length -gt 0) { $portableDbReady = $true; break }
+              }
+              Start-Sleep -Seconds 1
+            }
+            if (-not $portableDbReady) {
+              if (Test-Path $portableStdout) { Get-Content $portableStdout -Tail 80 }
+              if (Test-Path $portableStderr) { Get-Content $portableStderr -Tail 80 }
+              throw "Portable executable did not create a non-empty isolated SQLite database: $portableDatabase"
+            }
+
+            @(
+              'PASS: portable executable launched separately from the installed build',
+              'PASS: portable app started its embedded backend on 127.0.0.1:3000',
+              "PASS: portable app created isolated SQLite database: $portableDatabase ($($portableDb.Length) bytes)",
+              'NOTE: portable smoke test used a temporary APPDATA root to avoid sharing the installed-app test database'
+            ) | Add-Content -Path (Join-Path $env:RUNNER_TEMP 'WINDOWS-DESKTOP-SMOKE-TEST.txt') -Encoding utf8
+          } finally {
+            if ($portableProcess -and -not $portableProcess.HasExited) { taskkill /PID $portableProcess.Id /T /F | Out-Null }
+            $env:APPDATA = $originalAppData
+          }
+
       - name: Prepare release checksums and acceptance report
         shell: pwsh
         run: |
@@ -312,6 +394,7 @@ jobs:
             "Portable: $(Split-Path -Leaf $env:TOKENWAY_PORTABLE)",
             '',
             'The NSIS installer was installed silently; the installed app launched the bundled Go backend and created its isolated per-user SQLite database.',
+            'The portable executable was also launched separately with a temporary APPDATA root; its bundled backend became reachable and it created a non-empty isolated SQLite database.',
             'Executables are not code-signed. A production distributor should sign them using its own Windows code-signing certificate.'
           ) | Set-Content (Join-Path $out 'WINDOWS-ACCEPTANCE.md')
           "Windows release files, checksums and installation smoke evidence are ready." | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
