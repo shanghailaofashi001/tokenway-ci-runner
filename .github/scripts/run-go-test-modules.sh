@@ -27,7 +27,7 @@ mapfile -t discovered_packages < <(
     sed '/^$/d' |
     sort -u
 )
-if (( "${#discovered_packages[@]}" == 0 )); then
+if (( ${#discovered_packages[@]} == 0 )); then
   echo "FAIL: no Root Go test packages were discovered." >&2
   exit 1
 fi
@@ -36,7 +36,7 @@ packages=()
 if [[ "$scope" == "all" || "$scope" == "root" ]]; then
   if [[ -n "$root_input" ]]; then
     mapfile -t packages < <(printf '%s' "$root_input" | tr ', ' '\n' | sed '/^[[:space:]]*$/d' | sort -u)
-    if (( "${#packages[@]}" == 0 )); then
+    if (( ${#packages[@]} == 0 )); then
       echo "FAIL: root_test_packages was supplied but contained no import paths." >&2
       exit 2
     fi
@@ -59,7 +59,7 @@ if [[ "$scope" == "all" || "$scope" == "root" ]]; then
     packages=(github.com/QuantumNous/new-api/router)
   else
     packages=("${discovered_packages[@]}")
-    if (( "${#packages[@]}" < 40 )); then
+    if (( ${#packages[@]} < 40 )); then
       echo "FAIL: discovered only ${#packages[@]} Root test packages; expected at least 40." >&2
       exit 1
     fi
@@ -188,23 +188,26 @@ run_module() (
 )
 
 module_pids=()
-if [[ "$scope" == "all" || "$scope" == "relaykit" ]]; then
+if [[ "$scope" == "relaykit" || ( "$scope" == "all" && -z "$root_input" && "${TOKENWAY_FINANCE_TARGETED_ONLY:-false}" != "true" && "${TOKENWAY_ROUTER_ONLY:-false}" != "true" && "${TOKENWAY_RECOVERY_ONLY:-false}" != "true" ) ]]; then
   run_module relaykit &
   module_pids+=("$!")
 fi
-if [[ "$scope" == "all" || "$scope" == "tokenkit" ]]; then
+if [[ "$scope" == "tokenkit" || ( "$scope" == "all" && -z "$root_input" && "${TOKENWAY_FINANCE_TARGETED_ONLY:-false}" != "true" && "${TOKENWAY_ROUTER_ONLY:-false}" != "true" && "${TOKENWAY_RECOVERY_ONLY:-false}" != "true" ) ]]; then
   run_module tokenkit &
   module_pids+=("$!")
+fi
+if [[ -n "$root_input" ]]; then
+  echo "Skipping nested modules for this targeted Root-package run."
 fi
 
 failed=0
 root_pids=()
-if (( "${#packages[@]}" > 0 )); then
+if (( ${#packages[@]} > 0 )); then
   echo "Root package worker limit: $parallelism (each package is a separate process with its own MySQL/PostgreSQL databases)"
   for pkg in "${packages[@]}"; do
     run_root_package "$pkg" &
     root_pids+=("$!")
-    if (( "${#root_pids[@]}" >= parallelism )); then
+    if (( ${#root_pids[@]} >= parallelism )); then
       if wait "$root_pids[0]"; then :; else failed=1; fi
       root_pids=("${root_pids[@]:1}")
     fi
@@ -225,6 +228,7 @@ done
     cat "$status_file"
   done
 } | tee "$log_dir/summary.txt"
+grep '^FAIL:' "$log_dir/summary.txt" > "$log_dir/failures.txt" || true
 
 if (( failed != 0 )); then
   echo "Go validation still has failures. Exact affected package/module names and logs are in $log_dir."
