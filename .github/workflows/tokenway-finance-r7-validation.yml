@@ -41,6 +41,7 @@ on:
     paths:
       - ".github/workflows/tokenway-finance-r7-validation.yml"
       - ".github/scripts/run-go-test-modules.sh"
+      - ".github/scripts/run-tokenway-integration-suites.sh"
 
   push:
     branches:
@@ -48,6 +49,7 @@ on:
     paths:
       - ".github/workflows/tokenway-finance-r7-validation.yml"
       - ".github/scripts/run-go-test-modules.sh"
+      - ".github/scripts/run-tokenway-integration-suites.sh"
       - ".github/scripts/apply_encrypted_chat_history_sync.py"
       - ".github/workflows/tokenway-chat-sync-route-guard.yml"
       - ".github/scripts/apply_tokenway_file_library.py"
@@ -178,6 +180,7 @@ jobs:
           python3 -m py_compile .tokenway-validation/apply-nowpayments-access-token-rules.py
           python3 -m py_compile .tokenway-validation/apply-shared-test-db-harness.py
           bash -n .github/scripts/run-go-test-modules.sh
+          bash -n .github/scripts/run-tokenway-integration-suites.sh
           test -s .tokenway-validation/apply-transactional-db-timestamp.py
           echo "Private validation inputs restored; source remains runner-local."
 
