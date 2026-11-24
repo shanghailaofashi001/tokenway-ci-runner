@@ -291,12 +291,10 @@ jobs:
             if ($appProcess -and -not $appProcess.HasExited) { taskkill /PID $appProcess.Id /T /F | Out-Null }
           }
 
-          # Run the portable build separately, with its own temporary APPDATA root.
-          # This proves the portable executable can launch its embedded backend and initialize
-          # a fresh database without colliding with the installed-app smoke test.
-          $portableAppData = Join-Path $env:RUNNER_TEMP 'tokenway-portable-appdata'
-          New-Item -ItemType Directory -Force -Path $portableAppData | Out-Null
-          $originalAppData = $env:APPDATA
+          # Run the portable build after removing the install-smoke database.
+          # Electron resolves appData through its native Windows path API; changing only
+          # process APPDATA is not a reliable way to redirect app.getPath('appData').
+          # Both desktop variants intentionally share the normal per-user TokenWay data root.
           $portableStdout = Join-Path $env:RUNNER_TEMP 'tokenway-portable.stdout.log'
           $portableStderr = Join-Path $env:RUNNER_TEMP 'tokenway-portable.stderr.log'
           $portableProcess = $null
@@ -321,7 +319,14 @@ jobs:
             }
             if (-not $portReleased) { throw 'Port 3000 was not released after stopping the installed desktop process.' }
 
-            $env:APPDATA = $portableAppData
+            # This is an ephemeral GitHub-hosted runner profile. Remove only the DB
+            # created by the immediately preceding installer smoke test so that the
+            # portable launch must initialize a fresh DB at the real product data path.
+            foreach ($file in @($database, "$database-wal", "$database-shm")) {
+              Remove-Item -LiteralPath $file -Force -ErrorAction SilentlyContinue
+            }
+            if (Test-Path -LiteralPath $database) { throw "Unable to clear install-smoke database before portable test: $database" }
+
             $portableProcess = Start-Process -FilePath $env:TOKENWAY_PORTABLE -PassThru -RedirectStandardOutput $portableStdout -RedirectStandardError $portableStderr
             $portableHealthy = $false
             for ($i = 0; $i -lt 90; $i++) {
@@ -347,11 +352,10 @@ jobs:
               throw 'Portable TokenWay V11 did not start its embedded backend on 127.0.0.1:3000 within 90 seconds.'
             }
 
-            $portableDatabase = Join-Path (Join-Path (Join-Path $portableAppData 'TokenWay V11') 'data') 'tokenway-v11.db'
             $portableDbReady = $false
             for ($i = 0; $i -lt 15; $i++) {
-              if (Test-Path $portableDatabase) {
-                $portableDb = Get-Item $portableDatabase
+              if (Test-Path -LiteralPath $database) {
+                $portableDb = Get-Item -LiteralPath $database
                 if ($portableDb.Length -gt 0) { $portableDbReady = $true; break }
               }
               Start-Sleep -Seconds 1
@@ -359,18 +363,17 @@ jobs:
             if (-not $portableDbReady) {
               if (Test-Path $portableStdout) { Get-Content $portableStdout -Tail 80 }
               if (Test-Path $portableStderr) { Get-Content $portableStderr -Tail 80 }
-              throw "Portable executable did not create a non-empty isolated SQLite database: $portableDatabase"
+              throw "Portable executable did not recreate a non-empty SQLite database at the normal per-user path: $database"
             }
 
             @(
               'PASS: portable executable launched separately from the installed build',
               'PASS: portable app started its embedded backend on 127.0.0.1:3000',
-              "PASS: portable app created isolated SQLite database: $portableDatabase ($($portableDb.Length) bytes)",
-              'NOTE: portable smoke test used a temporary APPDATA root to avoid sharing the installed-app test database'
+              "PASS: portable app recreated a non-empty SQLite database at the normal per-user path: $database ($($portableDb.Length) bytes)",
+              'NOTE: portable and installed builds share the normal per-user %APPDATA%\TokenWay V11 data root by product design; the prior smoke-test database was removed before portable launch'
             ) | Add-Content -Path (Join-Path $env:RUNNER_TEMP 'WINDOWS-DESKTOP-SMOKE-TEST.txt') -Encoding utf8
           } finally {
             if ($portableProcess -and -not $portableProcess.HasExited) { taskkill /PID $portableProcess.Id /T /F | Out-Null }
-            $env:APPDATA = $originalAppData
           }
 
       - name: Prepare release checksums and acceptance report
@@ -394,7 +397,7 @@ jobs:
             "Portable: $(Split-Path -Leaf $env:TOKENWAY_PORTABLE)",
             '',
             'The NSIS installer was installed silently; the installed app launched the bundled Go backend and created its isolated per-user SQLite database.',
-            'The portable executable was also launched separately with a temporary APPDATA root; its bundled backend became reachable and it created a non-empty isolated SQLite database.',
+            'The portable executable was launched separately after the install-smoke database was removed; its bundled backend became reachable and it recreated a non-empty SQLite database at the normal per-user data path.',
             'Executables are not code-signed. A production distributor should sign them using its own Windows code-signing certificate.'
           ) | Set-Content (Join-Path $out 'WINDOWS-ACCEPTANCE.md')
           "Windows release files, checksums and installation smoke evidence are ready." | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
