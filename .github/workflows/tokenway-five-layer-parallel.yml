@@ -87,6 +87,8 @@ on:
       - ".github/scripts/run-go-test-modules.sh"
       - ".github/scripts/run-tokenway-integration-suites.sh"
       - ".github/scripts/classify-tokenway-go-failures.py"
+      - ".github/scripts/tokenway_go_test_selector.py"
+      - ".github/scripts/test-classify-tokenway-go-failures.py"
       - ".github/scripts/tokenway-source-snapshot.py"
       - ".github/scripts/apply-root-test-regressions.py"
   push:
@@ -98,6 +100,8 @@ on:
       - ".github/scripts/run-go-test-modules.sh"
       - ".github/scripts/run-tokenway-integration-suites.sh"
       - ".github/scripts/classify-tokenway-go-failures.py"
+      - ".github/scripts/tokenway_go_test_selector.py"
+      - ".github/scripts/test-classify-tokenway-go-failures.py"
       - ".github/scripts/tokenway-source-snapshot.py"
       - ".github/scripts/apply-root-test-regressions.py"
 
@@ -199,6 +203,7 @@ jobs:
           bash -n .github/scripts/run-go-test-modules.sh
           bash -n .github/scripts/run-tokenway-integration-suites.sh
           python3 -m py_compile .github/scripts/tokenway-source-snapshot.py
+          python3 -m py_compile .github/scripts/tokenway_go_test_selector.py
           python3 -m py_compile .github/scripts/classify-tokenway-go-failures.py
           python3 .github/scripts/test-classify-tokenway-go-failures.py
           test -s .tokenway-validation/apply-transactional-db-timestamp.py
