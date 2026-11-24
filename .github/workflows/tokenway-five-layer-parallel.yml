@@ -200,6 +200,7 @@ jobs:
           bash -n .github/scripts/run-tokenway-integration-suites.sh
           python3 -m py_compile .github/scripts/tokenway-source-snapshot.py
           python3 -m py_compile .github/scripts/classify-tokenway-go-failures.py
+          python3 .github/scripts/test-classify-tokenway-go-failures.py
           test -s .tokenway-validation/apply-transactional-db-timestamp.py
           echo "Private validation inputs restored; source remains runner-local."
 
