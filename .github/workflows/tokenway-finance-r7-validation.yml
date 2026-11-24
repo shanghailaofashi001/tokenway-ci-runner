@@ -661,7 +661,7 @@ jobs:
           test -s source/vendor/modules.txt
 
       - name: Run targeted CNY wallet payment conversion regressions
-        if: ${{ env.TOKENWAY_PACKAGE_ONLY == 'true' }}
+        if: ${{ env.TOKENWAY_PACKAGE_ONLY == 'true' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[cny-targeted]')) }}
         working-directory: source
         shell: bash
         run: |
