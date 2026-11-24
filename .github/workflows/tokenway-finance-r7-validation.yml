@@ -132,7 +132,7 @@ jobs:
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
           repository: shanghailaofashi001/tokenway-v11-dev
-          ref: 4ef334eff0a14e52c6552abd2ff773727eaebc2f
+          ref: 6cf1038df263f7bcc64f351b1b0523f4608142ce
           token: ${{ secrets.TOKENWAY_SOURCE_READ_TOKEN }}
           path: private
           fetch-depth: 1
@@ -785,6 +785,37 @@ jobs:
           go test -v -timeout 8m ./model -run TestWalletLedgerAcrossSupportedDatabases -count=1
           echo "===== Signed Epay callback database matrix ====="
           go test -v -timeout 8m ./controller -run TestEpaySuccessfulTopUpCallbackIsSignedAndIdempotentAcrossDatabases -count=1
+      - name: Run task billing, refunds, task settlement and WebSocket integration regressions
+        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_KUAIPAO_ONLY != 'true' && env.TOKENWAY_FINANCE_TARGETED_ONLY != 'true' && (env.TOKENWAY_GO_MODULE_SCOPE == 'all' || env.TOKENWAY_GO_MODULE_SCOPE == 'root') && env.TOKENWAY_TARGETED_ONLY != 'true' }}
+        working-directory: source
+        shell: bash
+        env:
+          GOPROXY: off
+          GOSUMDB: off
+          GOTOOLCHAIN: local
+          GOMAXPROCS: '1'
+          GOFLAGS: -mod=vendor -p=1
+        run: |
+          set -euo pipefail
+          mkdir -p web/dist
+          printf '<!doctype html><html></html>\\n' > web/dist/index.html
+          run_suite() {
+            local package="$1" pattern="$2"
+            local discovered
+            discovered="$(go test -list "$pattern" "./$package")"
+            if ! grep -q '^Test' <<<"$discovered"; then
+              echo "FAIL: no integration tests discovered for $package / $pattern" >&2
+              exit 1
+            fi
+            echo "===== Integration suite: $package / $pattern ====="
+            go test -v -timeout 12m -parallel=1 -count=1 "./$package" -run "$pattern"
+          }
+          run_suite service '^(TestProcessRequestBillingRecoverySettlesRefundsAndReviewsUnknownOutcomes|TestSettle_.*|TestRefundTaskQuota_.*|TestUpdateBatchTasksSettlesTieredUsageForTerminalStates|TestUpdateBatchTasksRefundsFailedTieredTask|TestUpdateBatchTasksRefundsFailedTaskWithoutUsageSettlement)$'
+          run_suite controller '^(TestImmediateTaskSettlementDatabase|TestResponsesWS.*|TestResponsesWebSocket.*)$'
+          run_suite relay '^TestResponsesWS.*$'
+          run_suite pkg/wsmanager '^(TestCloseChannel.*|TestUnregisterPreventsClose|TestRegisteredCloseIsIdempotent|TestPublishCloseChannelsNoopsWhenRedisDisabled|TestRedisChannelCloseEventsStayWithinDatabase)$'
+          echo "PASS: refund, task settlement, WebSocket and Redis channel-close integration regressions."
+
       - name: Vet and build root, relaykit, and tokenkit modules concurrently
         if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && (env.TOKENWAY_GO_STATIC_ONLY == 'true' || github.event_name != 'push' || !contains(github.event.head_commit.message, '[resume-full-go]')) && env.TOKENWAY_KUAIPAO_ONLY != 'true' && env.TOKENWAY_RECOVERY_ONLY != 'true' && env.TOKENWAY_KUAIPAO_FRONTEND_ONLY != 'true' }}
         working-directory: source
@@ -831,6 +862,8 @@ jobs:
           echo "PASS: go vet and go build completed for root, relaykit, and tokenkit."
 
       - name: Run all discovered Root test packages and parallel isolated Go modules
+        env:
+          TOKENWAY_ROOT_TEST_SKIP_PATTERN: ${{ env.TOKENWAY_TARGETED_ONLY != 'true' && '^(TestProcessRequestBillingRecoverySettlesRefundsAndReviewsUnknownOutcomes|TestSettle_.*|TestRefundTaskQuota_.*|TestUpdateBatchTasksSettlesTieredUsageForTerminalStates|TestUpdateBatchTasksRefundsFailedTieredTask|TestUpdateBatchTasksRefundsFailedTaskWithoutUsageSettlement|TestImmediateTaskSettlementDatabase|TestResponsesWS.*|TestResponsesWebSocket.*|TestCloseChannel.*|TestUnregisterPreventsClose|TestRegisteredCloseIsIdempotent|TestPublishCloseChannelsNoopsWhenRedisDisabled|TestRedisChannelCloseEventsStayWithinDatabase)$' || '' }}
         if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && (github.event_name != 'push' || !contains(github.event.head_commit.message, '[frontend-only]')) && env.TOKENWAY_KUAIPAO_ONLY != 'true' && env.TOKENWAY_KUAIPAO_FRONTEND_ONLY != 'true' }}
         working-directory: source
         shell: bash
