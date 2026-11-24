@@ -31,6 +31,25 @@ on:
         required: false
         type: boolean
         default: false
+      task_db_dialect:
+        description: "Database dialect for a targeted task-settlement rerun"
+        required: false
+        type: choice
+        options:
+          - sqlite
+          - mysql
+          - postgres
+        default: sqlite
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/tokenway-finance-r7-validation.yml"
+      - ".github/scripts/run-go-test-modules.sh"
+      - ".github/scripts/run-tokenway-integration-suites.sh"
+      - ".github/scripts/classify-tokenway-go-failures.py"
+      - ".github/actions/tokenway-integration/action.yml"
+
   push:
     branches:
       - main
@@ -105,6 +124,7 @@ jobs:
       TOKENWAY_ROOT_TEST_PATTERN: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.root_test_pattern || '' }}
       TOKENWAY_TARGETED_ONLY: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.targeted_only == 'true') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[targeted-only]')) }}
       TOKENWAY_RUN_DATABASE_MATRIX: ${{ (github.event_name == 'workflow_dispatch' && (github.event.inputs.targeted_only != 'true' || github.event.inputs.run_database_matrix == 'true')) || (github.event_name == 'push' && (!contains(github.event.head_commit.message, '[targeted-only]') || contains(github.event.head_commit.message, '[database-matrix]'))) }}
+      TEST_TASK_DB_DIALECT: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.task_db_dialect || 'sqlite' }}
       TEST_MYSQL_DSN: root:tokenway-test@tcp(127.0.0.1:3306)/tokenway_test?charset=utf8mb4&parseTime=True&loc=Local
       TEST_POSTGRES_DSN: postgres://tokenway:tokenway-test@127.0.0.1:5432/tokenway_test?sslmode=disable
       TEST_MYSQL_LOG_DSN: root:tokenway-test@tcp(127.0.0.1:3306)/tokenway_test?charset=utf8mb4&parseTime=True&loc=Local
@@ -124,7 +144,7 @@ jobs:
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
           repository: shanghailaofashi001/tokenway-v11-dev
-          ref: 4ef334eff0a14e52c6552abd2ff773727eaebc2f
+          ref: c5b69282a3de3a5bac519b97cf50556b7c06814f
           token: ${{ secrets.TOKENWAY_SOURCE_READ_TOKEN }}
           path: private
           fetch-depth: 1
@@ -615,6 +635,11 @@ jobs:
         working-directory: source
         run: python3 ../.tokenway-validation/apply-task-quota-persistence-guard.py
 
+      - name: Apply Root concurrency and log regressions before validation
+        if: ${{ env.TOKENWAY_FRONTEND_ONLY != 'true' && env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_KUAIPAO_ONLY != 'true' && env.TOKENWAY_KUAIPAO_FRONTEND_ONLY != 'true' }}
+        working-directory: source
+        shell: bash
+        run: python3 ../.github/scripts/apply-root-test-regressions.py
       - name: Set up isolated Go 1.26.10 toolchain
         if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_KUAIPAO_FRONTEND_ONLY != 'true' }}
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
@@ -655,7 +680,7 @@ jobs:
           echo "Changed/new Go files are gofmt-clean."
 
       - name: Restore and vendor Go modules
-        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_KUAIPAO_FRONTEND_ONLY != 'true' }}
+        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' }}
         id: go_vendor
         shell: bash
         run: |
@@ -686,6 +711,10 @@ jobs:
           done
           test -s source/vendor/modules.txt
 
+      - name: Freeze the exact source tree used by all acceptance tests
+        if: ${{ env.TOKENWAY_FRONTEND_ONLY != 'true' && env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_KUAIPAO_FRONTEND_ONLY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_KUAIPAO_ONLY != 'true' && env.TOKENWAY_FINANCE_TARGETED_ONLY != 'true' && env.TOKENWAY_TARGETED_ONLY != 'true' }}
+        shell: bash
+        run: python3 .github/scripts/tokenway-source-snapshot.py write
       - name: Run targeted CNY wallet payment conversion regressions
         if: ${{ env.TOKENWAY_PACKAGE_ONLY == 'true' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[cny-targeted]')) }}
         working-directory: source
@@ -777,6 +806,11 @@ jobs:
           go test -v -timeout 8m ./model -run TestWalletLedgerAcrossSupportedDatabases -count=1
           echo "===== Signed Epay callback database matrix ====="
           go test -v -timeout 8m ./controller -run TestEpaySuccessfulTopUpCallbackIsSignedAndIdempotentAcrossDatabases -count=1
+      - name: Run TokenWay business integration suites
+        if: ${{ env.TOKENWAY_FRONTEND_ONLY != 'true' && env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_KUAIPAO_FRONTEND_ONLY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_KUAIPAO_ONLY != 'true' && env.TOKENWAY_FINANCE_TARGETED_ONLY != 'true' && (env.TOKENWAY_GO_MODULE_SCOPE == 'all' || env.TOKENWAY_GO_MODULE_SCOPE == 'root') && env.TOKENWAY_TARGETED_ONLY != 'true' }}
+        uses: ./.github/actions/tokenway-integration
+        with:
+          source-directory: source
       - name: Vet and build root, relaykit, and tokenkit modules concurrently
         if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && (env.TOKENWAY_GO_STATIC_ONLY == 'true' || github.event_name != 'push' || !contains(github.event.head_commit.message, '[resume-full-go]')) && env.TOKENWAY_KUAIPAO_ONLY != 'true' && env.TOKENWAY_RECOVERY_ONLY != 'true' && env.TOKENWAY_KUAIPAO_FRONTEND_ONLY != 'true' }}
         working-directory: source
@@ -823,11 +857,18 @@ jobs:
           echo "PASS: go vet and go build completed for root, relaykit, and tokenkit."
 
       - name: Run all discovered Root test packages and parallel isolated Go modules
+        id: root_go_tests
+        env:
+          TOKENWAY_SEPARATE_INTEGRATION_SUITES: ${{ env.TOKENWAY_TARGETED_ONLY != 'true' && env.TOKENWAY_FINANCE_TARGETED_ONLY != 'true' && env.TOKENWAY_RECOVERY_ONLY != 'true' && env.TOKENWAY_KUAIPAO_ONLY != 'true' && env.TOKENWAY_KUAIPAO_FRONTEND_ONLY != 'true' && env.TOKENWAY_FRONTEND_ONLY != 'true' && 'true' || 'false' }}
         if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && (github.event_name != 'push' || !contains(github.event.head_commit.message, '[frontend-only]')) && env.TOKENWAY_KUAIPAO_ONLY != 'true' && env.TOKENWAY_KUAIPAO_FRONTEND_ONLY != 'true' }}
         working-directory: source
         shell: bash
         run: bash ../.github/scripts/run-go-test-modules.sh
 
+      - name: Classify Root Go module and package failures for targeted reruns
+        if: ${{ always() && steps.root_go_tests.outcome != 'skipped' }}
+        shell: bash
+        run: python3 .github/scripts/classify-tokenway-go-failures.py "$RUNNER_TEMP/tokenway-go-validation-logs"
       - name: Upload failed Go package diagnostics for targeted follow-up
         if: ${{ failure() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -874,7 +915,7 @@ jobs:
         working-directory: source/web
         run: bun install --frozen-lockfile
 
-      - name: Format changed frontend files with protected headers
+      - name: Verify changed frontend formatting and protected headers
         if: ${{ env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_FINANCE_TARGETED_ONLY != 'true' && env.TOKENWAY_TARGETED_ONLY != 'true' }}
         working-directory: source/web
         shell: bash
@@ -893,10 +934,9 @@ jobs:
           if [ "${#format_files[@]}" -eq 0 ]; then
             echo "No changed frontend files require formatting."
           else
-            printf 'Formatting %s changed frontend files only\n' "${#format_files[@]}"
-            node ../../.tokenway-validation/format-changed-with-protected-headers.mjs --write "${format_files[@]}"
+            printf 'Checking %s changed frontend files only\n' "${#format_files[@]}"
             node ../../.tokenway-validation/format-changed-with-protected-headers.mjs --check "${format_files[@]}"
-            node ../../.tokenway-validation/apply-changed-copyright-headers.mjs --write "${format_files[@]}"
+            node ../../.tokenway-validation/format-changed-with-protected-headers.mjs --check "${format_files[@]}"
             node ../../.tokenway-validation/apply-changed-copyright-headers.mjs --check "${format_files[@]}"
           fi
 
@@ -1007,6 +1047,10 @@ jobs:
           node ../private/.tokenway-validation/test-media-plugin-contracts.mjs
           node ../private/.tokenway-validation/test-rc52-media-adapters.mjs
 
+      - name: Verify accepted source snapshot after all test layers
+        if: ${{ success() && env.TOKENWAY_FRONTEND_ONLY != 'true' && env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_KUAIPAO_ONLY != 'true' && env.TOKENWAY_FINANCE_TARGETED_ONLY != 'true' && env.TOKENWAY_TARGETED_ONLY != 'true' }}
+        shell: bash
+        run: python3 .github/scripts/tokenway-source-snapshot.py verify
       - name: Package the exact source tree validated by this run
         if: ${{ success() && env.TOKENWAY_FRONTEND_ONLY != 'true' && env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_KUAIPAO_ONLY != 'true' && env.TOKENWAY_FINANCE_TARGETED_ONLY != 'true' && env.TOKENWAY_TARGETED_ONLY != 'true' }}
         shell: bash
@@ -1105,6 +1149,12 @@ jobs:
               "model/test_database_helpers_test.go",
               "controller/access_token_audit_test.go",
               "controller/model_management_test.go",
+              "controller/relay_task_plugin_test.go",
+              "controller/responses_websocket_test.go",
+              "relay/responses_websocket_test.go",
+              "service/task_billing_test.go",
+              "service/task_polling_test.go",
+              "pkg/wsmanager/wsmanager_test.go",
           ]
           for relative in required_files:
               path = destination / relative
@@ -1134,6 +1184,13 @@ jobs:
                   tree_digest.update(b"F" + bytes([0]) + relative.encode("utf-8") + bytes([0]) + bytes.fromhex(digest) + bytes([10]))
 
           source_tree_sha256 = tree_digest.hexdigest()
+          expected_source_tree_sha256 = (
+              root / ".tokenway-validation/ACCEPTED-SOURCE-TREE.sha256"
+          ).read_text(encoding="utf-8").strip()
+          if source_tree_sha256 != expected_source_tree_sha256:
+              raise SystemExit(
+                  "Refusing to package: staged source tree differs from the snapshot used by the test layers."
+              )
           (stage / "FILE-CHECKSUMS.sha256").write_text(
               "\n".join(file_records) + "\n", encoding="utf-8"
           )
@@ -1167,8 +1224,9 @@ jobs:
                   "Go formatting, dependency verification, offline dependency graph, vet and build",
                   "All discovered Root Go test packages (including e2e and channel adapters), plus Relaykit and Tokenkit module test suites",
                   "Root test packages run in isolated processes with package-specific disposable SQL databases; Relaykit and Tokenkit run as independent parallel modules",
-                  "A shared loopback-only SQL test harness creates per-test databases and applies production model migrations for schema-sensitive tests",
+                  "A shared loopback-only SQL test harness creates per-test databases; schema-sensitive model tests use production migrations, and task-settlement dialect tests use disposable databases for the exact model set under test",
                   "Wallet ledger and signed Epay callback integration tests on SQLite, MySQL and PostgreSQL",
+                  "Request billing recovery/refunds, task terminal-state settlement and refunds, task submission durability, Responses WebSocket lifecycle/accounting, and Redis channel-close isolation; immediate task settlement runs on SQLite, MySQL and PostgreSQL",
                   "Frontend production build, TypeScript typecheck, unit tests, Oxlint, format/copyright and TokenWay media contracts",
               ],
               "contents": {
