@@ -39,3 +39,5 @@ jobs:
           print("TokenWay API DNS/TLS/HTTP reachability: OK")
           print("JSON envelope keys:", ", ".join(sorted(payload.keys())))
           PY
+
+# Read-only live reachability recheck: 2026-11-24 after TOKENWAY five-layer acceptance.
