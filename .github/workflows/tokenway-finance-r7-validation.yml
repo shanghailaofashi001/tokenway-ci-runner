@@ -67,6 +67,7 @@ jobs:
       TOKENWAY_GO_STATIC_ONLY: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[go-static-only]') }}
       TOKENWAY_PACKAGE_ONLY: 'false' # Disabled: final archives must come from the same successful acceptance run.
       TOKENWAY_KUAIPAO_ONLY: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[kuaipao-only]') }}
+      TOKENWAY_FINANCE_TARGETED_ONLY: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[finance-targeted-only]') }}
       TEST_MYSQL_DSN: root:tokenway-test@tcp(127.0.0.1:3306)/tokenway_test?charset=utf8mb4&parseTime=True&loc=Local
       TEST_POSTGRES_DSN: postgres://tokenway:tokenway-test@127.0.0.1:5432/tokenway_test?sslmode=disable
       TEST_MYSQL_LOG_DSN: root:tokenway-test@tcp(127.0.0.1:3306)/tokenway_test?charset=utf8mb4&parseTime=True&loc=Local
@@ -308,6 +309,8 @@ jobs:
           install -D private/.tokenway-patches/model/user_quota_adjustment_test.go source/model/user_quota_adjustment_test.go
           install -D private/.tokenway-patches/service/funding_source_test.go source/service/funding_source_test.go
           install -D private/.tokenway-patches/service/request_billing_recovery_test.go source/service/request_billing_recovery_test.go
+          install -D private/.tokenway-patches/service/funding_source.go source/service/funding_source.go
+          install -D private/.tokenway-patches/service/request_billing_recovery.go source/service/request_billing_recovery.go
           test -s source/internal/testsupport/database.go
           test -s source/model/test_database_helpers_test.go
           test -s source/model/wallet_ledger_dialect_test.go
@@ -317,7 +320,36 @@ jobs:
           test -s source/model/user_quota_adjustment_test.go
           test -s source/service/funding_source_test.go
           test -s source/service/request_billing_recovery_test.go
-          echo "PASS: tagged database and all retained finance regression test sources installed into the assembled V11 tree."
+          test -s source/service/funding_source.go
+          test -s source/service/request_billing_recovery.go
+          cmp -s private/.tokenway-patches/service/funding_source.go source/service/funding_source.go
+          cmp -s private/.tokenway-patches/service/request_billing_recovery.go source/service/request_billing_recovery.go
+          grep -Fq 'nextReserveSeq := w.reserveSeq + 1' source/service/funding_source.go
+          grep -Fq 'w.reserveSeq = nextReserveSeq' source/service/funding_source.go
+          grep -Fq 'MarkRequestBillingReview(journal.RequestID' source/service/request_billing_recovery.go
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("source/common/str.go")
+          source = path.read_text(encoding="utf-8")
+          old = """func NormalizeBillingPreference(pref string) string {
+          \tswitch strings.TrimSpace(pref) {
+          \tcase "subscription_first", "wallet_first", "subscription_only", "wallet_only":
+          \t\treturn strings.TrimSpace(pref)
+          \tdefault:
+          \t\treturn "subscription_first"
+          \t}
+          }"""
+          new = """func NormalizeBillingPreference(_ string) string {
+          \treturn "wallet_only"
+          }"""
+          if source.count(old) != 1:
+              raise SystemExit(f"expected exactly one billing preference implementation, found {source.count(old)}")
+          path.write_text(source.replace(old, new, 1), encoding="utf-8")
+          print("Wallet-only billing preference policy applied.")
+          PY
+          grep -Fq 'func NormalizeBillingPreference(_ string) string' source/common/str.go
+          grep -Fq 'return "wallet_only"' source/common/str.go
+          echo "PASS: production finance sources and wallet-only billing policy are installed with their retained regression tests."
 
       - name: Correct CNY wallet and NOWPayments USD conversion
         working-directory: source
@@ -541,7 +573,7 @@ jobs:
           go test -v -timeout 3m ./relay/channel/advancedcustom -count=1 -run '^(TestKuaipaoPresetRoutesJoinBaseURLWithoutDuplicateV1|TestKuaipaoModelListManagementRoutesJoinBaseURLAndUseBearerAuth)$'
 
       - name: Run finance controller regression tests
-        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && (github.event_name != 'push' || !contains(github.event.head_commit.message, '[resume-full-go]')) && env.TOKENWAY_KUAIPAO_ONLY != 'true' }}
+        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && (github.event_name != 'push' || !contains(github.event.head_commit.message, '[resume-full-go]')) && env.TOKENWAY_KUAIPAO_ONLY != 'true' && env.TOKENWAY_FINANCE_TARGETED_ONLY != 'true' }}
         working-directory: source
         run: |
           set -euo pipefail
@@ -551,7 +583,7 @@ jobs:
           go test -v -timeout 5m ./controller -count=1 -run 'Test(NowPayments.*|GetNowPayments.*|GetPayMoney.*|ChatHistorySync.*|ApplyWalletQuotaDelta.*|ApplyTaskWalletQuotaDelta.*|BackfillWalletOpeningBalances.*|TransferAffQuotaToQuota.*|LegacyUserQuotaHelpersAlwaysWriteWalletLedger|RecordWalletOpeningBalanceTxWritesOnlyOpeningLedger|UserCheckinCreditsWalletAndLedgerInOneTransaction|RedeemCreditsQuotaExactlyOnce|RedeemRejectsWalletOverflow|RequestBillingJournal.*|UnknownRequestOutcome.*|ApplySubscriptionUsageDelta.*|CleanupSubscriptionPreConsumeRecordsRetainsUnresolvedReservations|PostConsumeUserSubscriptionDeltaRejectsOverflowAndInvalidState|PreConsumeUserSubscription.*|RefundSubscriptionPreConsumeIsAtomicAndIdempotent|SettleSubscriptionPreConsumeIsIdempotentAndClosesRefundPath|SubscriptionExtraReserveIsTrackedAndRefundedAtomically|SubscriptionPreConsumeHeartbeatWinsStaleReview|SubscriptionPreConsumeReviewBlocksSettlementAndRefund|SubscriptionRefundEscapesRequestIDLikeWildcards|SubscriptionSettlementIntentCanBeRecovered|ApplyTaskSubscriptionQuotaDelta.*|TaskSubscriptionSettlementAtomicallyAdjustsTokenAndUsageCounters|BillingRecoveryUsesSingleCombinedScheduledHandler)'
 
       - name: Run finance model regression tests
-        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && (github.event_name != 'push' || !contains(github.event.head_commit.message, '[resume-full-go]')) && env.TOKENWAY_KUAIPAO_ONLY != 'true' }}
+        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && (github.event_name != 'push' || !contains(github.event.head_commit.message, '[resume-full-go]')) && env.TOKENWAY_KUAIPAO_ONLY != 'true' && env.TOKENWAY_FINANCE_TARGETED_ONLY != 'true' }}
         working-directory: source
         run: |
           set -euo pipefail
@@ -559,7 +591,7 @@ jobs:
           go test -v -timeout 5m ./model -count=1 -run 'Test(NowPayments.*|GetNowPayments.*|ApplyWalletQuotaDelta.*|ApplyTaskWalletQuotaDelta.*|BackfillWalletOpeningBalances.*|TransferAffQuotaToQuota.*|LegacyUserQuotaHelpersAlwaysWriteWalletLedger|RecordWalletOpeningBalanceTxWritesOnlyOpeningLedger|UserCheckinCreditsWalletAndLedgerInOneTransaction|RedeemCreditsQuotaExactlyOnce|RedeemRejectsWalletOverflow|RequestBillingJournal.*|UnknownRequestOutcome.*|ApplySubscriptionUsageDelta.*|CleanupSubscriptionPreConsumeRecordsRetainsUnresolvedReservations|PostConsumeUserSubscriptionDeltaRejectsOverflowAndInvalidState|PreConsumeUserSubscription.*|RefundSubscriptionPreConsumeIsAtomicAndIdempotent|SettleSubscriptionPreConsumeIsIdempotentAndClosesRefundPath|SubscriptionExtraReserveIsTrackedAndRefundedAtomically|SubscriptionPreConsumeHeartbeatWinsStaleReview|SubscriptionPreConsumeReviewBlocksSettlementAndRefund|SubscriptionRefundEscapesRequestIDLikeWildcards|SubscriptionSettlementIntentCanBeRecovered|ApplyTaskSubscriptionQuotaDelta.*|TaskSubscriptionSettlementAtomicallyAdjustsTokenAndUsageCounters|BillingRecoveryUsesSingleCombinedScheduledHandler)'
 
       - name: Run finance service regression tests
-        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && (github.event_name != 'push' || !contains(github.event.head_commit.message, '[resume-full-go]')) && env.TOKENWAY_KUAIPAO_ONLY != 'true' }}
+        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && (github.event_name != 'push' || !contains(github.event.head_commit.message, '[resume-full-go]')) && env.TOKENWAY_KUAIPAO_ONLY != 'true' && env.TOKENWAY_FINANCE_TARGETED_ONLY != 'true' }}
         working-directory: source
         run: |
           set -euo pipefail
@@ -567,7 +599,7 @@ jobs:
           go test -v -timeout 5m ./service -count=1 -run 'Test(NowPayments.*|GetNowPayments.*|ApplyWalletQuotaDelta.*|ApplyTaskWalletQuotaDelta.*|BackfillWalletOpeningBalances.*|TransferAffQuotaToQuota.*|LegacyUserQuotaHelpersAlwaysWriteWalletLedger|RecordWalletOpeningBalanceTxWritesOnlyOpeningLedger|UserCheckinCreditsWalletAndLedgerInOneTransaction|RedeemCreditsQuotaExactlyOnce|RedeemRejectsWalletOverflow|RequestBillingJournal.*|UnknownRequestOutcome.*|ApplySubscriptionUsageDelta.*|CleanupSubscriptionPreConsumeRecordsRetainsUnresolvedReservations|PostConsumeUserSubscriptionDeltaRejectsOverflowAndInvalidState|PreConsumeUserSubscription.*|RefundSubscriptionPreConsumeIsAtomicAndIdempotent|SettleSubscriptionPreConsumeIsIdempotentAndClosesRefundPath|SubscriptionExtraReserveIsTrackedAndRefundedAtomically|SubscriptionPreConsumeHeartbeatWinsStaleReview|SubscriptionPreConsumeReviewBlocksSettlementAndRefund|SubscriptionRefundEscapesRequestIDLikeWildcards|SubscriptionSettlementIntentCanBeRecovered|ApplyTaskSubscriptionQuotaDelta.*|TaskSubscriptionSettlementAtomicallyAdjustsTokenAndUsageCounters|BillingRecoveryUsesSingleCombinedScheduledHandler)'
 
       - name: Run tagged SQLite MySQL PostgreSQL wallet and Epay integration regressions
-        if: ${{ success() && env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_KUAIPAO_ONLY != 'true' }}
+        if: ${{ success() && env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_KUAIPAO_ONLY != 'true' && env.TOKENWAY_FINANCE_TARGETED_ONLY != 'true' }}
         working-directory: source
         shell: bash
         run: |
@@ -606,7 +638,7 @@ jobs:
           (cd tokenkit && go build ./...)
 
       - name: Isolate tiered batch settlement regression before resuming full Go tests
-        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && (github.event_name != 'push' || (!contains(github.event.head_commit.message, '[router-only]') && !contains(github.event.head_commit.message, '[frontend-only]'))) && env.TOKENWAY_KUAIPAO_ONLY != 'true' }}
+        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && (github.event_name != 'push' || (!contains(github.event.head_commit.message, '[router-only]') && !contains(github.event.head_commit.message, '[frontend-only]'))) && env.TOKENWAY_KUAIPAO_ONLY != 'true' && env.TOKENWAY_FINANCE_TARGETED_ONLY != 'true' }}
         working-directory: source
         shell: bash
         run: |
@@ -652,7 +684,13 @@ jobs:
 
           # Run #50 passed every targeted package except router. Keep this retry
           # focused; a manual/full run still exercises the original package set.
-          if [[ "${TOKENWAY_ROUTER_ONLY:-false}" == "true" ]]; then
+          if [[ "${TOKENWAY_FINANCE_TARGETED_ONLY:-false}" == "true" ]]; then
+            # Only the two modules affected by this root-cause fix; do not rerun passing packages.
+            packages=(
+              github.com/QuantumNous/new-api/common
+              github.com/QuantumNous/new-api/service
+            )
+          elif [[ "${TOKENWAY_ROUTER_ONLY:-false}" == "true" ]]; then
             packages=(github.com/QuantumNous/new-api/router)
           else
             packages=(
@@ -694,7 +732,9 @@ jobs:
 
           # Run #50 passed both auxiliary modules; they are not part of a
           # router-only retry and remain included in a manual/full run.
-          if [[ "${TOKENWAY_ROUTER_ONLY:-false}" == "true" ]]; then
+          if [[ "${TOKENWAY_FINANCE_TARGETED_ONLY:-false}" == "true" ]]; then
+            echo "SKIP: Relaykit and Tokenkit were not changed by this finance fix; preserve their passing results."
+          elif [[ "${TOKENWAY_ROUTER_ONLY:-false}" == "true" ]]; then
             echo "SKIP: relaykit and tokenkit passed run #50 and were not changed."
           else
             for module in relaykit tokenkit; do
@@ -718,9 +758,9 @@ jobs:
             echo "Targeted Go validation still has failures."
             exit 1
           fi
-          echo "All previously failed root packages and both remaining modules passed."
+          echo "All selected root package regressions and applicable module tests passed."
       - name: Set up Bun 1.4.4
-        if: ${{ env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' }}
+        if: ${{ env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_FINANCE_TARGETED_ONLY != 'true' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -752,12 +792,12 @@ jobs:
           test "$("$bun_dir/bun" --version)" = "1.4.4"
 
       - name: Install frontend dependencies
-        if: ${{ env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' }}
+        if: ${{ env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_FINANCE_TARGETED_ONLY != 'true' }}
         working-directory: source/web
         run: bun install --frozen-lockfile
 
       - name: Format changed frontend files with protected headers
-        if: ${{ env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' }}
+        if: ${{ env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_FINANCE_TARGETED_ONLY != 'true' }}
         working-directory: source/web
         shell: bash
         run: |
@@ -792,22 +832,22 @@ jobs:
           bun run test -- src/features/channels/lib/__tests__/advanced-custom.test.ts -t "Kuaipao Advanced Custom templates"
 
       - name: Generate routes and build frontend
-        if: ${{ env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_KUAIPAO_ONLY != 'true' }}
+        if: ${{ env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_KUAIPAO_ONLY != 'true' && env.TOKENWAY_FINANCE_TARGETED_ONLY != 'true' }}
         working-directory: source/web
         run: bun run build
 
       - name: Frontend typecheck
-        if: ${{ env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_KUAIPAO_ONLY != 'true' }}
+        if: ${{ env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_KUAIPAO_ONLY != 'true' && env.TOKENWAY_FINANCE_TARGETED_ONLY != 'true' }}
         working-directory: source/web
         run: bun run typecheck
 
       - name: Frontend unit tests
-        if: ${{ env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_KUAIPAO_ONLY != 'true' }}
+        if: ${{ env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_KUAIPAO_ONLY != 'true' && env.TOKENWAY_FINANCE_TARGETED_ONLY != 'true' }}
         working-directory: source/web
         run: TOKIO_WORKER_THREADS=1 RAYON_NUM_THREADS=1 bun run test --maxWorkers=1
 
       - name: Frontend Oxlint
-        if: ${{ env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_KUAIPAO_ONLY != 'true' }}
+        if: ${{ env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_KUAIPAO_ONLY != 'true' && env.TOKENWAY_FINANCE_TARGETED_ONLY != 'true' }}
         working-directory: source/web
         shell: bash
         run: |
@@ -839,7 +879,7 @@ jobs:
           fi
 
       - name: Frontend format and copyright checks
-        if: ${{ env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_KUAIPAO_ONLY != 'true' }}
+        if: ${{ env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_KUAIPAO_ONLY != 'true' && env.TOKENWAY_FINANCE_TARGETED_ONLY != 'true' }}
         working-directory: source/web
         run: |
           set -euo pipefail
@@ -882,7 +922,7 @@ jobs:
           fi
 
       - name: Retained TokenWay media contract tests
-        if: ${{ env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_KUAIPAO_ONLY != 'true' }}
+        if: ${{ env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_KUAIPAO_ONLY != 'true' && env.TOKENWAY_FINANCE_TARGETED_ONLY != 'true' }}
         working-directory: source
         run: |
           set -euo pipefail
@@ -890,7 +930,7 @@ jobs:
           node ../private/.tokenway-validation/test-rc52-media-adapters.mjs
 
       - name: Package the exact source tree validated by this run
-        if: ${{ success() && env.TOKENWAY_FRONTEND_ONLY != 'true' && env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_KUAIPAO_ONLY != 'true' }}
+        if: ${{ success() && env.TOKENWAY_FRONTEND_ONLY != 'true' && env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_KUAIPAO_ONLY != 'true' && env.TOKENWAY_FINANCE_TARGETED_ONLY != 'true' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -1109,7 +1149,7 @@ jobs:
           PY
 
       - name: Upload same-run validated TokenWay V11 source archive
-        if: ${{ success() && env.TOKENWAY_FRONTEND_ONLY != 'true' && env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_KUAIPAO_ONLY != 'true' }}
+        if: ${{ success() && env.TOKENWAY_FRONTEND_ONLY != 'true' && env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_KUAIPAO_ONLY != 'true' && env.TOKENWAY_FINANCE_TARGETED_ONLY != 'true' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: tokenway-v11-validated-source
