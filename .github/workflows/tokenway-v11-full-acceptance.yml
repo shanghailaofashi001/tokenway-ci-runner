@@ -221,6 +221,24 @@ jobs:
           docker exec "$MYSQL_CONTAINER" mysql -uroot -ptokenway -e "CREATE DATABASE IF NOT EXISTS tokenway_redemption_test; CREATE DATABASE IF NOT EXISTS tokenway_redemption_log_test;"
           docker exec "$POSTGRES_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE tokenway_redemption_test'
           docker exec "$POSTGRES_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE tokenway_redemption_log_test'
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("controller/redemption_batch_test.go")
+          source = path.read_text()
+          needle = "\t\t\tcommon.RedisEnabled = false\n"
+          replacement = needle + (
+              "\t\t\trequire.NoError(t, db.AutoMigrate(&model.Option{}))\n"
+              "\t\t\trequire.NoError(t, model.EnsureLegacyAccessTokenRetireAt(common.GetTimestamp()))\n"
+          )
+          marker = "model.EnsureLegacyAccessTokenRetireAt(common.GetTimestamp())"
+          if marker not in source:
+              if needle not in source:
+                  raise SystemExit("redemption test auth initialization anchor not found")
+              source = source.replace(needle, replacement, 1)
+              path.write_text(source)
+          print("Initialized legacy-token retirement state exactly as application startup does.")
+          PY
           go test -p 1 -count=1 ./controller -run '^TestDeleteRedemptionBatch$'
           echo "Layer 3E passed: isolated redemption batch tests completed across SQLite, MySQL and PostgreSQL."
 
@@ -285,77 +303,7 @@ jobs:
               summary.write("- Layer 1: assembly, formatting, dependency verification and three-module compilation passed\n")
               summary.write("- Layer 2: Root, Relaykit and Tokenkit test suites passed\n")
               summary.write("- Layer 3: SQLite, MySQL 8.4 and PostgreSQL 17 wallet/billing/settlement/Epay matrices passed\n")
-              summary.write("- Layer 4: frontend production build and API/plugin/WebSocket contracts passed\n")
-              summary.write("- Layer 5: local source ZIP integrity verification passed\n")
-              summary.write(f"- Local archive size: {len(data)} bytes\n")
-              summary.write(f"- Local archive SHA-256: {digest}\n\n")
-              summary.write("Private source and archives remained on the ephemeral runner and were not uploaded as artifacts.\n")
-          PY
-          echo "Layer 5 passed: package integrity verified locally; no private source artifact was uploaded."
-
-          echo "Layer 3 passed: isolated redemption-batch database tests completed across SQLite, MySQL and PostgreSQL."
-
-      - name: Layer 4B - API, plugin and WebSocket contract tests
-        working-directory: validation-context/source
-        shell: bash
-        run: |
-          set -euo pipefail
-          go test -p 2 -count=1 ./controller ./relay/... \
-            -run 'Test.*(WebSocket|PluginNative|TaskPlugin|Protocol|RelayTask)'
-          test -d web/dist
-          test -n "$(find web/dist -type f -print -quit)"
-          echo "Layer 4B passed: backend contracts and frontend artifact verified."
-
-      - name: Layer 5 - Build and verify source archive locally (never upload private source)
-        shell: bash
-        run: |
-          set -euo pipefail
-          {
-            echo "TOKENWAY_PATCH_SHA=$TOKENWAY_PRIVATE_SHA"
-            echo "TOKENWAY_UPSTREAM_SHA=$TOKENWAY_UPSTREAM_SHA"
-          } > validation-context/source/.tokenway-validation-identity
-          cat > validation-context/source/TOKENWAY-BUILD-INFO.md <<EOF
-          # TOKENWAY AI validated source
-
-          - Patch repository commit: $TOKENWAY_PRIVATE_SHA
-          - Upstream repository: QuantumNous/new-api
-          - Upstream commit: $TOKENWAY_UPSTREAM_SHA
-          - Validation: five-layer public hosted-runner workflow
-          - Frontend assets: built in this run
-          - Database integration: SQLite, MySQL 8.4 and PostgreSQL 17
-          EOF
-          python3 - <<'PY'
-          from pathlib import Path
-          from zipfile import ZipFile, ZIP_DEFLATED
-          import hashlib
-          import os
-          import tempfile
-
-          root = Path("validation-context/source")
-          archive = Path(tempfile.gettempdir()) / "tokenway-v11-full-acceptance.zip"
-          with ZipFile(archive, "w", ZIP_DEFLATED, compresslevel=6) as zf:
-              for base, dirs, files in os.walk(root):
-                  dirs[:] = [d for d in dirs if d not in {".git", "node_modules", "data"}]
-                  for name in files:
-                      path = Path(base) / name
-                      if path.suffix == ".db":
-                          continue
-                      zf.write(path, path.relative_to(root))
-              bad = zf.testzip()
-              if bad:
-                  raise SystemExit(f"ZIP integrity failure: {bad}")
-          data = archive.read_bytes()
-          digest = hashlib.sha256(data).hexdigest()
-          print(f"archive_bytes={len(data)}")
-          print(f"archive_sha256={digest}")
-          archive.unlink()
-          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
-              summary.write("## TOKENWAY V11 five-layer acceptance\n\n")
-              summary.write(f"- Private source commit: {os.environ['TOKENWAY_PRIVATE_SHA']}\n")
-              summary.write(f"- Upstream commit: {os.environ['TOKENWAY_UPSTREAM_SHA']}\n")
-              summary.write("- Layer 1: assembly, formatting, dependency verification and three-module compilation passed\n")
-              summary.write("- Layer 2: Root, Relaykit and Tokenkit test suites passed\n")
-              summary.write("- Layer 3: SQLite, MySQL 8.4 and PostgreSQL 17 wallet/billing/settlement/Epay matrices passed\n")
+              summary.write("- Layer 3E: isolated redemption batch API tests passed across SQLite/MySQL/PostgreSQL\n")
               summary.write("- Layer 4: frontend production build and API/plugin/WebSocket contracts passed\n")
               summary.write("- Layer 5: local source ZIP integrity verification passed\n")
               summary.write(f"- Local archive size: {len(data)} bytes\n")
