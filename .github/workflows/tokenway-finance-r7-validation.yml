@@ -86,7 +86,7 @@ jobs:
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
           repository: shanghailaofashi001/tokenway-v11-dev
-          ref: d1dd4edb3c7491f3e8b786dd455920d2e0fc5dd4
+          ref: 347830873f07e08e43375f196aeaf6b8f9d6b74e
           token: ${{ secrets.TOKENWAY_SOURCE_READ_TOKEN }}
           path: private
           fetch-depth: 1
@@ -869,7 +869,7 @@ jobs:
               "product":"TokenWay V11",
               "package_type":"Kuaipao-migrated validated source archive",
               "source_commit":"48a6c87f9e7757fdc58e5be9bcb4f8281ad0dfd0",
-              "finance_validation_snapshot":"d1dd4edb3c7491f3e8b786dd455920d2e0fc5dd4",
+              "finance_validation_snapshot":"347830873f07e08e43375f196aeaf6b8f9d6b74e",
               "branding_snapshot":"d2494da77bc59b7edb4082bb2a594f24997b6ece",
               "kuaipao_migration_patch_sha256":hashlib.sha256(patch.read_bytes()).hexdigest(),
               "kuaipao_channels":["kuaipao_anthropic","kuaipao_openai_chat","kuaipao_openai_responses"],
@@ -1117,7 +1117,7 @@ jobs:
           brand_sha = git_head("private-validation")
           expected = {
               "source": "48a6c87f9e7757fdc58e5be9bcb4f8281ad0dfd0",
-              "private": "d1dd4edb3c7491f3e8b786dd455920d2e0fc5dd4",
+              "private": "347830873f07e08e43375f196aeaf6b8f9d6b74e",
               "brand": "d2494da77bc59b7edb4082bb2a594f24997b6ece",
           }
           actual = {"source": source_sha, "private": private_sha, "brand": brand_sha}
