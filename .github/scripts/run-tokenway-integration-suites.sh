@@ -3,7 +3,7 @@ set -Eeuo pipefail
 export GOPROXY=off GOSUMDB=off GOTOOLCHAIN=local GOMAXPROCS=1
 export GOFLAGS="-mod=vendor -p=1"
 : "${RUNNER_TEMP:=/tmp}"
-log_dir="$RUNNER_TEMP/tokenway-integration-logs"
+log_dir="$RUNNER_TEMP/tokenway-go-validation-logs"
 mkdir -p "$log_dir"
 report="$log_dir/integration-failure-classification.json"
 failed=0
