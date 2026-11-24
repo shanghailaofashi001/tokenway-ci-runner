@@ -65,7 +65,7 @@ jobs:
       TOKENWAY_LINT_ONLY: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[lint-only]') }}
       TOKENWAY_FRONTEND_VERIFY: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[frontend-verify]') }}
       TOKENWAY_GO_STATIC_ONLY: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[go-static-only]') }}
-      TOKENWAY_PACKAGE_ONLY: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[package-only]') }}
+      TOKENWAY_PACKAGE_ONLY: 'false' # Disabled: final archives must come from the same successful acceptance run.
       TOKENWAY_KUAIPAO_ONLY: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[kuaipao-only]') }}
       TEST_MYSQL_DSN: root:tokenway-test@tcp(127.0.0.1:3306)/tokenway_test?charset=utf8mb4&parseTime=True&loc=Local
       TEST_POSTGRES_DSN: postgres://tokenway:tokenway-test@127.0.0.1:5432/tokenway_test?sslmode=disable
@@ -294,7 +294,7 @@ jobs:
           grep -Fq 'var SystemName = "TokenWay AI"' common/constants.go
           printf '%s\n' "R7 finance patch applied to the full branded source tree."
 
-      - name: Install tagged TokenWay database integration test sources
+      - name: Install TokenWay finance and database integration test sources
         if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_KUAIPAO_ONLY != 'true' }}
         shell: bash
         run: |
@@ -303,11 +303,21 @@ jobs:
           install -D private/.tokenway-patches/model/test_database_helpers_test.go source/model/test_database_helpers_test.go
           install -D private/.tokenway-patches/model/wallet_ledger_dialect_test.go source/model/wallet_ledger_dialect_test.go
           install -D private/.tokenway-patches/controller/epay_callback_dialect_test.go source/controller/epay_callback_dialect_test.go
+          install -D private/.tokenway-patches/common/billing_preference_test.go source/common/billing_preference_test.go
+          install -D private/.tokenway-patches/model/topup_ledger_test.go source/model/topup_ledger_test.go
+          install -D private/.tokenway-patches/model/user_quota_adjustment_test.go source/model/user_quota_adjustment_test.go
+          install -D private/.tokenway-patches/service/funding_source_test.go source/service/funding_source_test.go
+          install -D private/.tokenway-patches/service/request_billing_recovery_test.go source/service/request_billing_recovery_test.go
           test -s source/internal/testsupport/database.go
           test -s source/model/test_database_helpers_test.go
           test -s source/model/wallet_ledger_dialect_test.go
           test -s source/controller/epay_callback_dialect_test.go
-          echo "PASS: tagged database integration test sources installed into the assembled V11 tree."
+          test -s source/common/billing_preference_test.go
+          test -s source/model/topup_ledger_test.go
+          test -s source/model/user_quota_adjustment_test.go
+          test -s source/service/funding_source_test.go
+          test -s source/service/request_billing_recovery_test.go
+          echo "PASS: tagged database and all retained finance regression test sources installed into the assembled V11 tree."
 
       - name: Correct CNY wallet and NOWPayments USD conversion
         working-directory: source
@@ -496,6 +506,29 @@ jobs:
             fi
           done
 
+      - name: Verify restored finance regression tests are discoverable
+        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_KUAIPAO_ONLY != 'true' }}
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          export GOPROXY=off GOSUMDB=off GOFLAGS="-mod=vendor -p=1" GOTOOLCHAIN=local
+          check_test() {
+            local package="$1"
+            local name="$2"
+            local listing
+            listing=$(go test -list "^${name}$" "./${package}")
+            if ! grep -Fxq "$name" <<<"$listing"; then
+              printf 'FAIL: %s/%s was not discovered by go test\n' "$package" "$name" >&2
+              exit 1
+            fi
+            printf 'PASS: discovered %s/%s\n' "$package" "$name"
+          }
+          check_test common TestNormalizeBillingPreferenceAlwaysUsesWalletBalance
+          check_test model TestCreditTopUpQuotaWritesIdempotentWalletLedger
+          check_test model TestAdjustUserQuotaWritesImmutableWalletLedger
+          check_test service TestWalletFundingReservationRetryKeepsIdempotencySequence
+          check_test service TestProcessRequestBillingRecoverySettlesRefundsAndReviewsUnknownOutcomes
       - name: Run only migrated Kuaipao Go regressions
         if: ${{ env.TOKENWAY_KUAIPAO_ONLY == 'true' }}
         working-directory: source
@@ -623,6 +656,7 @@ jobs:
             packages=(github.com/QuantumNous/new-api/router)
           else
             packages=(
+              github.com/QuantumNous/new-api/common
               github.com/QuantumNous/new-api/router
               github.com/QuantumNous/new-api/controller
               github.com/QuantumNous/new-api/model
@@ -854,6 +888,234 @@ jobs:
           set -euo pipefail
           node ../private/.tokenway-validation/test-media-plugin-contracts.mjs
           node ../private/.tokenway-validation/test-rc52-media-adapters.mjs
+
+      - name: Package the exact source tree validated by this run
+        if: ${{ success() && env.TOKENWAY_FRONTEND_ONLY != 'true' && env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_KUAIPAO_ONLY != 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          import shutil
+          import subprocess
+          import tarfile
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          root = Path.cwd()
+          source = root / "source"
+          if not source.is_dir():
+              raise SystemExit("Refusing to package: assembled source directory is missing.")
+
+          def git_head(folder):
+              return subprocess.check_output(
+                  ["git", "-C", str(root / folder), "rev-parse", "HEAD"],
+                  text=True,
+              ).strip()
+
+          source_commit = git_head("source")
+          private_commit = git_head("private")
+          brand_commit = git_head("private-validation")
+          finance_patch = root / ".tokenway-validation/R7-finance-migration.patch.b64"
+          kuaipao_patch = root / ".tokenway-validation/kuaipao-v11-migration.patch"
+          for required_input in (finance_patch, kuaipao_patch):
+              if not required_input.is_file() or required_input.stat().st_size == 0:
+                  raise SystemExit(f"Refusing to package: required patch input is missing: {required_input}")
+
+          stage = Path(os.environ["RUNNER_TEMP"]) / "tokenway-v11-same-run-release"
+          if stage.exists():
+              shutil.rmtree(stage)
+          stage.mkdir(parents=True)
+          destination = stage / "TokenWay-V11"
+
+          excluded_dirs = {
+              ".git", "node_modules", "dist", "coverage", ".cache", ".vite",
+              ".tanstack", ".turbo", ".next", ".output", "tmp", "logs",
+          }
+          env_examples = {".env.example", ".env.sample", ".env.template"}
+          excluded_env = {".env", ".env.local", ".env.production", ".env.development"}
+
+          def ignore(directory, names):
+              rejected = []
+              for name in names:
+                  full = Path(directory) / name
+                  if full.is_dir() and name in excluded_dirs:
+                      rejected.append(name)
+                  elif name in excluded_env:
+                      rejected.append(name)
+                  elif name.startswith(".env.") and name not in env_examples:
+                      rejected.append(name)
+                  elif name == ".DS_Store" or name.endswith(".log"):
+                      rejected.append(name)
+                  elif full.is_file() and Path(name).suffix.lower() in {".sqlite", ".sqlite3", ".db"}:
+                      rejected.append(name)
+              return rejected
+
+          shutil.copytree(source, destination, ignore=ignore, symlinks=True)
+
+          required_files = [
+              "go.mod",
+              "vendor/modules.txt",
+              "relaykit/go.mod",
+              "relaykit/vendor/modules.txt",
+              "tokenkit/go.mod",
+              "tokenkit/vendor/modules.txt",
+              "web/package.json",
+              "web/src/assets/tokenway-home/hero-scene.webp",
+              "controller/nowpayments.go",
+              "model/wallet_ledger.go",
+              "model/request_billing_journal.go",
+              "service/request_billing_recovery.go",
+              "common/billing_preference_test.go",
+              "model/topup_ledger_test.go",
+              "model/user_quota_adjustment_test.go",
+              "service/funding_source_test.go",
+              "service/request_billing_recovery_test.go",
+              "model/wallet_ledger_dialect_test.go",
+              "controller/epay_callback_dialect_test.go",
+          ]
+          for relative in required_files:
+              path = destination / relative
+              if not path.is_file() or path.stat().st_size == 0:
+                  raise SystemExit(f"Refusing to package: required validated source file missing or empty: {relative}")
+
+          for path in destination.rglob("*"):
+              if path.is_symlink():
+                  try:
+                      resolved = path.resolve(strict=True)
+                  except FileNotFoundError:
+                      raise SystemExit(f"Broken symlink in validated source: {path.relative_to(destination)}")
+                  if not resolved.is_relative_to(destination.resolve()):
+                      raise SystemExit(f"External symlink in validated source: {path.relative_to(destination)}")
+
+          file_records = []
+          tree_digest = hashlib.sha256()
+          for path in sorted(destination.rglob("*")):
+              relative = path.relative_to(destination).as_posix()
+              if path.is_symlink():
+                  target = os.readlink(path)
+                  file_records.append(f"SYMLINK {target}  TokenWay-V11/{relative}")
+                  tree_digest.update(b"L" + bytes([0]) + relative.encode("utf-8") + bytes([0]) + target.encode("utf-8") + bytes([10]))
+              elif path.is_file():
+                  digest = hashlib.sha256(path.read_bytes()).hexdigest()
+                  file_records.append(f"{digest}  TokenWay-V11/{relative}")
+                  tree_digest.update(b"F" + bytes([0]) + relative.encode("utf-8") + bytes([0]) + bytes.fromhex(digest) + bytes([10]))
+
+          source_tree_sha256 = tree_digest.hexdigest()
+          (stage / "FILE-CHECKSUMS.sha256").write_text(
+              "\n".join(file_records) + "\n", encoding="utf-8"
+          )
+
+          manifest = {
+              "product": "TokenWay V11",
+              "package_type": "same-run validated source archive",
+              "created_at_utc": datetime.now(timezone.utc).isoformat(),
+              "acceptance": {
+                  "repository": os.environ["GITHUB_REPOSITORY"],
+                  "workflow": os.environ.get("GITHUB_WORKFLOW", ""),
+                  "workflow_commit": os.environ["GITHUB_SHA"],
+                  "ref": os.environ.get("GITHUB_REF", ""),
+                  "run_id": int(os.environ["GITHUB_RUN_ID"]),
+                  "run_number": int(os.environ["GITHUB_RUN_NUMBER"]),
+                  "result": "success — package step runs only after every required acceptance step succeeds",
+              },
+              "source": {
+                  "repository": "QuantumNous/new-api",
+                  "commit": source_commit,
+                  "assembled_source_tree_sha256": source_tree_sha256,
+              },
+              "tokenway_validation": {
+                  "repository": "shanghailaofashi001/tokenway-v11-dev",
+                  "private_snapshot_commit": private_commit,
+                  "branding_snapshot_commit": brand_commit,
+                  "finance_migration_patch_sha256": hashlib.sha256(finance_patch.read_bytes()).hexdigest(),
+                  "kuaipao_migration_patch_sha256": hashlib.sha256(kuaipao_patch.read_bytes()).hexdigest(),
+              },
+              "validated_layers": [
+                  "Go formatting, dependency verification, offline dependency graph, vet and build",
+                  "Root finance regression packages, Relaykit and Tokenkit module test suites",
+                  "Wallet ledger and signed Epay callback integration tests on SQLite, MySQL and PostgreSQL",
+                  "Frontend production build, TypeScript typecheck, unit tests, Oxlint, format/copyright and TokenWay media contracts",
+              ],
+              "contents": {
+                  "source_file_count": len(file_records),
+                  "vendored_go_dependencies": True,
+                  "original_tokenway_brand_assets": True,
+                  "git_metadata_included": False,
+                  "node_modules_included": False,
+                  "generated_frontend_dist_included": False,
+                  "local_env_and_database_files_included": False,
+              },
+              "limitations": [
+                  "No live merchant payment credentials or production settlement endpoints were used; live provider acceptance is not claimed."
+              ],
+          }
+          (stage / "RELEASE-MANIFEST.json").write_text(
+              json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
+
+          run_url = f"{os.environ.get('GITHUB_SERVER_URL', 'https://github.com')}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}"
+          evidence = [
+              "# TokenWay V11 — same-run validation evidence",
+              "",
+              f"- Acceptance run: {run_url}",
+              f"- CI workflow commit: {os.environ['GITHUB_SHA']}",
+              f"- Upstream source commit: {source_commit}",
+              f"- Assembled source tree SHA-256: {source_tree_sha256}",
+              f"- Private validation snapshot: {private_commit}",
+              f"- Branding snapshot: {brand_commit}",
+              "",
+              "The archive was created from the exact assembled source directory used by this successful workflow run. No source or dependency manifest was merged from a different acceptance run after tests completed.",
+              "",
+              "The package contains vendored Go dependencies and preserved TokenWay branding assets. It excludes Git metadata, local secrets, local databases, node_modules and generated frontend output.",
+              "",
+              "Live merchant credentials, production payment callbacks, live chain settlement and production refunds were not exercised.",
+          ]
+          (stage / "VALIDATION-EVIDENCE.md").write_text("\n".join(evidence) + "\n", encoding="utf-8")
+          (stage / "PACKAGE-README.md").write_text(
+              "# TokenWay V11 validated source package\n\n"
+              "The complete assembled source is in TokenWay-V11/.\n\n"
+              "Read RELEASE-MANIFEST.json, VALIDATION-EVIDENCE.md and FILE-CHECKSUMS.sha256. "
+              "The manifest binds the archive to the same successful CI run and exact assembled source-tree digest.\n",
+              encoding="utf-8",
+          )
+
+          archive = Path(os.environ["RUNNER_TEMP"]) / "TokenWay-V11-validated-source.tar.gz"
+          if archive.exists():
+              archive.unlink()
+          with tarfile.open(archive, "w:gz") as bundle:
+              bundle.add(stage, arcname=".")
+          subprocess.run(["tar", "-tzf", str(archive)], check=True, stdout=subprocess.DEVNULL)
+          archive_sha256 = hashlib.sha256(archive.read_bytes()).hexdigest()
+          archive_size = archive.stat().st_size
+
+          summary = Path(os.environ["GITHUB_STEP_SUMMARY"])
+          with summary.open("a", encoding="utf-8") as output:
+              output.write("## TokenWay V11 same-run validated source archive\n\n")
+              output.write(f"- Acceptance run: {run_url}\n")
+              output.write(f"- Upstream source commit: {source_commit}\n")
+              output.write(f"- Assembled source tree SHA-256: {source_tree_sha256}\n")
+              output.write(f"- Archive size: {archive_size} bytes\n")
+              output.write(f"- Archive SHA-256: {archive_sha256}\n")
+              output.write(f"- Source files and symlinks: {len(file_records)}\n")
+          print(f"PACKAGE_READY: {archive}")
+          print(f"SOURCE_TREE_SHA256: {source_tree_sha256}")
+          print(f"PACKAGE_SIZE_BYTES: {archive_size}")
+          print(f"PACKAGE_SHA256: {archive_sha256}")
+          print(f"SOURCE_FILES_AND_SYMLINKS: {len(file_records)}")
+          PY
+
+      - name: Upload same-run validated TokenWay V11 source archive
+        if: ${{ success() && env.TOKENWAY_FRONTEND_ONLY != 'true' && env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_KUAIPAO_ONLY != 'true' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: tokenway-v11-validated-source
+          path: ${{ runner.temp }}/TokenWay-V11-validated-source.tar.gz
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Package migrated Kuaipao-enabled TokenWay V11 source
         if: ${{ success() && env.TOKENWAY_KUAIPAO_ONLY == 'true' }}
