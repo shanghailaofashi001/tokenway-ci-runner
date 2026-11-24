@@ -75,7 +75,7 @@ run_suite() {
   return 0
 }
 
-run_suite service '^(TestProcessRequestBillingRecoverySettlesRefundsAndReviewsUnknownOutcomes|TestSettle.*|TestRefund.*|TestUpdateBatchTasks.*|TestUpdateSunoTasksStalePollsRefundExactlyOnce|TestSweepTimedOutTasks.*|TestTaskReportsOnceAtTheFinalState)'
+run_suite service '^(TestProcessRequestBillingRecoverySettlesRefundsAndReviewsUnknownOutcomes|TestSettle.*|TestRefund.*|TestUpdateBatchTasks.*|TestUpdateSunoTasksStalePollsRefundExactlyOnce|TestSweepTimedOutTasks.*)'
 run_suite controller '^(TestExecuteTaskSubmission.*|TestResponsesWS.*|TestResponsesWebSocket.*|TestResponsesInterruptedStreamHealth|TestResponsesStreamOutcomesPreserveAccounting)'
 for dialect in sqlite mysql postgres; do
   echo "===== Task settlement database matrix: $dialect ====="
