@@ -294,6 +294,21 @@ jobs:
           grep -Fq 'var SystemName = "TokenWay AI"' common/constants.go
           printf '%s\n' "R7 finance patch applied to the full branded source tree."
 
+      - name: Install tagged TokenWay database integration test sources
+        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_KUAIPAO_ONLY != 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -D private/.tokenway-patches/internal/testsupport/database_test.go source/internal/testsupport/database.go
+          install -D private/.tokenway-patches/model/test_database_helpers_test.go source/model/test_database_helpers_test.go
+          install -D private/.tokenway-patches/model/wallet_ledger_dialect_test.go source/model/wallet_ledger_dialect_test.go
+          install -D private/.tokenway-patches/controller/epay_callback_dialect_test.go source/controller/epay_callback_dialect_test.go
+          test -s source/internal/testsupport/database.go
+          test -s source/model/test_database_helpers_test.go
+          test -s source/model/wallet_ledger_dialect_test.go
+          test -s source/controller/epay_callback_dialect_test.go
+          echo "PASS: tagged database integration test sources installed into the assembled V11 tree."
+
       - name: Correct CNY wallet and NOWPayments USD conversion
         working-directory: source
         shell: bash
