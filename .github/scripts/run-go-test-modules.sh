@@ -290,6 +290,43 @@ done
 } | tee "$log_dir/summary.txt"
 grep '^FAIL:' "$log_dir/summary.txt" > "$log_dir/failures.txt" || true
 
+# Emit machine-readable failure routing so a failed module/package can be
+# rerun without repeating unrelated successful suites.
+python3 - "$log_dir" <<'PY'
+import json
+import pathlib
+import re
+import sys
+
+log_dir = pathlib.Path(sys.argv[1])
+results = []
+for path in sorted(log_dir.glob("*.status")):
+    line = path.read_text(encoding="utf-8").strip()
+    if not line:
+        continue
+    failed = line.startswith("FAIL:")
+    match = re.match(r"(?:PASS|FAIL): (.+?)(?: \\(exit \\d+\\))?$", line)
+    subject = match.group(1) if match else path.stem
+    if subject.endswith(" full test suite"):
+        module = subject.removesuffix(" full test suite")
+        suite = "go-module"
+        selector = {"go_module_scope": module}
+    else:
+        module = "root"
+        suite = "root-package"
+        selector = {"go_module_scope": "root", "root_test_packages": subject}
+    results.append({"status": "failed" if failed else "passed", "suite": suite,
+                    "module": module, "package": subject if suite == "root-package" else None,
+                    "rerun_selector": selector, "status_file": path.name})
+failures = [item for item in results if item["status"] == "failed"]
+report = {"schema_version": 1, "overall": "failed" if failures else "passed",
+          "failed_count": len(failures), "results": results,
+          "targeted_rerun": [item["rerun_selector"] for item in failures]}
+(log_dir / "failure-classification.json").write_text(
+    json.dumps(report, ensure_ascii=False, indent=2) + "\\n", encoding="utf-8")
+print(f"Wrote failure-classification.json: {len(failures)} failed suite(s) across {len(results)} result(s).")
+PY
+
 if (( failed != 0 )); then
   echo "Go validation still has failures. Exact affected package/module names and logs are in $log_dir."
   exit 1
