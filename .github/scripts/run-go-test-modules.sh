@@ -30,6 +30,7 @@ PY
 fi
 
 root_test_pattern="${TOKENWAY_ROOT_TEST_PATTERN:-}"
+separate_integration_suites="${TOKENWAY_SEPARATE_INTEGRATION_SUITES:-false}"
 if [[ -z "$root_test_pattern" && "${GITHUB_EVENT_NAME:-}" == "push" && -n "${GITHUB_EVENT_PATH:-}" && -f "$GITHUB_EVENT_PATH" ]]; then
   root_test_pattern="$(python3 - "$GITHUB_EVENT_PATH" <<'PY'
 import json
@@ -179,6 +180,23 @@ run_root_package() (
     test_args+=(-run "$root_test_pattern")
   elif [[ "${TOKENWAY_RECOVERY_ONLY:-false}" == "true" && -z "$root_input" ]]; then
     test_args+=(-run '^TestProcessRequestBillingRecoverySettlesRefundsAndReviewsUnknownOutcomes$')
+  fi
+
+  if [[ "$separate_integration_suites" == "true" ]]; then
+    case "$pkg" in
+      github.com/QuantumNous/new-api/service)
+        test_args+=(-skip "^(TestProcessRequestBillingRecoverySettlesRefundsAndReviewsUnknownOutcomes|TestSettle.*|TestRefund.*|TestUpdateBatchTasks.*|TestUpdateSunoTasksStalePollsRefundExactlyOnce|TestSweepTimedOutTasks.*|TestTaskReportsOnceAtTheFinalState)")
+        ;;
+      github.com/QuantumNous/new-api/controller)
+        test_args+=(-skip "^(TestImmediateTaskSettlementDatabase|TestExecuteTaskSubmission.*|TestResponsesWS.*|TestResponsesWebSocket.*|TestResponsesInterruptedStreamHealth|TestResponsesStreamOutcomesPreserveAccounting)")
+        ;;
+      github.com/QuantumNous/new-api/relay)
+        test_args+=(-skip "^TestResponsesWS.*")
+        ;;
+      github.com/QuantumNous/new-api/pkg/wsmanager)
+        test_args+=(-skip "^(TestCloseChannel.*|TestUnregisterPreventsClose|TestRegisteredCloseIsIdempotent|TestPublishCloseChannelsNoopsWhenRedisDisabled|TestRedisChannelCloseEventsStayWithinDatabase)")
+        ;;
+    esac
   fi
 
   if timeout --signal=TERM --kill-after=30s 17m go test "${test_args[@]}" "$pkg" > "$logfile" 2>&1; then
