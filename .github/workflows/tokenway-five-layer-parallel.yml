@@ -170,6 +170,7 @@ jobs:
           cp private/.tokenway-validation/apply-payment-quota-error-compat.py .tokenway-validation/apply-payment-quota-error-compat.py
           cp private/.tokenway-validation/apply-nowpayments-access-token-rules.py .tokenway-validation/apply-nowpayments-access-token-rules.py
           cp -a private-validation/.tokenway-validation/. .tokenway-validation/
+          cp private/.tokenway-validation/apply-shared-test-db-harness.py .tokenway-validation/apply-shared-test-db-harness.py
           cp private/.tokenway-validation/apply-frontend-oxlint-fixes.py .tokenway-validation/apply-frontend-oxlint-fixes.py
           cp private/.tokenway-validation/format-changed-with-protected-headers.mjs .tokenway-validation/format-changed-with-protected-headers.mjs
           cp private/.tokenway-validation/apply-changed-copyright-headers.mjs .tokenway-validation/apply-changed-copyright-headers.mjs
@@ -742,6 +743,41 @@ jobs:
             node ../../.tokenway-validation/apply-changed-copyright-headers.mjs --write "${format_files[@]}"
             node ../../.tokenway-validation/apply-changed-copyright-headers.mjs --check "${format_files[@]}"
           fi
+
+      - name: Final Go formatting pass on all changed non-vendored source files
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t go_files < <(
+            python3 - <<'PY'
+          import pathlib
+          import subprocess
+          root = pathlib.Path("source")
+          tracked = subprocess.check_output(
+              ["git", "-C", str(root), "diff", "--name-only", "--diff-filter=ACMRT", "HEAD"],
+              text=True,
+          )
+          untracked = subprocess.check_output(
+              ["git", "-C", str(root), "ls-files", "--others", "--exclude-standard"],
+              text=True,
+          )
+          excluded = {"vendor", "node_modules", "dist", "coverage", ".cache", ".git"}
+          paths = sorted(set(tracked.splitlines()) | set(untracked.splitlines()))
+          for name in paths:
+              path = pathlib.PurePosixPath(name)
+              if name.endswith(".go") and not any(part in excluded for part in path.parts):
+                  print(name)
+          PY
+          )
+          if (("${#go_files[@]}")); then
+            gofmt -w "${go_files[@]}"
+            unformatted="$(gofmt -l "${go_files[@]}")"
+            if [[ -n "$unformatted" ]]; then
+              printf 'Changed Go files remain unformatted:\\n%s\\n' "$unformatted"
+              exit 1
+            fi
+          fi
+          echo "PASS: all changed Go source files are gofmt-clean before snapshot freeze."
 
       - name: Remove transient dependencies, generated output and environment files before snapshot freeze
         shell: bash
@@ -1342,8 +1378,6 @@ jobs:
           else
             printf 'Formatting %s changed frontend files only\n' "${#format_files[@]}"
             node ../../.tokenway-validation/format-changed-with-protected-headers.mjs --check "${format_files[@]}"
-            node ../../.tokenway-validation/format-changed-with-protected-headers.mjs --check "${format_files[@]}"
-            node ../../.tokenway-validation/apply-changed-copyright-headers.mjs --check "${format_files[@]}"
             node ../../.tokenway-validation/apply-changed-copyright-headers.mjs --check "${format_files[@]}"
           fi
       - name: Run only migrated Kuaipao frontend regressions
