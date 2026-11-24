@@ -699,6 +699,10 @@ jobs:
           rm -rf source/web/node_modules source/web/dist
           python3 .github/scripts/tokenway-source-snapshot.py freeze source source-snapshot.json
 
+      - name: Remove Git metadata after recording immutable source commit
+        shell: bash
+        run: rm -rf source/.git
+
       - name: Upload immutable source snapshot for all acceptance layers
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
@@ -778,7 +782,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mapfile -t go_files < <({ git diff --name-only -- '*.go'; git ls-files --others --exclude-standard -- '*.go'; } | sort -u)
+          mapfile -t go_files < <(
+            python3 - <<'PY'
+          import json
+          from pathlib import Path
+          manifest = json.loads(Path("../source-snapshot.json").read_text(encoding="utf-8"))
+          for path in manifest["changed_files"]:
+              if path.endswith(".go"):
+                  print(path)
+          PY
+          )
           if (("${#go_files[@]}")); then
             unformatted="$(gofmt -l "${go_files[@]}")"
             if [[ -n "$unformatted" ]]; then
@@ -1260,13 +1273,15 @@ jobs:
           set -euo pipefail
           export PATH="$PWD/node_modules/.bin:$PATH"
           mapfile -t format_files < <(
-            {
-              git -C .. diff --name-only --diff-filter=ACMRT HEAD -- web
-              git -C .. ls-files --others --exclude-standard
-            } | awk '/^web\/.*\.(cjs|cts|css|html|js|jsx|json|md|mjs|mts|ts|tsx|yaml|yml)$/ {
-              sub(/^web\//, "")
-              print
-            }' | sort -u
+            python3 - <<'PY'
+          import json
+          from pathlib import Path
+          allowed = {".cjs", ".cts", ".css", ".html", ".js", ".jsx", ".json", ".md", ".mjs", ".mts", ".ts", ".tsx", ".yaml", ".yml"}
+          manifest = json.loads(Path("../../source-snapshot.json").read_text(encoding="utf-8"))
+          for path in manifest["changed_files"]:
+              if path.startswith("web/") and Path(path).suffix.lower() in allowed:
+                  print(path[len("web/"):])
+          PY
           )
           if [ "${#format_files[@]}" -eq 0 ]; then
             echo "No changed frontend files require formatting."
@@ -1352,13 +1367,15 @@ jobs:
           fi
 
           mapfile -t copyright_files < <(
-            {
-              git -C .. diff --name-only --diff-filter=ACMRT HEAD -- web
-              git -C .. ls-files --others --exclude-standard
-            } | awk '/^web\/.*\.(cjs|css|js|jsx|mjs|scss|ts|tsx)$/ {
-              sub(/^web\//, "")
-              print
-            }' | sort -u
+            python3 - <<'PY'
+          import json
+          from pathlib import Path
+          allowed = {".cjs", ".css", ".js", ".jsx", ".mjs", ".scss", ".ts", ".tsx"}
+          manifest = json.loads(Path("../../source-snapshot.json").read_text(encoding="utf-8"))
+          for path in manifest["changed_files"]:
+              if path.startswith("web/") and Path(path).suffix.lower() in allowed:
+                  print(path[len("web/"):])
+          PY
           )
           if [ "${#copyright_files[@]}" -gt 0 ]; then
             node ../../.tokenway-validation/apply-changed-copyright-headers.mjs --check "${copyright_files[@]}"
@@ -1476,10 +1493,8 @@ jobs:
                   text=True,
               ).strip()
 
-          source_commit = git_head("source")
           source_snapshot = json.loads(Path("source-snapshot.json").read_text(encoding="utf-8"))
-          if source_snapshot.get("source_commit") != source_commit:
-              raise SystemExit("Refusing to package: source commit differs from the immutable validated snapshot")
+          source_commit = source_snapshot["source_commit"]
           private_commit = git_head("private")
           brand_commit = git_head("private-validation")
           finance_patch = root / ".tokenway-validation/R7-finance-migration.patch.b64"
