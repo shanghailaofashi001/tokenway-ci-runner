@@ -174,11 +174,27 @@ jobs:
           $ErrorActionPreference = 'Stop'
           Set-Location $env:TOKENWAY_SOURCE_ROOT
           $env:CGO_ENABLED = '0'
-          $env:GOFLAGS = '-mod=vendor'
+          $env:GOWORK = 'off'
           go version
-          go build -pgo=vendor/github.com/Calcium-Ion/moejs/default.pgo -trimpath -ldflags='-s -w -X github.com/QuantumNous/new-api/common.Version=11.0.0' -o tokenway-v11.exe .
+          $pgoProfile = Join-Path $env:TOKENWAY_SOURCE_ROOT 'vendor/github.com/Calcium-Ion/moejs/default.pgo'
+          if (-not (Test-Path -LiteralPath $pgoProfile -PathType Leaf)) { throw "Vendored Go PGO profile is missing: $pgoProfile" }
+          $buildArgs = @(
+            'build',
+            '-mod=vendor',
+            '-pgo',
+            'vendor/github.com/Calcium-Ion/moejs/default.pgo',
+            '-trimpath',
+            '-ldflags',
+            '-s -w -X github.com/QuantumNous/new-api/common.Version=11.0.0',
+            '-o',
+            'tokenway-v11.exe',
+            '.'
+          )
+          & go @buildArgs
           if ($LASTEXITCODE -ne 0) { throw "Go Windows build failed with exit code $LASTEXITCODE" }
-          if (-not (Test-Path (Join-Path $env:TOKENWAY_SOURCE_ROOT 'tokenway-v11.exe'))) { throw 'Windows backend binary was not produced.' }
+          $backendBinary = Join-Path $env:TOKENWAY_SOURCE_ROOT 'tokenway-v11.exe'
+          if (-not (Test-Path -LiteralPath $backendBinary -PathType Leaf)) { throw 'Windows backend binary was not produced.' }
+          Write-Host "PASS: built $backendBinary"
 
       - name: Package NSIS installer and portable executable
         shell: pwsh
