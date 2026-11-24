@@ -6,6 +6,7 @@ import re
 import sys
 
 log_dir = pathlib.Path(sys.argv[1])
+log_dir.mkdir(parents=True, exist_ok=True)
 results = []
 
 def failed_test_names(log_path: pathlib.Path) -> list[str]:
