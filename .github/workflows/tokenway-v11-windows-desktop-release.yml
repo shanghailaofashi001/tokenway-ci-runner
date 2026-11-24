@@ -65,6 +65,7 @@ jobs:
           $run = gh api "repos/$env:GITHUB_REPOSITORY/actions/runs/$env:SOURCE_RUN_ID" | ConvertFrom-Json
           if ($run.name -ne 'TokenWay Finance R7 — full V11 validation on public runner') { throw "Unexpected source workflow: $($run.name)" }
           if ($run.head_branch -ne 'main') { throw "Source run is not from main: $($run.head_branch)" }
+          if ($run.event -notin @('push','workflow_dispatch')) { throw "Unsupported source validation event: $($run.event)" }
           $jobs = gh api "repos/$env:GITHUB_REPOSITORY/actions/runs/$env:SOURCE_RUN_ID/jobs" | ConvertFrom-Json
           $validation = @($jobs.jobs | Where-Object { $_.name -eq 'Assemble branded V11 source, apply R7, test all modules and frontend' } | Select-Object -First 1)
           if (-not $validation -or $validation[0].conclusion -ne 'success') { throw 'The complete TokenWay source acceptance job did not pass; refusing desktop release.' }
@@ -89,11 +90,34 @@ jobs:
           $project = Join-Path $extract 'TokenWay-V11'
           if (-not (Test-Path $manifestPath) -or -not (Test-Path $checksumsPath) -or -not (Test-Path $project)) { throw 'The validated source archive is missing its release manifest, checksums or source root.' }
           $manifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
-          if ($manifest.acceptance.run_id -ne [long]$env:SOURCE_RUN_ID -or $manifest.packaging_workflow.run_id -ne [long]$env:SOURCE_RUN_ID) { throw 'Release manifest acceptance/packaging run IDs do not match the source run.' }
-          if ($manifest.desktop.product_name -ne 'TokenWay V11' -or $manifest.desktop.version -ne '11.0.0' -or $manifest.desktop.application_id -ne 'com.tokenway.ai.desktop') { throw 'Desktop release identity in the source manifest is invalid.' }
-          if ($manifest.desktop.windows_backend_binary -ne 'tokenway-v11.exe' -or $manifest.desktop.windows_backend_resource -ne 'bin/tokenway-v11.exe') { throw 'Manifest Windows backend path is inconsistent.' }
-          if (@($manifest.desktop.windows_targets) -notcontains 'nsis' -or @($manifest.desktop.windows_targets) -notcontains 'portable') { throw 'Manifest does not define both required Windows release targets.' }
+          if ([long]$manifest.acceptance.run_id -ne [long]$env:SOURCE_RUN_ID) { throw "Release manifest acceptance run ID does not match the requested source run: $($manifest.acceptance.run_id) vs $env:SOURCE_RUN_ID" }
+          if ($manifest.acceptance.result -notlike 'success*') { throw "Source acceptance manifest is not successful: $($manifest.acceptance.result)" }
           if ($manifest.contents.source_file_count -lt 9000) { throw 'Manifest source file count is unexpectedly small.' }
+          if (-not $manifest.contents.original_tokenway_brand_assets) { throw 'Original TokenWay branding assets are not attested in the source manifest.' }
+          if ($manifest.contents.node_modules_included -or $manifest.contents.local_env_and_database_files_included) { throw 'Source archive unexpectedly includes node_modules, local env or database files.' }
+
+          $electronPackage = Get-Content (Join-Path $project 'electron/package.json') -Raw | ConvertFrom-Json
+          if ($electronPackage.name -ne 'tokenway-v11-desktop' -or $electronPackage.version -ne '11.0.0') { throw 'Electron package name/version do not match TokenWay V11.' }
+          if ($electronPackage.build.productName -ne 'TokenWay V11' -or $electronPackage.build.appId -ne 'com.tokenway.ai.desktop') { throw 'Electron package productName/appId mismatch.' }
+          if ($electronPackage.build.win.icon -ne 'tokenway.ico') { throw 'Electron Windows ICO mapping is missing.' }
+          if (@($electronPackage.build.win.target) -notcontains 'nsis' -or @($electronPackage.build.win.target) -notcontains 'portable') { throw 'Electron Windows build targets must include NSIS and portable.' }
+          $backendResource = @($electronPackage.build.win.extraResources | Where-Object { $_.from -eq '../tokenway-v11.exe' -and $_.to -eq 'bin/tokenway-v11.exe' })
+          if ($backendResource.Count -ne 1) { throw 'Electron Windows backend resource mapping is missing or duplicated.' }
+
+          $mainSource = Get-Content (Join-Path $project 'electron/main.js') -Raw
+          foreach ($required in @(
+            "const TOKENWAY_APP_NAME = 'TokenWay V11';",
+            "fs.mkdirSync(TOKENWAY_USER_DATA_PATH, { recursive: true });",
+            "app.setPath('userData', TOKENWAY_USER_DATA_PATH);",
+            'com.tokenway.ai.desktop',
+            'tokenway-v11.exe',
+            'tokenway-v11.db'
+          )) {
+            if (-not $mainSource.Contains($required)) { throw "Electron main.js desktop invariant missing: $required" }
+          }
+          foreach ($icon in @('electron/icon.png','electron/tokenway.ico','electron/tray-icon-windows.png','web/public/tokenway-home/brand-mark.webp')) {
+            if (-not (Test-Path (Join-Path $project $icon) -PathType Leaf)) { throw "Original TokenWay desktop icon/brand asset missing: $icon" }
+          }
 
           $verified = 0
           foreach ($line in Get-Content $checksumsPath) {
