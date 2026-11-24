@@ -79,18 +79,54 @@ PY
 }
 
 failed=0
-run_suite service '^(TestProcessRequestBillingRecoverySettlesRefundsAndReviewsUnknownOutcomes|TestSettle.*|TestRefund.*|TestUpdateBatchTasks.*|TestUpdateSunoTasksStalePollsRefundExactlyOnce|TestSweepTimedOutTasks.*)$' || failed=1
-run_suite controller '^(TestExecuteTaskSubmission.*|TestResponsesWS.*)$' || failed=1
+selected_package="${TOKENWAY_INTEGRATION_PACKAGE:-all}"
+selected_pattern="${TOKENWAY_INTEGRATION_TEST_PATTERN:-}"
 dialect_selection="${TOKENWAY_TASK_DB_DIALECT:-all}"
 case "$dialect_selection" in
   all) dialects=(sqlite mysql postgres) ;;
   sqlite|mysql|postgres) dialects=("$dialect_selection") ;;
   *) echo "Unsupported TOKENWAY_TASK_DB_DIALECT: $dialect_selection" >&2; exit 2 ;;
 esac
-for dialect in "${dialects[@]}"; do
-  run_suite controller '^TestImmediateTaskSettlementDatabase
-run_suite relay '^TestResponsesWS.*$' || failed=1
-run_suite pkg/wsmanager '^(TestCloseChannel.*|TestUnregisterPreventsClose|TestRegisteredCloseIsIdempotent|TestPublishCloseChannelsNoopsWhenRedisDisabled|TestRedisChannelCloseEventsStayWithinDatabase)$' || failed=1
+run_task_settlement_matrix() {
+  local dialect
+  for dialect in "${dialects[@]}"; do
+    run_suite controller '^TestImmediateTaskSettlementDatabase$' "$dialect" || failed=1
+  done
+}
+
+case "$selected_package" in
+  all)
+    if [[ -n "$selected_pattern" ]]; then
+      echo "TOKENWAY_INTEGRATION_TEST_PATTERN requires a specific TOKENWAY_INTEGRATION_PACKAGE." >&2
+      exit 2
+    fi
+    run_suite service '^(TestProcessRequestBillingRecoverySettlesRefundsAndReviewsUnknownOutcomes|TestSettle.*|TestRefund.*|TestUpdateBatchTasks.*|TestUpdateSunoTasksStalePollsRefundExactlyOnce|TestSweepTimedOutTasks.*)$' || failed=1
+    run_suite controller '^(TestExecuteTaskSubmission.*|TestResponsesWS.*)$' || failed=1
+    run_task_settlement_matrix
+    run_suite relay '^TestResponsesWS.*$' || failed=1
+    run_suite pkg/wsmanager '^(TestCloseChannel.*|TestUnregisterPreventsClose|TestRegisteredCloseIsIdempotent|TestPublishCloseChannelsNoopsWhenRedisDisabled|TestRedisChannelCloseEventsStayWithinDatabase)$' || failed=1
+    ;;
+  service)
+    run_suite service "${selected_pattern:-^(TestProcessRequestBillingRecoverySettlesRefundsAndReviewsUnknownOutcomes|TestSettle.*|TestRefund.*|TestUpdateBatchTasks.*|TestUpdateSunoTasksStalePollsRefundExactlyOnce|TestSweepTimedOutTasks.*)$}" || failed=1
+    ;;
+  controller)
+    if [[ "$selected_pattern" == "^TestImmediateTaskSettlementDatabase$" ]]; then
+      run_task_settlement_matrix
+    else
+      run_suite controller "${selected_pattern:-^(TestExecuteTaskSubmission.*|TestResponsesWS.*)$}" || failed=1
+    fi
+    ;;
+  relay)
+    run_suite relay "${selected_pattern:-^TestResponsesWS.*$}" || failed=1
+    ;;
+  pkg/wsmanager)
+    run_suite pkg/wsmanager "${selected_pattern:-^(TestCloseChannel.*|TestUnregisterPreventsClose|TestRegisteredCloseIsIdempotent|TestPublishCloseChannelsNoopsWhenRedisDisabled|TestRedisChannelCloseEventsStayWithinDatabase)$}" || failed=1
+    ;;
+  *)
+    echo "Unsupported TOKENWAY_INTEGRATION_PACKAGE: $selected_package" >&2
+    exit 2
+    ;;
+esac
 
 python3 - "$results" "$log_dir/failure-classification.json" <<'PY'
 import json, pathlib, sys
