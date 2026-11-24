@@ -76,9 +76,11 @@ def classify(log_dir: Path) -> dict:
         })
 
     failures = [item for item in results if item.get("status") == "failed"]
+    unclassified = [item for item in results if item.get("status") == "unclassified"]
+    overall = "failed" if failures else ("unknown" if unclassified or not results else "passed")
     return {
         "schema_version": 1,
-        "overall": "failed" if failures else ("passed" if results else "unknown"),
+        "overall": overall,
         "failed_count": len(failures),
         "results": results,
         "targeted_rerun": [item["rerun_selector"] for item in failures],
