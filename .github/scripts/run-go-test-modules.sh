@@ -305,7 +305,7 @@ for path in sorted(log_dir.glob("*.status")):
     if not line:
         continue
     failed = line.startswith("FAIL:")
-    match = re.match(r"(?:PASS|FAIL): (.+?)(?: \\(exit \\d+\\))?$", line)
+    match = re.match(r"(?:PASS|FAIL): (.+?)(?: \(exit \d+\))?$", line)
     subject = match.group(1) if match else path.stem
     if subject.endswith(" full test suite"):
         module = subject.removesuffix(" full test suite")
@@ -323,7 +323,7 @@ report = {"schema_version": 1, "overall": "failed" if failures else "passed",
           "failed_count": len(failures), "results": results,
           "targeted_rerun": [item["rerun_selector"] for item in failures]}
 (log_dir / "failure-classification.json").write_text(
-    json.dumps(report, ensure_ascii=False, indent=2) + "\\n", encoding="utf-8")
+    json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 print(f"Wrote failure-classification.json: {len(failures)} failed suite(s) across {len(results)} result(s).")
 PY
 
