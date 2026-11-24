@@ -544,10 +544,10 @@ jobs:
           mkdir -p web/dist
           printf '<!doctype html><html></html>\\n' > web/dist/index.html
           model_tests="$(go test -list '^TestWalletLedgerAcrossSupportedDatabases$' ./model)"
-          printf '%s\\n' "$model_tests"
+          printf '%s\n' "$model_tests"
           grep -Fxq 'TestWalletLedgerAcrossSupportedDatabases' <<<"$model_tests"
           controller_tests="$(go test -list '^TestEpaySuccessfulTopUpCallbackIsSignedAndIdempotentAcrossDatabases$' ./controller)"
-          printf '%s\\n' "$controller_tests"
+          printf '%s\n' "$controller_tests"
           grep -Fxq 'TestEpaySuccessfulTopUpCallbackIsSignedAndIdempotentAcrossDatabases' <<<"$controller_tests"
           echo "PASS: both tagged integration tests were discovered before execution."
           echo "===== Wallet ledger database matrix ====="
