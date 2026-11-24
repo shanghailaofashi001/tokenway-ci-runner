@@ -19,6 +19,15 @@ case "$scope" in
   *) echo "Unsupported TOKENWAY_GO_MODULE_SCOPE: $scope" >&2; exit 2 ;;
 esac
 
+if [[ -n "$root_input" && "$scope" != "all" && "$scope" != "root" ]]; then
+  echo "root_test_packages can only be used with the all or root module scope." >&2
+  exit 2
+fi
+if [[ "${TOKENWAY_TARGETED_ONLY:-false}" == "true" && ( "$scope" == "all" || "$scope" == "root" ) && -z "$root_input" ]]; then
+  echo "A targeted Root run must provide one or more exact root_test_packages; use relaykit/tokenkit scope for a targeted module run." >&2
+  exit 2
+fi
+
 export GOPROXY=off GOSUMDB=off GOTOOLCHAIN=local GOMAXPROCS=1
 export GOFLAGS="-mod=vendor -p=1"
 

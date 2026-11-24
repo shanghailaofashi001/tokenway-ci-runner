@@ -118,7 +118,7 @@ jobs:
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
           repository: shanghailaofashi001/tokenway-v11-dev
-          ref: 914e86c9d88329bb4ee31c15cdb3aeb9d04d0c52
+          ref: d1de74b20a98ef7752e04298134735ecfe75248f
           token: ${{ secrets.TOKENWAY_SOURCE_READ_TOKEN }}
           path: private
           fetch-depth: 1
@@ -329,7 +329,7 @@ jobs:
           printf '%s\n' "R7 finance patch applied to the full branded source tree."
 
       - name: Install TokenWay finance and database integration test sources
-        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_KUAIPAO_ONLY != 'true' }}
+        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_KUAIPAO_ONLY != 'true' && (env.TOKENWAY_GO_MODULE_SCOPE == 'all' || env.TOKENWAY_GO_MODULE_SCOPE == 'root') }}
         shell: bash
         run: |
           set -euo pipefail
@@ -649,7 +649,7 @@ jobs:
           go test -v -timeout 3m ./relay/channel/advancedcustom -count=1 -run '^(TestKuaipaoPresetRoutesJoinBaseURLWithoutDuplicateV1|TestKuaipaoModelListManagementRoutesJoinBaseURLAndUseBearerAuth)$'
 
       - name: Run tagged SQLite MySQL PostgreSQL wallet and Epay integration regressions
-        if: ${{ success() && env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_KUAIPAO_ONLY != 'true' && env.TOKENWAY_FINANCE_TARGETED_ONLY != 'true' && (env.TOKENWAY_TARGETED_ONLY != 'true' || env.TOKENWAY_RUN_DATABASE_MATRIX == 'true') }}
+        if: ${{ success() && env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_KUAIPAO_ONLY != 'true' && env.TOKENWAY_FINANCE_TARGETED_ONLY != 'true' && (env.TOKENWAY_GO_MODULE_SCOPE == 'all' || env.TOKENWAY_GO_MODULE_SCOPE == 'root') && (env.TOKENWAY_TARGETED_ONLY != 'true' || env.TOKENWAY_RUN_DATABASE_MATRIX == 'true') }}
         working-directory: source
         shell: bash
         run: |
@@ -1141,7 +1141,7 @@ jobs:
               "product":"TokenWay V11",
               "package_type":"Kuaipao-migrated validated source archive",
               "source_commit":"48a6c87f9e7757fdc58e5be9bcb4f8281ad0dfd0",
-              "finance_validation_snapshot":"914e86c9d88329bb4ee31c15cdb3aeb9d04d0c52",
+              "finance_validation_snapshot":"d1de74b20a98ef7752e04298134735ecfe75248f",
               "branding_snapshot":"d2494da77bc59b7edb4082bb2a594f24997b6ece",
               "kuaipao_migration_patch_sha256":hashlib.sha256(patch.read_bytes()).hexdigest(),
               "kuaipao_channels":["kuaipao_anthropic","kuaipao_openai_chat","kuaipao_openai_responses"],
@@ -1389,7 +1389,7 @@ jobs:
           brand_sha = git_head("private-validation")
           expected = {
               "source": "48a6c87f9e7757fdc58e5be9bcb4f8281ad0dfd0",
-              "private": "914e86c9d88329bb4ee31c15cdb3aeb9d04d0c52",
+              "private": "d1de74b20a98ef7752e04298134735ecfe75248f",
               "brand": "d2494da77bc59b7edb4082bb2a594f24997b6ece",
           }
           actual = {"source": source_sha, "private": private_sha, "brand": brand_sha}
