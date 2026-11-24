@@ -27,6 +27,10 @@ on:
         type: boolean
         default: false
       run_database_matrix:
+        description: "Include the tagged SQLite/MySQL/PostgreSQL wallet and EPay integration matrix"
+        required: false
+        type: boolean
+        default: false
       task_db_dialect:
         description: "Database dialect for a targeted task-settlement rerun"
         required: false
@@ -36,10 +40,6 @@ on:
           - mysql
           - postgres
         default: sqlite
-        description: "Include the tagged SQLite/MySQL/PostgreSQL wallet and EPay integration matrix"
-        required: false
-        type: boolean
-        default: false
 
   pull_request:
     branches:
@@ -832,7 +832,7 @@ jobs:
             python3 - "$integration_log_dir/integration-failure-classification.json" "$package" "$pattern" "$status" "$variant" <<'PY'
           import json, pathlib, sys
           path = pathlib.Path(sys.argv[1])
-package, pattern, status, variant = sys.argv[2], sys.argv[3], int(sys.argv[4]), sys.argv[5]
+          package, pattern, status, variant = sys.argv[2], sys.argv[3], int(sys.argv[4]), sys.argv[5]
           report = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {
               "schema_version": 1, "overall": "passed", "failed_count": 0,
               "results": [], "targeted_rerun": []
@@ -847,7 +847,8 @@ package, pattern, status, variant = sys.argv[2], sys.argv[3], int(sys.argv[4]), 
                   "go_module_scope": "root",
                   "root_test_packages": "github.com/QuantumNous/new-api/" + package,
                   "root_test_pattern": pattern,
-                  "targeted_only": True
+                  "targeted_only": True,
+                  **({"task_db_dialect": variant.removeprefix("task-db-")} if variant.startswith("task-db-") else {})
               **({"task_db_dialect": variant.removeprefix("task-db-")} if variant.startswith("task-db-") else {})
               }
           }
