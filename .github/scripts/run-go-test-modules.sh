@@ -2,7 +2,9 @@
 set -Eeuo pipefail
 
 # Apply Root concurrency/log regressions after the finance fixture transformations in the workflow.
-python3 ../.github/scripts/apply-root-test-regressions.py
+if [[ "${TOKENWAY_SKIP_ROOT_TEST_PATCH:-false}" != "true" ]]; then
+  python3 ../.github/scripts/apply-root-test-regressions.py
+fi
 
 log_dir="${RUNNER_TEMP:-/tmp}/tokenway-go-validation-logs"
 mkdir -p "$log_dir"
