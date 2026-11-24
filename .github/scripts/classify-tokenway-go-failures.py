@@ -81,7 +81,7 @@ for status_path in sorted(log_dir.glob("*.status")):
                     "nested_module_packages": package,
                 }
                 if tests:
-                    selector["nested_module_test_pattern"] = "^(?:" + "|".join(
+                    selector["nested_module_test_pattern"] = "^(" + "|".join(
                         re.escape(name) for name in sorted(tests)
                     ) + ")$"
                 results.append({
@@ -114,7 +114,7 @@ for status_path in sorted(log_dir.glob("*.status")):
         "root_test_packages": package,
     }
     if tests:
-        selector["root_test_pattern"] = "^(?:" + "|".join(re.escape(name) for name in tests) + ")$"
+        selector["root_test_pattern"] = "^(" + "|".join(re.escape(name) for name in tests) + ")$"
     results.append({
         "status": "failed" if failed else "passed",
         "suite": "root-package",
