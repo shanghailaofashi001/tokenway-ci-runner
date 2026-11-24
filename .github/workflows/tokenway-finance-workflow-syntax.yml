@@ -6,6 +6,7 @@ on:
     paths:
       - ".github/workflows/tokenway-finance-r7-validation.yml"
       - ".github/workflows/tokenway-finance-workflow-syntax.yml"
+      - ".github/workflows/tokenway-v11-windows-desktop-release.yml"
 
 permissions:
   contents: read
@@ -23,7 +24,7 @@ jobs:
       - name: Parse finance workflow YAML
         run: |
           set -euo pipefail
-          ruby -e 'require "yaml"; YAML.parse_file(".github/workflows/tokenway-finance-r7-validation.yml"); puts "PASS: finance workflow is valid YAML"'
+          ruby -e 'require "yaml"; ARGV.each { |path| YAML.parse_file(path); puts "PASS: #{path} is valid YAML" }' .github/workflows/tokenway-finance-r7-validation.yml .github/workflows/tokenway-v11-windows-desktop-release.yml
 
       - name: Check targeted CNY test step boundaries
         run: |
