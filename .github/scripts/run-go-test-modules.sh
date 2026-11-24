@@ -208,7 +208,7 @@ if (( ${#packages[@]} > 0 )); then
     run_root_package "$pkg" &
     root_pids+=("$!")
     if (( ${#root_pids[@]} >= parallelism )); then
-      if wait "$root_pids[0]"; then :; else failed=1; fi
+      if wait "${root_pids[0]}"; then :; else failed=1; fi
       root_pids=("${root_pids[@]:1}")
     fi
   done
