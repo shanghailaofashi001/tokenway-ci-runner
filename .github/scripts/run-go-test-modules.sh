@@ -185,7 +185,7 @@ run_root_package() (
   if [[ "$separate_integration_suites" == "true" ]]; then
     case "$pkg" in
       github.com/QuantumNous/new-api/service)
-        test_args+=(-skip "^(TestProcessRequestBillingRecoverySettlesRefundsAndReviewsUnknownOutcomes|TestSettle.*|TestRefund.*|TestUpdateBatchTasks.*|TestUpdateSunoTasksStalePollsRefundExactlyOnce|TestSweepTimedOutTasks.*|TestTaskReportsOnceAtTheFinalState)")
+        test_args+=(-skip "^(TestProcessRequestBillingRecoverySettlesRefundsAndReviewsUnknownOutcomes|TestSettle.*|TestRefund.*|TestUpdateBatchTasks.*|TestUpdateSunoTasksStalePollsRefundExactlyOnce|TestSweepTimedOutTasks.*)")
         ;;
       github.com/QuantumNous/new-api/controller)
         test_args+=(-skip "^(TestImmediateTaskSettlementDatabase|TestExecuteTaskSubmission.*|TestResponsesWS.*|TestResponsesWebSocket.*|TestResponsesInterruptedStreamHealth|TestResponsesStreamOutcomesPreserveAccounting)")
