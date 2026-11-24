@@ -13,12 +13,11 @@ on:
         required: false
         type: choice
         options:
-          - all
           - go_static
           - go_unit
           - integration
           - frontend
-        default: all
+        default: go_unit
       go_module_scope:
         description: "Go module scope for a targeted unit rerun"
         required: false
