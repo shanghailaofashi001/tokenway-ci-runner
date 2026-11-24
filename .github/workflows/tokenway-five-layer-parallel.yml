@@ -1374,10 +1374,15 @@ jobs:
           fi
 
           mapfile -t changed_files < <(
-            {
-              git -C .. diff --name-only --diff-filter=ACMRT HEAD -- web | awk '/^web\/.*\.(js|jsx|ts|tsx|mjs|cjs)$/ { sub(/^web\//, ""); print }'
-              git -C .. ls-files --others --exclude-standard | awk '/^web\/.*\.(js|jsx|ts|tsx|mjs|cjs)$/ { sub(/^web\//, ""); print }'
-            } | sort -u
+            python3 - <<'PY'
+          import json
+          from pathlib import Path
+          allowed = {".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs"}
+          manifest = json.loads(Path("../../source-snapshot.json").read_text(encoding="utf-8"))
+          for path in manifest["changed_files"]:
+              if path.startswith("web/") and Path(path).suffix.lower() in allowed:
+                  print(path[len("web/"):])
+          PY
           )
 
           if [ "${#changed_files[@]}" -eq 0 ]; then
@@ -1402,13 +1407,15 @@ jobs:
           fi
 
           mapfile -t format_files < <(
-            {
-              git -C .. diff --name-only --diff-filter=ACMRT HEAD -- web
-              git -C .. ls-files --others --exclude-standard
-            } | awk '/^web\/.*\.(cjs|cts|css|html|js|jsx|json|md|mjs|mts|ts|tsx|yaml|yml)$/ {
-              sub(/^web\//, "")
-              print
-            }' | sort -u
+            python3 - <<'PY'
+          import json
+          from pathlib import Path
+          allowed = {".cjs", ".cts", ".css", ".html", ".js", ".jsx", ".json", ".md", ".mjs", ".mts", ".ts", ".tsx", ".yaml", ".yml"}
+          manifest = json.loads(Path("../../source-snapshot.json").read_text(encoding="utf-8"))
+          for path in manifest["changed_files"]:
+              if path.startswith("web/") and Path(path).suffix.lower() in allowed:
+                  print(path[len("web/"):])
+          PY
           )
           if [ "${#format_files[@]}" -gt 0 ]; then
             node ../../.tokenway-validation/format-changed-with-protected-headers.mjs --check "${format_files[@]}"
