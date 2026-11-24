@@ -19,6 +19,7 @@ with tempfile.TemporaryDirectory(prefix="tokenway-failure-routing-") as temporar
     )
     events = [
         {"Action": "fail", "Package": relaykit_package, "Test": "TestDecodeBroken"},
+        {"Action": "fail", "Package": relaykit_package, "Test": "TestDecodeParent/sub-case"},
         {"Action": "fail", "Package": relaykit_package},
         {"Action": "fail", "Package": relaykit_build_failure},
     ]
@@ -51,12 +52,12 @@ with tempfile.TemporaryDirectory(prefix="tokenway-failure-routing-") as temporar
 
     results = {(item["module"], item["package"]): item for item in report["results"]}
     first = results[("relaykit", relaykit_package)]
-    if first["failed_tests"] != ["TestDecodeBroken"]:
+    if first["failed_tests"] != ["TestDecodeBroken", "TestDecodeParent/sub-case"]:
         raise SystemExit(f"nested-module test name was not captured: {first}")
     expected = {
         "go_module_scope": "relaykit",
         "nested_module_packages": relaykit_package,
-        "nested_module_test_pattern": "^(TestDecodeBroken)$",
+        "nested_module_test_pattern": "^(TestDecodeBroken|TestDecodeParent)$",
     }
     if first["rerun_selector"] != expected:
         raise SystemExit(f"nested-module rerun selector is incorrect: {first['rerun_selector']}")
