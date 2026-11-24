@@ -319,9 +319,9 @@ jobs:
           path = Path("source/service/funding_source.go")
           source = path.read_text(encoding="utf-8")
           import re
-          pattern = re.compile(r"(\\tPlanId\\s+int\\n\\tPlanTitle\\s+string\\n)(})")
+          pattern = re.compile(r"(\tPlanId\s+int\n\tPlanTitle\s+string\n)(})")
           updated, count = pattern.subn(
-              r"\\1\\treserveSeq        int\\n\\tlastReserveSeq    int\\n\\tlastReserveAmount int\\n\\2",
+              r"\1\treserveSeq        int\n\tlastReserveSeq    int\n\tlastReserveAmount int\n\2",
               source,
               count=1,
           )
