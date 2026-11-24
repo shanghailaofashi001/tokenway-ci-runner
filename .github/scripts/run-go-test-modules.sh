@@ -124,10 +124,13 @@ if [[ "$scope" == "all" || "$scope" == "root" ]]; then
     fi
     for required in \
       github.com/QuantumNous/new-api/e2e \
+      github.com/QuantumNous/new-api/controller \
       github.com/QuantumNous/new-api/middleware \
       github.com/QuantumNous/new-api/oauth \
       github.com/QuantumNous/new-api/pkg/wsmanager \
+      github.com/QuantumNous/new-api/relay \
       github.com/QuantumNous/new-api/relay/channel/vertex \
+      github.com/QuantumNous/new-api/service \
       github.com/QuantumNous/new-api/setting/system_setting; do
       if ! printf '%s\n' "${packages[@]}" | grep -Fxq "$required"; then
         echo "FAIL: required Root test package was not discovered: $required" >&2
