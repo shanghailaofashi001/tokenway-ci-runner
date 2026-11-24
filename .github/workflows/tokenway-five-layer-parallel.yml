@@ -2,6 +2,69 @@ name: TokenWay V11 — Five-layer parallel acceptance
 
 on:
   workflow_dispatch:
+    inputs:
+      targeted_only:
+        description: "Run only the selected affected acceptance layer; do not package"
+        required: false
+        type: boolean
+        default: false
+      target_layer:
+        description: "Acceptance layer to rerun when targeted_only is enabled"
+        required: false
+        type: choice
+        options:
+          - all
+          - go_static
+          - go_unit
+          - integration
+          - frontend
+        default: all
+      go_module_scope:
+        description: "Go module scope for a targeted unit rerun"
+        required: false
+        type: choice
+        options:
+          - all
+          - root
+          - relaykit
+          - tokenkit
+        default: all
+      root_test_packages:
+        description: "Comma-separated exact Root Go import paths (optional)"
+        required: false
+        type: string
+        default: ""
+      root_test_pattern:
+        description: "Go -run regular expression for the selected Root package(s)"
+        required: false
+        type: string
+        default: ""
+      integration_package:
+        description: "Integration package to rerun"
+        required: false
+        type: choice
+        options:
+          - all
+          - service
+          - controller
+          - relay
+          - pkg/wsmanager
+        default: all
+      integration_test_pattern:
+        description: "Go -run regular expression for the selected integration package"
+        required: false
+        type: string
+        default: ""
+      task_db_dialect:
+        description: "Database dialect for task-settlement targeted reruns"
+        required: false
+        type: choice
+        options:
+          - all
+          - sqlite
+          - mysql
+          - postgres
+        default: all
   pull_request:
     branches:
       - main
@@ -720,6 +783,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     needs: assemble_source
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.targeted_only != true || inputs.target_layer == 'go_static' }}
     env:
       GOWORK: "off"
       GOTOOLCHAIN: "local"
@@ -868,6 +932,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 90
     needs: assemble_source
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.targeted_only != true || inputs.target_layer == 'go_unit' }}
     services:
       mysql:
         image: mysql:8.4
@@ -1006,6 +1071,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 90
     needs: assemble_source
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.targeted_only != true || inputs.target_layer == 'integration' }}
     services:
       mysql:
         image: mysql:8.4
@@ -1158,6 +1224,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 90
     needs: assemble_source
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.targeted_only != true || inputs.target_layer == 'frontend' }}
     env:
       GOWORK: "off"
       GOTOOLCHAIN: "local"
@@ -1400,6 +1467,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     needs: [assemble_source, layer1_go_static, layer2_unit, layer3_integration, layer4_frontend]
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.targeted_only != true }}
     steps:
       - name: Checkout public CI orchestrator
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
@@ -1716,6 +1784,7 @@ jobs:
     name: "Five-layer TokenWay V11 acceptance complete"
     runs-on: ubuntu-latest
     needs: [assemble_source, layer1_go_static, layer2_unit, layer3_integration, layer4_frontend, layer5_package]
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.targeted_only != true }}
     steps:
       - name: Confirm all five layers and same-run SHA-256 package passed
         run: |
