@@ -31,6 +31,25 @@ on:
         required: false
         type: boolean
         default: false
+      task_db_dialect:
+        description: "Database dialect for a targeted task-settlement rerun"
+        required: false
+        type: choice
+        options:
+          - sqlite
+          - mysql
+          - postgres
+        default: sqlite
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/tokenway-finance-r7-validation.yml"
+      - ".github/scripts/run-go-test-modules.sh"
+      - ".github/scripts/run-tokenway-integration-suites.sh"
+      - ".github/scripts/classify-tokenway-go-failures.py"
+      - ".github/actions/tokenway-integration/action.yml"
+
   push:
     branches:
       - main
@@ -105,6 +124,7 @@ jobs:
       TOKENWAY_ROOT_TEST_PATTERN: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.root_test_pattern || '' }}
       TOKENWAY_TARGETED_ONLY: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.targeted_only == 'true') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[targeted-only]')) }}
       TOKENWAY_RUN_DATABASE_MATRIX: ${{ (github.event_name == 'workflow_dispatch' && (github.event.inputs.targeted_only != 'true' || github.event.inputs.run_database_matrix == 'true')) || (github.event_name == 'push' && (!contains(github.event.head_commit.message, '[targeted-only]') || contains(github.event.head_commit.message, '[database-matrix]'))) }}
+      TEST_TASK_DB_DIALECT: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.task_db_dialect || 'sqlite' }}
       TEST_MYSQL_DSN: root:tokenway-test@tcp(127.0.0.1:3306)/tokenway_test?charset=utf8mb4&parseTime=True&loc=Local
       TEST_POSTGRES_DSN: postgres://tokenway:tokenway-test@127.0.0.1:5432/tokenway_test?sslmode=disable
       TEST_MYSQL_LOG_DSN: root:tokenway-test@tcp(127.0.0.1:3306)/tokenway_test?charset=utf8mb4&parseTime=True&loc=Local
@@ -124,7 +144,7 @@ jobs:
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
           repository: shanghailaofashi001/tokenway-v11-dev
-          ref: 4ef334eff0a14e52c6552abd2ff773727eaebc2f
+          ref: c5b69282a3de3a5bac519b97cf50556b7c06814f
           token: ${{ secrets.TOKENWAY_SOURCE_READ_TOKEN }}
           path: private
           fetch-depth: 1
@@ -777,6 +797,11 @@ jobs:
           go test -v -timeout 8m ./model -run TestWalletLedgerAcrossSupportedDatabases -count=1
           echo "===== Signed Epay callback database matrix ====="
           go test -v -timeout 8m ./controller -run TestEpaySuccessfulTopUpCallbackIsSignedAndIdempotentAcrossDatabases -count=1
+      - name: Run TokenWay business integration suites
+        if: ${{ env.TOKENWAY_FRONTEND_ONLY != 'true' && env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_KUAIPAO_FRONTEND_ONLY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_KUAIPAO_ONLY != 'true' && env.TOKENWAY_FINANCE_TARGETED_ONLY != 'true' && (env.TOKENWAY_GO_MODULE_SCOPE == 'all' || env.TOKENWAY_GO_MODULE_SCOPE == 'root') && env.TOKENWAY_TARGETED_ONLY != 'true' }}
+        uses: ./.github/actions/tokenway-integration
+        with:
+          source-directory: source
       - name: Vet and build root, relaykit, and tokenkit modules concurrently
         if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && (env.TOKENWAY_GO_STATIC_ONLY == 'true' || github.event_name != 'push' || !contains(github.event.head_commit.message, '[resume-full-go]')) && env.TOKENWAY_KUAIPAO_ONLY != 'true' && env.TOKENWAY_RECOVERY_ONLY != 'true' && env.TOKENWAY_KUAIPAO_FRONTEND_ONLY != 'true' }}
         working-directory: source
@@ -823,11 +848,18 @@ jobs:
           echo "PASS: go vet and go build completed for root, relaykit, and tokenkit."
 
       - name: Run all discovered Root test packages and parallel isolated Go modules
+        id: root_go_tests
+        env:
+          TOKENWAY_SEPARATE_INTEGRATION_SUITES: ${{ env.TOKENWAY_TARGETED_ONLY != 'true' && env.TOKENWAY_FINANCE_TARGETED_ONLY != 'true' && env.TOKENWAY_RECOVERY_ONLY != 'true' && env.TOKENWAY_KUAIPAO_ONLY != 'true' && env.TOKENWAY_KUAIPAO_FRONTEND_ONLY != 'true' && env.TOKENWAY_FRONTEND_ONLY != 'true' && 'true' || 'false' }}
         if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && (github.event_name != 'push' || !contains(github.event.head_commit.message, '[frontend-only]')) && env.TOKENWAY_KUAIPAO_ONLY != 'true' && env.TOKENWAY_KUAIPAO_FRONTEND_ONLY != 'true' }}
         working-directory: source
         shell: bash
         run: bash ../.github/scripts/run-go-test-modules.sh
 
+      - name: Classify Root Go module and package failures for targeted reruns
+        if: ${{ always() && steps.root_go_tests.outcome != 'skipped' }}
+        shell: bash
+        run: python3 .github/scripts/classify-tokenway-go-failures.py "$RUNNER_TEMP/tokenway-go-validation-logs"
       - name: Upload failed Go package diagnostics for targeted follow-up
         if: ${{ failure() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
