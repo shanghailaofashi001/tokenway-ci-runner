@@ -751,23 +751,50 @@ jobs:
           go test -v -timeout 8m ./model -run TestWalletLedgerAcrossSupportedDatabases -count=1
           echo "===== Signed Epay callback database matrix ====="
           go test -v -timeout 8m ./controller -run TestEpaySuccessfulTopUpCallbackIsSignedAndIdempotentAcrossDatabases -count=1
-      - name: Vet root, relaykit, and tokenkit modules
+      - name: Vet and build root, relaykit, and tokenkit modules concurrently
         if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && (env.TOKENWAY_GO_STATIC_ONLY == 'true' || github.event_name != 'push' || !contains(github.event.head_commit.message, '[resume-full-go]')) && env.TOKENWAY_KUAIPAO_ONLY != 'true' && env.TOKENWAY_RECOVERY_ONLY != 'true' }}
         working-directory: source
+        shell: bash
         run: |
           set -euo pipefail
-          go vet ./...
-          (cd relaykit && go vet ./...)
-          (cd tokenkit && go vet ./...)
+          log_dir="$RUNNER_TEMP/tokenway-go-validation-logs"
+          mkdir -p "$log_dir"
 
-      - name: Build root, relaykit, and tokenkit modules
-        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && (env.TOKENWAY_GO_STATIC_ONLY == 'true' || github.event_name != 'push' || !contains(github.event.head_commit.message, '[resume-full-go]')) && env.TOKENWAY_KUAIPAO_ONLY != 'true' && env.TOKENWAY_RECOVERY_ONLY != 'true' }}
-        working-directory: source
-        run: |
-          set -euo pipefail
-          go build ./...
-          (cd relaykit && go build ./...)
-          (cd tokenkit && go build ./...)
+          # Vet and build read the already-assembled source tree. Run them concurrently,
+          # but cap each Go process so the ubuntu-latest runner is not oversubscribed.
+          (
+            export GOMAXPROCS=1
+            export GOFLAGS="-p=1"
+            go vet ./... &&
+              (cd relaykit && go vet ./...) &&
+              (cd tokenkit && go vet ./...)
+          ) >"$log_dir/go-vet.log" 2>&1 &
+          vet_pid=$!
+
+          (
+            export GOMAXPROCS=1
+            export GOFLAGS="-p=1"
+            go build ./... &&
+              (cd relaykit && go build ./...) &&
+              (cd tokenkit && go build ./...)
+          ) >"$log_dir/go-build.log" 2>&1 &
+          build_pid=$!
+
+          vet_status=0
+          wait "$vet_pid" || vet_status=$?
+          build_status=0
+          wait "$build_pid" || build_status=$?
+
+          echo "===== go vet output ====="
+          cat "$log_dir/go-vet.log"
+          echo "===== go build output ====="
+          cat "$log_dir/go-build.log"
+
+          if [ "$vet_status" -ne 0 ] || [ "$build_status" -ne 0 ]; then
+            echo "Go static validation failed: vet=$vet_status build=$build_status"
+            exit 1
+          fi
+          echo "PASS: go vet and go build completed for root, relaykit, and tokenkit."
 
       - name: Run all discovered Root test packages and parallel isolated Go modules
         if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && (github.event_name != 'push' || !contains(github.event.head_commit.message, '[frontend-only]')) && env.TOKENWAY_KUAIPAO_ONLY != 'true' }}
