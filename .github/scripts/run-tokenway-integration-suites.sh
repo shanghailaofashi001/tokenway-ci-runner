@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-log_dir="\${RUNNER_TEMP:-/tmp}/tokenway-integration-validation-logs"
+log_dir="${RUNNER_TEMP:-/tmp}/tokenway-integration-validation-logs"
 mkdir -p "$log_dir" web/dist
 if [[ ! -s web/dist/index.html ]]; then
   printf '<!doctype html><html></html>\n' > web/dist/index.html
@@ -9,9 +9,9 @@ fi
 results="$log_dir/results.ndjson"
 : > "$results"
 failed=0
-selected_package="\${TOKENWAY_INTEGRATION_PACKAGE:-all}"
-selected_pattern="\${TOKENWAY_INTEGRATION_TEST_PATTERN:-}"
-dialect_selection="\${TOKENWAY_TASK_DB_DIALECT:-all}"
+selected_package="${TOKENWAY_INTEGRATION_PACKAGE:-all}"
+selected_pattern="${TOKENWAY_INTEGRATION_TEST_PATTERN:-}"
+dialect_selection="${TOKENWAY_TASK_DB_DIALECT:-all}"
 
 case "$dialect_selection" in
   all) dialects=(sqlite mysql postgres) ;;
@@ -20,8 +20,8 @@ case "$dialect_selection" in
 esac
 
 run_suite() {
-  local package="$1" pattern="$2" dialect="\${3:-}" tags="\${4:-}"
-  local slug="\${package//\//-}" discovered logfile status
+  local package="$1" pattern="$2" dialect="${3:-}" tags="${4:-}"
+  local slug="${package//\//-}" discovered logfile status
   local -a test_flags=()
   [[ -z "$dialect" ]] || slug="$slug-$dialect"
   if [[ -n "$tags" ]]; then
@@ -30,19 +30,19 @@ run_suite() {
   fi
   logfile="$log_dir/$slug.log"
 
-  if ! discovered="$(go test "\${test_flags[@]}" -list "$pattern" "./$package" 2>&1)"; then
+  if ! discovered="$(go test "${test_flags[@]}" -list "$pattern" "./$package" 2>&1)"; then
     printf '%s\n' "$discovered" > "$logfile"
     status=1
   elif ! grep -q '^Test' <<<"$discovered"; then
     printf 'FAIL: no tests discovered for %s / %s\n' "$package" "$pattern" > "$logfile"
     status=2
   elif [[ -n "$dialect" ]]; then
-    if TEST_TASK_DB_DIALECT="$dialect" go test "\${test_flags[@]}" -json -v -timeout 12m -parallel=1 -count=1 "./$package" -run "$pattern" > "$logfile" 2>&1; then
+    if TEST_TASK_DB_DIALECT="$dialect" go test "${test_flags[@]}" -json -v -timeout 12m -parallel=1 -count=1 "./$package" -run "$pattern" > "$logfile" 2>&1; then
       status=0
     else
       status=$?
     fi
-  elif go test "\${test_flags[@]}" -json -v -timeout 12m -parallel=1 -count=1 "./$package" -run "$pattern" > "$logfile" 2>&1; then
+  elif go test "${test_flags[@]}" -json -v -timeout 12m -parallel=1 -count=1 "./$package" -run "$pattern" > "$logfile" 2>&1; then
     status=0
   else
     status=$?
@@ -104,13 +104,13 @@ PY
 
 run_task_settlement_matrix() {
   local dialect
-  for dialect in "\${dialects[@]}"; do
+  for dialect in "${dialects[@]}"; do
     run_suite controller '^TestImmediateTaskSettlementDatabase$' "$dialect" || failed=1
   done
 }
 run_websocket_auth_matrix() {
   local dialect
-  for dialect in "\${dialects[@]}"; do
+  for dialect in "${dialects[@]}"; do
     run_suite controller '^TestResponsesWSRequestRunnerRejectsRevokedCredentials$' "$dialect" || failed=1
   done
 }
@@ -126,7 +126,8 @@ run_refund_and_task_lifecycle() {
 run_controller_websocket_lifecycle() {
   # Keep the revoked-credential test in its dedicated SQLite/MySQL/PostgreSQL matrix,
   # and keep immediate settlement in its own three-dialect matrix.
-  run_suite controller '^(TestExecuteTaskSubmission.*|TestPresentTaskSubmission.*|TestAcceptedSubmitStreamNeverRetries|TestRespondTaskSubmissionErrorWithoutCause|TestResponsesWSRequestRunner(RefreshesBillingContextAndCleansBody|UsesExistingMemoryRateLimit|SharesRedisSuccessLimitWithHTTP)|TestResponsesInterruptedStreamHealth|TestResponsesWebSocket.*|TestResponsesStreamOutcomesPreserveAccounting|TestResponsesHTTPHealthCountsFinalResult)
+  run_suite controller '^(TestExecuteTaskSubmission.*|TestPresentTaskSubmission.*|TestAcceptedSubmitStreamNeverRetries|TestRespondTaskSubmissionErrorWithoutCause|TestResponsesWSRequestRunner(RefreshesBillingContextAndCleansBody|UsesExistingMemoryRateLimit|SharesRedisSuccessLimitWithHTTP)|TestResponsesInterruptedStreamHealth|TestResponsesWebSocket.*|TestResponsesStreamOutcomesPreserveAccounting|TestResponsesHTTPHealthCountsFinalResult)$' || failed=1
+}
 run_relay_websocket_lifecycle() {
   run_suite relay '^TestResponsesWS.*$' || failed=1
 }
@@ -150,7 +151,7 @@ case "$selected_package" in
     run_epay_database_matrix
     ;;
   service)
-    run_suite service "\${selected_pattern:-^(TestProcessRequestBillingRecoverySettlesRefundsAndReviewsUnknownOutcomes|TestSettle.*|TestRefund.*|TestUpdateBatchTasks.*|TestUpdateSunoTasksStalePollsRefundExactlyOnce|TestSweepTimedOutTasks.*)$}" || failed=1
+    run_suite service "${selected_pattern:-^(TestProcessRequestBillingRecoverySettlesRefundsAndReviewsUnknownOutcomes|TestSettle.*|TestRefund.*|TestUpdateBatchTasks.*|TestUpdateSunoTasksStalePollsRefundExactlyOnce|TestSweepTimedOutTasks.*)$}" || failed=1
     ;;
   controller)
     if [[ "$selected_pattern" == "^TestImmediateTaskSettlementDatabase$" ]]; then
@@ -221,7 +222,7 @@ case "$selected_package" in
     run_epay_database_matrix
     ;;
   service)
-    run_suite service "\${selected_pattern:-^(TestProcessRequestBillingRecoverySettlesRefundsAndReviewsUnknownOutcomes|TestSettle.*|TestRefund.*|TestUpdateBatchTasks.*|TestUpdateSunoTasksStalePollsRefundExactlyOnce|TestSweepTimedOutTasks.*)$}" || failed=1
+    run_suite service "${selected_pattern:-^(TestProcessRequestBillingRecoverySettlesRefundsAndReviewsUnknownOutcomes|TestSettle.*|TestRefund.*|TestUpdateBatchTasks.*|TestUpdateSunoTasksStalePollsRefundExactlyOnce|TestSweepTimedOutTasks.*)$}" || failed=1
     ;;
   controller)
     if [[ "$selected_pattern" == "^TestImmediateTaskSettlementDatabase$" ]]; then
