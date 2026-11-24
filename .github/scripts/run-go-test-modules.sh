@@ -154,8 +154,11 @@ run_root_package() (
   key="$(printf '%s' "$pkg" | sha256sum | cut -c1-12)"
   local mysql_db="twroot_${key}"
   local pg_db="twroot_${key}"
+  local sqlite_db="${RUNNER_TEMP:-/tmp}/tokenway-root-${key}.db"
+  export SQLITE_PATH="$sqlite_db"
 
   cleanup_package_databases() {
+    rm -f "$sqlite_db" "$sqlite_db-wal" "$sqlite_db-shm"
     mysql --protocol=TCP -h127.0.0.1 -uroot -ptokenway-test \
       -e "DROP DATABASE IF EXISTS $mysql_db;" >/dev/null 2>&1 || true
     PGPASSWORD=tokenway-test psql -h127.0.0.1 -Utokenway -d postgres \
