@@ -39,8 +39,17 @@ test_source = test_path.read_text(encoding="utf-8")
 test_old = """\tvar ready sync.WaitGroup
 \tready.Add(2)
 \trelease := make(chan struct{})
+\tvar queryStartMu sync.Mutex
+\tqueryStartCount := 0
 \trequire.NoError(t, db.Callback().Query().Before("gorm:query").Register("test:concurrent_quota_start", func(tx *gorm.DB) {
-\t\tif tx.Statement.Table == "users" {
+\t\tif tx.Statement.Table != "users" {
+\t\t\treturn
+\t\t}
+\t\tqueryStartMu.Lock()
+\t\tqueryStartCount++
+\t\tshouldWait := queryStartCount <= 2
+\t\tqueryStartMu.Unlock()
+\t\tif shouldWait {
 \t\t\tready.Done()
 \t\t\t<-release
 \t\t}
