@@ -189,7 +189,6 @@ run_root_package() (
     test_args+=(-run '^TestProcessRequestBillingRecoverySettlesRefundsAndReviewsUnknownOutcomes$')
   fi
 
-  package_skip_pattern=""
   if [[ "$separate_integration_suites" == "true" ]]; then
     case "$pkg" in
       github.com/QuantumNous/new-api/service)
