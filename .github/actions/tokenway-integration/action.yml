@@ -30,4 +30,4 @@ runs:
       id: report
       if: always()
       shell: bash
-      run: echo "path=$RUNNER_TEMP/tokenway-integration-logs/integration-failure-classification.json" >> "$GITHUB_OUTPUT"
+      run: echo "path=$RUNNER_TEMP/tokenway-go-validation-logs/integration-failure-classification.json" >> "$GITHUB_OUTPUT"
