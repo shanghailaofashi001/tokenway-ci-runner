@@ -850,7 +850,7 @@ jobs:
       - name: Run all discovered Root test packages and parallel isolated Go modules
         id: root_go_tests
         env:
-          TOKENWAY_SEPARATE_INTEGRATION_SUITES: ${{ env.TOKENWAY_TARGETED_ONLY != 'true' && 'true' || 'false' }}
+          TOKENWAY_SEPARATE_INTEGRATION_SUITES: ${{ env.TOKENWAY_TARGETED_ONLY != 'true' && env.TOKENWAY_FINANCE_TARGETED_ONLY != 'true' && env.TOKENWAY_RECOVERY_ONLY != 'true' && env.TOKENWAY_KUAIPAO_ONLY != 'true' && env.TOKENWAY_KUAIPAO_FRONTEND_ONLY != 'true' && env.TOKENWAY_FRONTEND_ONLY != 'true' && 'true' || 'false' }}
         if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && (github.event_name != 'push' || !contains(github.event.head_commit.message, '[frontend-only]')) && env.TOKENWAY_KUAIPAO_ONLY != 'true' && env.TOKENWAY_KUAIPAO_FRONTEND_ONLY != 'true' }}
         working-directory: source
         shell: bash
