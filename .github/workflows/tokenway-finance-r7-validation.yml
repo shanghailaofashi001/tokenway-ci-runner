@@ -27,10 +27,6 @@ on:
         type: boolean
         default: false
       run_database_matrix:
-        description: "Include the tagged SQLite/MySQL/PostgreSQL wallet and EPay integration matrix"
-        required: false
-        type: boolean
-        default: false
       task_db_dialect:
         description: "Database dialect for a targeted task-settlement integration rerun"
         required: false
@@ -53,21 +49,8 @@ on:
       - ".github/scripts/run-go-test-modules.sh"
       - ".github/scripts/run-tokenway-integration-suites.sh"
       - ".github/scripts/classify-tokenway-go-failures.py"
-
-  push:
-    branches:
-      - main
-    paths:
-      - ".github/workflows/tokenway-finance-r7-validation.yml"
-      - ".github/scripts/run-go-test-modules.sh"
-      - ".github/scripts/run-tokenway-integration-suites.sh"
-      - ".github/scripts/classify-tokenway-go-failures.py"
-      - ".github/scripts/apply_encrypted_chat_history_sync.py"
-      - ".github/workflows/tokenway-chat-sync-route-guard.yml"
-      - ".github/scripts/apply_tokenway_file_library.py"
-      - ".github/scripts/apply_tokenway_file_library_web.py"
-      - ".github/workflows/tokenway-file-library-guard.yml"
-      - ".github/workflows/tokenway-file-library-frontend-guard.yml"
+      - ".github/workflows/tokenway-five-layer-parallel.yml"
+      - ".github/scripts/tokenway-source-snapshot.py"
 
 permissions:
   contents: read
@@ -146,11 +129,17 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Parse five-layer workflow YAML before acceptance
+        shell: bash
+        run: |
+          set -euo pipefail
+          ruby -e 'require "yaml"; YAML.load_file(".github/workflows/tokenway-five-layer-parallel.yml", aliases: true); puts "PASS: five-layer workflow YAML parsed."'
+
       - name: Checkout pinned private TokenWay source and validation materials
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
           repository: shanghailaofashi001/tokenway-v11-dev
-          ref: 4ef334eff0a14e52c6552abd2ff773727eaebc2f
+          ref: 6cf1038df263f7bcc64f351b1b0523f4608142ce
           token: ${{ secrets.TOKENWAY_SOURCE_READ_TOKEN }}
           path: private
           fetch-depth: 1
@@ -160,7 +149,7 @@ jobs:
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
           repository: shanghailaofashi001/tokenway-v11-dev
-          ref: 6cf1038df263f7bcc64f351b1b0523f4608142ce
+          ref: d2494da77bc59b7edb4082bb2a594f24997b6ece
           token: ${{ secrets.TOKENWAY_SOURCE_READ_TOKEN }}
           path: private-validation
           fetch-depth: 1
@@ -194,6 +183,7 @@ jobs:
           python3 -m py_compile .tokenway-validation/apply-shared-test-db-harness.py
           bash -n .github/scripts/run-go-test-modules.sh
           bash -n .github/scripts/run-tokenway-integration-suites.sh
+          python3 -m py_compile .github/scripts/tokenway-source-snapshot.py
           python3 -m py_compile .github/scripts/classify-tokenway-go-failures.py
           test -s .tokenway-validation/apply-transactional-db-timestamp.py
           echo "Private validation inputs restored; source remains runner-local."
