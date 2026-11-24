@@ -9,6 +9,7 @@ on:
       - ".github/workflows/tokenway-v11-windows-desktop-release.yml"
 
 permissions:
+  actions: write
   contents: read
 
 jobs:
@@ -67,3 +68,20 @@ jobs:
 
           print("PASS: CNY, encrypted chat-sync, and offline dependency checks have distinct step boundaries")
           PY
+
+  dispatch-windows-desktop-release:
+    name: Dispatch Windows desktop build from the pinned successful Run 164
+    needs: validate-workflow
+    if: ${{ needs.validate-workflow.result == 'success' && contains(github.event.head_commit.message, '[resume-run-164]') }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Dispatch standalone Windows release with exact source run ID
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh workflow run .github/workflows/tokenway-v11-windows-desktop-release.yml --repo "$GITHUB_REPOSITORY" --ref main -f source_run_id=45337836586
+          echo "PASS: Windows desktop release dispatched from validated source Run 164; source acceptance was not rerun."
