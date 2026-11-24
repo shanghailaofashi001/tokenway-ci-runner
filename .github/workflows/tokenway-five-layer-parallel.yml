@@ -110,8 +110,9 @@ permissions:
   actions: read
 
 concurrency:
-  group: tokenway-five-layer-${{ github.ref }}-${{ github.run_id }}
-  cancel-in-progress: false
+  # A newer commit on this PR supersedes older full acceptance runs; keep only the latest immutable snapshot under test.
+  group: tokenway-five-layer-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   assemble_source:
