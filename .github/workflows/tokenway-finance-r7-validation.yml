@@ -31,6 +31,16 @@ on:
         required: false
         type: boolean
         default: false
+      task_db_dialect:
+        description: "Database dialect for a targeted task-settlement integration rerun"
+        required: false
+        type: choice
+        options:
+          - all
+          - sqlite
+          - mysql
+          - postgres
+        default: all
         description: "Include the tagged SQLite/MySQL/PostgreSQL wallet and EPay integration matrix"
         required: false
         type: boolean
@@ -120,6 +130,7 @@ jobs:
       TOKENWAY_ROOT_TEST_PATTERN: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.root_test_pattern || '' }}
       TOKENWAY_TARGETED_ONLY: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.targeted_only == 'true') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[targeted-only]')) }}
       TOKENWAY_RUN_DATABASE_MATRIX: ${{ (github.event_name == 'workflow_dispatch' && (github.event.inputs.targeted_only != 'true' || github.event.inputs.run_database_matrix == 'true')) || (github.event_name == 'push' && (!contains(github.event.head_commit.message, '[targeted-only]') || contains(github.event.head_commit.message, '[database-matrix]'))) }}
+      TOKENWAY_TASK_DB_DIALECT: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.task_db_dialect || 'all' }}
       TEST_MYSQL_DSN: root:tokenway-test@tcp(127.0.0.1:3306)/tokenway_test?charset=utf8mb4&parseTime=True&loc=Local
       TEST_POSTGRES_DSN: postgres://tokenway:tokenway-test@127.0.0.1:5432/tokenway_test?sslmode=disable
       TEST_MYSQL_LOG_DSN: root:tokenway-test@tcp(127.0.0.1:3306)/tokenway_test?charset=utf8mb4&parseTime=True&loc=Local
@@ -795,7 +806,7 @@ jobs:
           echo "===== Signed Epay callback database matrix ====="
           go test -v -timeout 8m ./controller -run TestEpaySuccessfulTopUpCallbackIsSignedAndIdempotentAcrossDatabases -count=1
       - name: Run refund, task settlement and WebSocket integration suites
-        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_KUAIPAO_ONLY != 'true' && env.TOKENWAY_FINANCE_TARGETED_ONLY != 'true' && (env.TOKENWAY_GO_MODULE_SCOPE == 'all' || env.TOKENWAY_GO_MODULE_SCOPE == 'root') && env.TOKENWAY_TARGETED_ONLY != 'true' }}
+        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_KUAIPAO_ONLY != 'true' && env.TOKENWAY_FINANCE_TARGETED_ONLY != 'true' && (env.TOKENWAY_GO_MODULE_SCOPE == 'all' || env.TOKENWAY_GO_MODULE_SCOPE == 'root') && (env.TOKENWAY_TARGETED_ONLY != 'true' || env.TOKENWAY_RUN_DATABASE_MATRIX == 'true') }}
         working-directory: source
         shell: bash
         env:
