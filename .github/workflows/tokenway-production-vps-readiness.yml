@@ -10,18 +10,23 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: tokenway-production-vps-readiness
+  cancel-in-progress: false
+
 jobs:
   read-only-production-audit:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
       PROD_HOST: ${{ secrets.TOKENWAY_PROD_SSH_HOST }}
-      PROD_USER: ${{ secrets.TOKENWAY_PROD_SSH_USER || 'root' }}
-      PROD_PORT: ${{ secrets.TOKENWAY_PROD_SSH_PORT || '22' }}
+      PROD_USER: ${{ secrets.TOKENWAY_PROD_SSH_USER }}
+      PROD_PORT: ${{ secrets.TOKENWAY_PROD_SSH_PORT }}
       PROD_SSH_KEY: ${{ secrets.TOKENWAY_PROD_SSH_PRIVATE_KEY }}
-      DEPLOY_PATH: ${{ secrets.TOKENWAY_PROD_DEPLOY_PATH || '/opt/tokenway-v11-kuaipao/TokenWay-V11' }}
+      PROD_KNOWN_HOSTS: ${{ secrets.TOKENWAY_PROD_SSH_KNOWN_HOSTS }}
+      DEPLOY_PATH: ${{ secrets.TOKENWAY_PROD_DEPLOY_PATH }}
     steps:
-      - name: Check production SSH access configuration
+      - name: Check pinned SSH access configuration
         id: preflight
         shell: bash
         run: |
@@ -29,98 +34,117 @@ jobs:
           set +x
           missing=()
           [[ -n "$PROD_HOST" ]] || missing+=("TOKENWAY_PROD_SSH_HOST")
+          [[ -n "$PROD_USER" ]] || missing+=("TOKENWAY_PROD_SSH_USER")
+          [[ "$PROD_PORT" =~ ^[0-9]{1,5}$ ]] && ((PROD_PORT >= 1 && PROD_PORT <= 65535)) || missing+=("TOKENWAY_PROD_SSH_PORT")
           [[ -n "$PROD_SSH_KEY" ]] || missing+=("TOKENWAY_PROD_SSH_PRIVATE_KEY")
+          [[ -n "$PROD_KNOWN_HOSTS" ]] || missing+=("TOKENWAY_PROD_SSH_KNOWN_HOSTS")
           {
-            echo "## TokenWay production VPS readiness"
+            echo "## TokenWay production VPS read-only readiness audit"
             echo
-            echo "Expected deployment directory: $DEPLOY_PATH"
-            echo "Expected Compose project: tokenway-v11"
-            echo "Expected app listener: 127.0.0.1:13000 → container 3000"
+            echo "Target OS expectation: Ubuntu 22.04 LTS (will be detected, not assumed)."
+            echo "No deployment path is assumed; an optional path is inspected only if supplied."
             echo
             if (("${#missing[@]}" > 0)); then
-              echo "**BLOCKED — read-only SSH audit cannot connect.**"
+              echo "**BLOCKED — pinned SSH configuration is incomplete.**"
               echo
-              echo "Missing GitHub Actions secrets:"
-              for item in "${missing[@]}"; do printf -- '- %s\n' "$item"; done
+              for item in "${missing[@]}"; do printf -- '- %s
+' "$item"; done
               echo
-              echo "Add the missing secrets to the CI repository Actions secrets, then rerun this workflow."
+              echo "No SSH connection or remote command was attempted."
             else
-              echo "SSH inputs are present. The next step will run read-only checks only."
+              echo "Pinned SSH inputs are present. The remote operation is read-only."
             fi
           } >> "$GITHUB_STEP_SUMMARY"
           if (("${#missing[@]}" > 0)); then
             echo "blocked=true" >> "$GITHUB_OUTPUT"
-            echo "BLOCKED: missing production SSH configuration; no remote command was attempted."
             exit 1
-          else
-            echo "blocked=false" >> "$GITHUB_OUTPUT"
-            echo "READY: production SSH configuration is present; only read-only checks will run."
           fi
+          echo "blocked=false" >> "$GITHUB_OUTPUT"
 
-      - name: Run read-only VPS, storage and payment configuration audit
+      - name: Run Ubuntu VPS inventory over pinned SSH
         if: steps.preflight.outputs.blocked == 'false'
         shell: bash
         run: |
           set -euo pipefail
           set +x
           install -d -m 700 "$HOME/.ssh"
-          printf '%s\n' "$PROD_SSH_KEY" > "$HOME/.ssh/tokenway_prod_key"
-          chmod 600 "$HOME/.ssh/tokenway_prod_key"
-          ssh-keyscan -p "$PROD_PORT" -H "$PROD_HOST" >> "$HOME/.ssh/known_hosts" 2>/dev/null
-          ssh -i "$HOME/.ssh/tokenway_prod_key" -p "$PROD_PORT" \
-            -o BatchMode=yes -o ConnectTimeout=12 \
-            "$PROD_USER@$PROD_HOST" bash -s -- "$DEPLOY_PATH" <<'REMOTE'
-          set -euo pipefail
+          printf '%s
+' "$PROD_SSH_KEY" > "$HOME/.ssh/tokenway_prod_key"
+          printf '%s
+' "$PROD_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/tokenway_prod_key" "$HOME/.ssh/known_hosts"
+          trap 'rm -f "$HOME/.ssh/tokenway_prod_key"' EXIT
+          ssh -i "$HOME/.ssh/tokenway_prod_key" -p "$PROD_PORT"             -o BatchMode=yes -o ConnectTimeout=12             -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts"             "$PROD_USER@$PROD_HOST" bash -s -- "$DEPLOY_PATH" <<'REMOTE'
+          set -u
           DEPLOY_PATH="$1"
-          cd "$DEPLOY_PATH"
-          test -f docker-compose.yml
-          docker compose version
-          docker compose -p tokenway-v11 ps
-          echo '--- persistent volumes ---'
-          docker volume ls --format '{{.Name}}' | grep -E 'tokenway_v11_pg_data|tokenway_data' || true
-          echo '--- filesystem capacity ---'
-          df -h "$DEPLOY_PATH"
-          echo '--- local application listener ---'
-          curl -sS -o /dev/null -w 'HTTP %{http_code}\n' http://127.0.0.1:13000/sign-in || true
-          echo '--- payment configuration presence only (no secret values) ---'
-          docker compose -p tokenway-v11 exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -At' <<'SQL'
-          WITH required(key) AS (
-            VALUES
-              ('EpayId'),
-              ('EpayKey'),
-              ('NowPaymentsApiKey'),
-              ('NowPaymentsIPNSecret'),
-              ('USDExchangeRate'),
-              ('payment_setting.compliance_confirmed'),
-              ('payment_setting.compliance_terms_version')
-          ),
-          vals AS (
-            SELECT required.key, options.value
-            FROM required
-            LEFT JOIN options ON options.key = required.key
-          )
-          SELECT key || '=' ||
-            CASE
-              WHEN key = 'USDExchangeRate' THEN
-                CASE WHEN value ~ '^[0-9]+([.][0-9]+)?$' AND value::numeric > 0 THEN 'SET' ELSE 'MISSING' END
-              WHEN key = 'payment_setting.compliance_confirmed' THEN
-                CASE WHEN lower(coalesce(value, '')) = 'true' THEN 'SET' ELSE 'MISSING' END
-              WHEN key = 'payment_setting.compliance_terms_version' THEN
-                CASE WHEN value = 'v1' THEN 'SET' ELSE 'MISSING' END
-              ELSE
-                CASE WHEN coalesce(btrim(value), '') <> '' THEN 'SET' ELSE 'MISSING' END
-            END
-          FROM vals
-          ORDER BY key;
-          SQL
+          section() { printf '
+===== %s =====
+' "$1"; }
+          section 'OS release'
+          if [ -r /etc/os-release ]; then cat /etc/os-release; else uname -a; fi
+          section 'CPU and load'
+          nproc 2>/dev/null || true
+          uptime 2>/dev/null || true
+          section 'Memory and swap'
+          free -h 2>/dev/null || true
+          swapon --show 2>/dev/null || true
+          section 'Disk and inode capacity'
+          df -hT / 2>/dev/null || true
+          df -i / 2>/dev/null || true
+          lsblk -o NAME,SIZE,TYPE,FSTYPE,MOUNTPOINT 2>/dev/null || true
+          section 'Relevant installed Ubuntu packages (versions only)'
+          if command -v dpkg-query >/dev/null 2>&1; then
+            dpkg-query -W -f='${binary:Package} ${Version}
+' 'docker*' 'containerd*' 'postgresql*' 'redis*' 'nginx*' 'caddy*' 2>/dev/null || true
+          fi
+          section 'Relevant active systemd service names'
+          if command -v systemctl >/dev/null 2>&1; then
+            systemctl list-units --type=service --state=running --no-legend 2>/dev/null | grep -Ei 'tokenway|postgres|redis|docker|containerd|nginx|caddy' || true
+          fi
+          section 'Docker and Compose (only if installed)'
+          if command -v docker >/dev/null 2>&1; then
+            docker version --format 'client={{.Client.Version}} server={{.Server.Version}}' 2>&1 || true
+            docker compose version 2>&1 || true
+            docker ps --format 'table {{.Names}}	{{.Image}}	{{.Status}}	{{.Ports}}' 2>&1 || true
+            docker stats --no-stream --format 'table {{.Name}}	{{.CPUPerc}}	{{.MemUsage}}	{{.MemPerc}}' 2>&1 || true
+          else
+            echo 'Docker is not installed; no installation attempted.'
+          fi
+          section 'Listening TCP sockets'
+          ss -lnt 2>/dev/null || true
+          section 'Kernel OOM evidence (current boot; may require journal permission)'
+          if command -v journalctl >/dev/null 2>&1; then
+            journalctl -k -b --no-pager 2>/dev/null | grep -Ei 'out of memory|oom-kill|killed process' | tail -30 || true
+          fi
+          section 'Optional deployment directory'
+          if [ -n "$DEPLOY_PATH" ]; then
+            if [ -d "$DEPLOY_PATH" ]; then
+              printf 'Directory exists: %s
+' "$DEPLOY_PATH"
+              find "$DEPLOY_PATH" -maxdepth 1 -type f -printf '%f
+' 2>/dev/null | sort | head -80
+              if [ -f "$DEPLOY_PATH/docker-compose.yml" ] && command -v docker >/dev/null 2>&1; then
+                docker compose -f "$DEPLOY_PATH/docker-compose.yml" ps 2>&1 || true
+              fi
+            else
+              printf 'Configured deployment path does not exist: %s
+' "$DEPLOY_PATH"
+            fi
+          else
+            echo 'No deployment path secret supplied; no path assumed or entered.'
+          fi
+          section 'Safety boundary'
+          echo 'Read-only inventory only: no environment variables, secret values, database contents, payment credentials, or private keys were read or printed.'
+          echo 'No packages, services, containers, firewall rules, files, database schemas, or persistent volumes were changed.'
           REMOTE
 
-      - name: Record safety boundary
+      - name: Record audit safety boundary
         if: always()
         run: |
           {
             echo
-            echo "This workflow is read-only. It does not stop containers, alter Compose files, migrate the database, delete volumes, or deploy an image."
-            echo "Payment checks report presence only; they never print credential values or initiate charges, refunds, or callbacks."
-            echo "Any production switch must preserve the existing PostgreSQL/Redis/Silo volumes and .env, and must take a verified database backup first."
+            echo "This workflow performs inventory only. It does not install Docker, migrate databases, change Compose/systemd configuration, restart services, alter firewall rules, or deploy."
+            echo "SSH host identity is pinned from TOKENWAY_PROD_SSH_KNOWN_HOSTS; ssh-keyscan trust-on-first-use is not used."
+            echo "The remote inventory detects the current OS and deployment method rather than assuming Debian, Docker, a fixed directory, or a fixed PostgreSQL/Redis layout."
+            echo "No payment credentials are inspected and no charge, refund, callback, or blockchain transaction is initiated."
           } >> "$GITHUB_STEP_SUMMARY"
