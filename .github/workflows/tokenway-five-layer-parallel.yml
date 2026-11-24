@@ -677,9 +677,12 @@ jobs:
             node ../../.tokenway-validation/apply-changed-copyright-headers.mjs --check "${format_files[@]}"
           fi
 
-      - name: Remove transient frontend dependencies before snapshot freeze
+      - name: Remove transient dependencies, generated output and environment files before snapshot freeze
         shell: bash
-        run: rm -rf source/web/node_modules source/web/dist
+        run: |
+          set -euo pipefail
+          find source -type d \\( -name node_modules -o -name dist -o -name coverage -o -name .cache -o -name .vite -o -name .tanstack -o -name .turbo -o -name .next -o -name .output -o -name tmp -o -name logs \\) -prune -exec rm -rf {} +
+          find source -type f \\( -name .env -o -name .env.local -o -name .env.production -o -name .env.development -o -name '.env.*' ! -name .env.example ! -name .env.sample ! -name .env.template -o -name .DS_Store -o -name '*.log' -o -name '*.sqlite' -o -name '*.sqlite3' -o -name '*.db' \\) -delete
 
       - name: Validate snapshot tools
         shell: bash
