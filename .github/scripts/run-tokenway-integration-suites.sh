@@ -102,7 +102,7 @@ case "$selected_package" in
       exit 2
     fi
     run_suite service '^(TestProcessRequestBillingRecoverySettlesRefundsAndReviewsUnknownOutcomes|TestSettle.*|TestRefund.*|TestUpdateBatchTasks.*|TestUpdateSunoTasksStalePollsRefundExactlyOnce|TestSweepTimedOutTasks.*)$' || failed=1
-    run_suite controller '^(TestExecuteTaskSubmission.*|TestResponsesWS.*)$' || failed=1
+    run_suite controller '^(TestExecuteTaskSubmission.*|TestResponsesWS.*|TestResponsesWebSocket.*)$' || failed=1
     run_task_settlement_matrix
     run_suite relay '^TestResponsesWS.*$' || failed=1
     run_suite pkg/wsmanager '^(TestCloseChannel.*|TestUnregisterPreventsClose|TestRegisteredCloseIsIdempotent|TestPublishCloseChannelsNoopsWhenRedisDisabled|TestRedisChannelCloseEventsStayWithinDatabase)$' || failed=1
@@ -114,7 +114,7 @@ case "$selected_package" in
     if [[ "$selected_pattern" == "^TestImmediateTaskSettlementDatabase$" ]]; then
       run_task_settlement_matrix
     else
-      run_suite controller "${selected_pattern:-^(TestExecuteTaskSubmission.*|TestResponsesWS.*)$}" || failed=1
+      run_suite controller "${selected_pattern:-^(TestExecuteTaskSubmission.*|TestResponsesWS.*|TestResponsesWebSocket.*)$}" || failed=1
     fi
     ;;
   relay)
