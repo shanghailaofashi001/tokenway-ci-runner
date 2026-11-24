@@ -30,6 +30,7 @@ PY
 fi
 
 root_test_pattern="${TOKENWAY_ROOT_TEST_PATTERN:-}"
+separate_integration_suites="${TOKENWAY_SEPARATE_INTEGRATION_SUITES:-false}"
 if [[ -z "$root_test_pattern" && "${GITHUB_EVENT_NAME:-}" == "push" && -n "${GITHUB_EVENT_PATH:-}" && -f "$GITHUB_EVENT_PATH" ]]; then
   root_test_pattern="$(python3 - "$GITHUB_EVENT_PATH" <<'PY'
 import json
@@ -123,10 +124,13 @@ if [[ "$scope" == "all" || "$scope" == "root" ]]; then
     fi
     for required in \
       github.com/QuantumNous/new-api/e2e \
+      github.com/QuantumNous/new-api/controller \
       github.com/QuantumNous/new-api/middleware \
       github.com/QuantumNous/new-api/oauth \
       github.com/QuantumNous/new-api/pkg/wsmanager \
+      github.com/QuantumNous/new-api/relay \
       github.com/QuantumNous/new-api/relay/channel/vertex \
+      github.com/QuantumNous/new-api/service \
       github.com/QuantumNous/new-api/setting/system_setting; do
       if ! printf '%s\n' "${packages[@]}" | grep -Fxq "$required"; then
         echo "FAIL: required Root test package was not discovered: $required" >&2
@@ -179,6 +183,23 @@ run_root_package() (
     test_args+=(-run "$root_test_pattern")
   elif [[ "${TOKENWAY_RECOVERY_ONLY:-false}" == "true" && -z "$root_input" ]]; then
     test_args+=(-run '^TestProcessRequestBillingRecoverySettlesRefundsAndReviewsUnknownOutcomes$')
+  fi
+
+  if [[ "$separate_integration_suites" == "true" ]]; then
+    case "$pkg" in
+      github.com/QuantumNous/new-api/service)
+        test_args+=(-skip "^(TestProcessRequestBillingRecoverySettlesRefundsAndReviewsUnknownOutcomes|TestSettle.*|TestRefund.*|TestUpdateBatchTasks.*|TestUpdateSunoTasksStalePollsRefundExactlyOnce|TestSweepTimedOutTasks.*)")
+        ;;
+      github.com/QuantumNous/new-api/controller)
+        test_args+=(-skip "^(TestImmediateTaskSettlementDatabase|TestExecuteTaskSubmission.*|TestResponsesWS.*|TestResponsesWebSocket.*|TestResponsesInterruptedStreamHealth|TestResponsesStreamOutcomesPreserveAccounting)")
+        ;;
+      github.com/QuantumNous/new-api/relay)
+        test_args+=(-skip "^TestResponsesWS.*")
+        ;;
+      github.com/QuantumNous/new-api/pkg/wsmanager)
+        test_args+=(-skip "^(TestCloseChannel.*|TestUnregisterPreventsClose|TestRegisteredCloseIsIdempotent|TestPublishCloseChannelsNoopsWhenRedisDisabled|TestRedisChannelCloseEventsStayWithinDatabase)")
+        ;;
+    esac
   fi
 
   if timeout --signal=TERM --kill-after=30s 17m go test "${test_args[@]}" "$pkg" > "$logfile" 2>&1; then
