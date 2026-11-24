@@ -56,7 +56,7 @@ with tempfile.TemporaryDirectory(prefix="tokenway-failure-routing-") as temporar
     expected = {
         "go_module_scope": "relaykit",
         "nested_module_packages": relaykit_package,
-        "nested_module_test_pattern": "^(?:TestDecodeBroken)$",
+        "nested_module_test_pattern": "^(TestDecodeBroken)$",
     }
     if first["rerun_selector"] != expected:
         raise SystemExit(f"nested-module rerun selector is incorrect: {first['rerun_selector']}")
@@ -71,7 +71,7 @@ with tempfile.TemporaryDirectory(prefix="tokenway-failure-routing-") as temporar
     root_result = results[("root", root_package)]
     if root_result["failed_tests"] != ["TestRootRegression"]:
         raise SystemExit(f"Root test routing regressed: {root_result}")
-    if root_result["rerun_selector"].get("root_test_pattern") != "^(?:TestRootRegression)$":
+    if root_result["rerun_selector"].get("root_test_pattern") != "^(TestRootRegression)$":
         raise SystemExit(f"Root targeted rerun selector is incorrect: {root_result['rerun_selector']}")
 
 print("PASS: Root and nested Go failures map to exact module, package, failed test and targeted rerun selectors.")
