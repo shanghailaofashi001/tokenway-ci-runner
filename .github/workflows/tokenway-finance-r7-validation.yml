@@ -1137,6 +1137,12 @@ jobs:
               "model/test_database_helpers_test.go",
               "controller/access_token_audit_test.go",
               "controller/model_management_test.go",
+              "controller/relay_task_plugin_test.go",
+              "controller/responses_websocket_test.go",
+              "relay/responses_websocket_test.go",
+              "service/task_billing_test.go",
+              "service/task_polling_test.go",
+              "pkg/wsmanager/wsmanager_test.go",
           ]
           for relative in required_files:
               path = destination / relative
@@ -1199,8 +1205,9 @@ jobs:
                   "Go formatting, dependency verification, offline dependency graph, vet and build",
                   "All discovered Root Go test packages (including e2e and channel adapters), plus Relaykit and Tokenkit module test suites",
                   "Root test packages run in isolated processes with package-specific disposable SQL databases; Relaykit and Tokenkit run as independent parallel modules",
-                  "A shared loopback-only SQL test harness creates per-test databases and applies production model migrations for schema-sensitive tests",
+                  "A shared loopback-only SQL test harness creates per-test databases; schema-sensitive model tests use production migrations, and task-settlement dialect tests use disposable databases for the exact model set under test",
                   "Wallet ledger and signed Epay callback integration tests on SQLite, MySQL and PostgreSQL",
+                  "Request billing recovery/refunds, task terminal-state settlement and refunds, task submission durability, Responses WebSocket lifecycle/accounting, and Redis channel-close isolation; immediate task settlement runs on SQLite, MySQL and PostgreSQL",
                   "Frontend production build, TypeScript typecheck, unit tests, Oxlint, format/copyright and TokenWay media contracts",
               ],
               "contents": {
