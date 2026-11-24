@@ -71,11 +71,11 @@ for status_path in sorted(log_dir.glob("*.status")):
 failures = [item for item in results if item["status"] == "failed"]
 report = {
     "schema_version": 1,
-    "overall": "failed" if failures else "passed",
+    "overall": "failed" if failures else ("passed" if results else "not-run"),
     "failed_count": len(failures),
     "results": results,
     "targeted_rerun": [item["rerun_selector"] for item in failures],
 }
 output = log_dir / "failure-classification.json"
 output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-print(f"Go failure classification: {len(failures)} failed suite(s) / {len(results)} total.")
+print(f"Go failure classification: {len(failures)} failed suite(s) / {len(results)} total (status: {report['overall']}).")
