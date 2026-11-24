@@ -5,22 +5,11 @@ import pathlib
 import re
 import sys
 
+from tokenway_go_test_selector import targeted_test_pattern
+
 log_dir = pathlib.Path(sys.argv[1])
 log_dir.mkdir(parents=True, exist_ok=True)
 results = []
-
-
-def go_regex_escape(value: str) -> str:
-    """Escape only Go RE2 metacharacters; unlike re.escape, do not escape spaces or hyphens."""
-    metacharacters = set(r"\\.+*?()|[]{}^$")
-    return "".join("\\" + character if character in metacharacters else character for character in value)
-
-
-def targeted_test_pattern(test_names: set[str]) -> str:
-    # Go -run splits patterns on '/'; target failed top-level test functions so
-    # subtest failures rerun only their owning test function, not the whole package.
-    roots = sorted({name.split("/", 1)[0] for name in test_names})
-    return "^(" + "|".join(go_regex_escape(name) for name in roots) + ")$"
 
 
 def failed_test_names(log_path: pathlib.Path) -> list[str]:
