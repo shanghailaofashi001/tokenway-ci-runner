@@ -42,6 +42,7 @@ on:
       - ".github/workflows/tokenway-finance-r7-validation.yml"
       - ".github/scripts/run-go-test-modules.sh"
       - ".github/scripts/run-tokenway-integration-suites.sh"
+      - ".github/scripts/classify-tokenway-go-failures.py"
 
   push:
     branches:
@@ -50,6 +51,7 @@ on:
       - ".github/workflows/tokenway-finance-r7-validation.yml"
       - ".github/scripts/run-go-test-modules.sh"
       - ".github/scripts/run-tokenway-integration-suites.sh"
+      - ".github/scripts/classify-tokenway-go-failures.py"
       - ".github/scripts/apply_encrypted_chat_history_sync.py"
       - ".github/workflows/tokenway-chat-sync-route-guard.yml"
       - ".github/scripts/apply_tokenway_file_library.py"
@@ -181,6 +183,7 @@ jobs:
           python3 -m py_compile .tokenway-validation/apply-shared-test-db-harness.py
           bash -n .github/scripts/run-go-test-modules.sh
           bash -n .github/scripts/run-tokenway-integration-suites.sh
+          python3 -m py_compile .github/scripts/classify-tokenway-go-failures.py
           test -s .tokenway-validation/apply-transactional-db-timestamp.py
           echo "Private validation inputs restored; source remains runner-local."
 
@@ -863,6 +866,11 @@ jobs:
         shell: bash
         run: bash ../.github/scripts/run-go-test-modules.sh
 
+      - name: Classify Go failures by module, package and failed test
+        if: always()
+        shell: bash
+        run: python3 .github/scripts/classify-tokenway-go-failures.py "$RUNNER_TEMP/tokenway-go-validation-logs"
+
       - name: Upload failed Go package diagnostics for targeted follow-up
         if: ${{ failure() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -1207,6 +1215,7 @@ jobs:
               "validated_layers": [
                   "Go formatting, dependency verification, offline dependency graph, vet and build",
                   "All discovered Root Go test packages (including e2e and channel adapters), plus Relaykit and Tokenkit module test suites",
+                  "Machine-readable Go failure routing by module, package and exact failing test names, with targeted rerun selectors",
                   "Root test packages run in isolated processes with package-specific disposable SQL databases; Relaykit and Tokenkit run as independent parallel modules",
                   "A shared loopback-only SQL test harness creates per-test databases and applies production model migrations for schema-sensitive tests",
                   "Wallet ledger and signed Epay callback integration tests on SQLite, MySQL and PostgreSQL",
