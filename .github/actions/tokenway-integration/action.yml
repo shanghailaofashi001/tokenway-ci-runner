@@ -1,0 +1,33 @@
+name: TokenWay business integration suites
+description: Run refund, task settlement, Responses WebSocket and Redis isolation integration regressions.
+
+inputs:
+  source-directory:
+    description: Relative path to the assembled TokenWay source tree.
+    required: false
+    default: source
+
+outputs:
+  report-path:
+    description: Path to the machine-readable integration failure classification report.
+    value: ${{ steps.report.outputs.path }}
+
+runs:
+  using: composite
+  steps:
+    - name: Run TokenWay business integration suites
+      shell: bash
+      working-directory: ${{ inputs.source-directory }}
+      env:
+        GOPROXY: off
+        GOSUMDB: off
+        GOTOOLCHAIN: local
+        GOMAXPROCS: '1'
+        GOFLAGS: -mod=vendor -p=1
+      run: bash ../.github/scripts/run-tokenway-integration-suites.sh
+
+    - name: Expose integration classification report path
+      id: report
+      if: always()
+      shell: bash
+      run: echo "path=$RUNNER_TEMP/tokenway-integration-logs/integration-failure-classification.json" >> "$GITHUB_OUTPUT"
