@@ -35,7 +35,7 @@ run_suite() {
   fi
 
   python3 - "$results" "$package" "$pattern" "$dialect" "$status" "$logfile" <<'PY'
-import json, pathlib, sys
+import json, pathlib, re, sys
 out, package, pattern, dialect, raw_status, logfile = sys.argv[1:]
 status = int(raw_status)
 tests = set()
@@ -52,6 +52,8 @@ selector = {
     "root_test_pattern": pattern,
     "targeted_only": True,
 }
+if tests:
+    selector["root_test_pattern"] = "^(" + "|".join(re.escape(name) for name in sorted(tests)) + ")$"
 if dialect:
     selector["task_db_dialect"] = dialect
 record = {
