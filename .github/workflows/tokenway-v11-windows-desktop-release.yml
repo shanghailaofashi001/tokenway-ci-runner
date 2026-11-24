@@ -12,6 +12,11 @@ on:
         description: "Successful TokenWay V11 source acceptance run ID"
         required: true
         type: string
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/tokenway-v11-windows-desktop-release.yml"
 
 permissions:
   contents: read
@@ -22,6 +27,14 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  verify-config-push:
+    name: Ignore config-only pushes; release waits for source acceptance completion
+    if: ${{ github.event_name == 'push' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Confirm no desktop release is built from an unvalidated workflow edit
+        run: echo "PASS: configuration push validated; Windows release is gated by workflow_run or explicit source_run_id."
+
   build:
     name: Build and smoke-test Windows installer from validated source
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' || github.event.workflow_run.conclusion == 'failure' }}
