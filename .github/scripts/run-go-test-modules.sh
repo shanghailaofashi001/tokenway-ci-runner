@@ -192,26 +192,6 @@ run_root_package() (
   if [[ "$separate_integration_suites" == "true" ]]; then
     case "$pkg" in
       github.com/QuantumNous/new-api/service)
-        package_skip_pattern="^(TestProcessRequestBillingRecoverySettlesRefundsAndReviewsUnknownOutcomes|TestSettle.*|TestRefund.*|TestUpdateBatchTasks.*|TestUpdateSunoTasksStalePollsRefundExactlyOnce|TestSweepTimedOutTasks.*|TestTaskReportsOnceAtTheFinalState)"
-        ;;
-      github.com/QuantumNous/new-api/controller)
-        package_skip_pattern="^(TestImmediateTaskSettlementDatabase|TestExecuteTaskSubmission.*|TestResponsesWS.*|TestResponsesWebSocket.*)"
-        ;;
-      github.com/QuantumNous/new-api/relay)
-        package_skip_pattern="^TestResponsesWS.*"
-        ;;
-      github.com/QuantumNous/new-api/pkg/wsmanager)
-        package_skip_pattern="^(TestCloseChannel.*|TestUnregisterPreventsClose|TestRegisteredCloseIsIdempotent|TestPublishCloseChannelsNoopsWhenRedisDisabled|TestRedisChannelCloseEventsStayWithinDatabase)"
-        ;;
-    esac
-  fi
-  if [[ -n "$package_skip_pattern" ]]; then
-    test_args+=(-skip "$package_skip_pattern")
-  fi
-
-  if [[ "$separate_integration_suites" == "true" ]]; then
-    case "$pkg" in
-      github.com/QuantumNous/new-api/service)
         test_args+=(-skip '^(TestProcessRequestBillingRecoverySettlesRefundsAndReviewsUnknownOutcomes|TestSettle.*|TestRefund.*|TestUpdateBatchTasks.*|TestUpdateSunoTasksStalePollsRefundExactlyOnce|TestSweepTimedOutTasks.*|TestTaskReportsOnceAtTheFinalState)$')
         ;;
       github.com/QuantumNous/new-api/controller)
