@@ -48,6 +48,9 @@ on:
           - controller
           - relay
           - pkg/wsmanager
+          - wallet_db
+          - epay_db
+          - database_matrix
         default: all
       integration_test_pattern:
         description: "Go -run regular expression for the selected integration package"
@@ -1182,28 +1185,7 @@ jobs:
           mkdir -p web/dist
           printf '<!doctype html><html></html>\n' > web/dist/index.html
           go test -v -timeout 3m ./relay/channel/advancedcustom -count=1 -run '^(TestKuaipaoPresetRoutesJoinBaseURLWithoutDuplicateV1|TestKuaipaoModelListManagementRoutesJoinBaseURLAndUseBearerAuth)$'
-      - name: Run tagged SQLite MySQL PostgreSQL wallet and Epay integration regressions
-        if: ${{ env.TOKENWAY_TARGETED_ONLY != 'true' }}
-        working-directory: source
-        shell: bash
-        run: |
-          set -euo pipefail
-          export GOPROXY=off GOSUMDB=off GOTOOLCHAIN=local GOMAXPROCS=1
-          export GOFLAGS="-mod=vendor -p=1 -tags=tokenway_test"
-          mkdir -p web/dist
-          printf '<!doctype html><html></html>\\n' > web/dist/index.html
-          model_tests="$(go test -list '^TestWalletLedgerAcrossSupportedDatabases$' ./model)"
-          printf '%s\n' "$model_tests"
-          grep -Fxq 'TestWalletLedgerAcrossSupportedDatabases' <<<"$model_tests"
-          controller_tests="$(go test -list '^TestEpaySuccessfulTopUpCallbackIsSignedAndIdempotentAcrossDatabases$' ./controller)"
-          printf '%s\n' "$controller_tests"
-          grep -Fxq 'TestEpaySuccessfulTopUpCallbackIsSignedAndIdempotentAcrossDatabases' <<<"$controller_tests"
-          echo "PASS: both tagged integration tests were discovered before execution."
-          echo "===== Wallet ledger database matrix ====="
-          go test -v -timeout 8m ./model -run TestWalletLedgerAcrossSupportedDatabases -count=1
-          echo "===== Signed Epay callback database matrix ====="
-          go test -v -timeout 8m ./controller -run TestEpaySuccessfulTopUpCallbackIsSignedAndIdempotentAcrossDatabases -count=1
-      - name: Run refund, task settlement and WebSocket integration suites
+      - name: Run refund, task settlement, WebSocket, wallet and EPay integration suites
         if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_KUAIPAO_ONLY != 'true' && env.TOKENWAY_FINANCE_TARGETED_ONLY != 'true' && (env.TOKENWAY_GO_MODULE_SCOPE == 'all' || env.TOKENWAY_GO_MODULE_SCOPE == 'root') && (env.TOKENWAY_TARGETED_ONLY != 'true' || github.event_name == 'workflow_dispatch' && inputs.target_layer == 'integration') }}
         working-directory: source
         shell: bash
