@@ -38,6 +38,16 @@ on:
         required: false
         type: string
         default: ""
+      nested_module_packages:
+        description: "Exact Go import path(s) for a targeted Relaykit or Tokenkit package rerun"
+        required: false
+        type: string
+        default: ""
+      nested_module_test_pattern:
+        description: "Go -run regular expression for the selected nested-module package(s)"
+        required: false
+        type: string
+        default: ""
       integration_package:
         description: "Integration package to rerun"
         required: false
@@ -1017,6 +1027,8 @@ jobs:
       TOKENWAY_GO_MODULE_SCOPE: ${{ github.event_name == 'workflow_dispatch' && inputs.targeted_only == true && inputs.target_layer == 'go_unit' && inputs.go_module_scope || 'all' }}
       TOKENWAY_ROOT_TEST_PACKAGES: ${{ github.event_name == 'workflow_dispatch' && inputs.targeted_only == true && inputs.target_layer == 'go_unit' && inputs.root_test_packages || '' }}
       TOKENWAY_ROOT_TEST_PATTERN: ${{ github.event_name == 'workflow_dispatch' && inputs.targeted_only == true && inputs.target_layer == 'go_unit' && inputs.root_test_pattern || '' }}
+      TOKENWAY_NESTED_MODULE_PACKAGES: ${{ github.event_name == 'workflow_dispatch' && inputs.targeted_only == true && inputs.target_layer == 'go_unit' && inputs.nested_module_packages || '' }}
+      TOKENWAY_NESTED_MODULE_TEST_PATTERN: ${{ github.event_name == 'workflow_dispatch' && inputs.targeted_only == true && inputs.target_layer == 'go_unit' && inputs.nested_module_test_pattern || '' }}
       TOKENWAY_TARGETED_ONLY: ${{ github.event_name == 'workflow_dispatch' && inputs.targeted_only == true && inputs.target_layer == 'go_unit' && 'true' || 'false' }}
       TOKENWAY_RUN_DATABASE_MATRIX: "true"
       TOKENWAY_TASK_DB_DIALECT: "all"
