@@ -31,7 +31,6 @@ fi
 
 root_test_pattern="${TOKENWAY_ROOT_TEST_PATTERN:-}"
 separate_integration_suites="${TOKENWAY_SEPARATE_INTEGRATION_SUITES:-false}"
-separate_integration_suites="${TOKENWAY_SEPARATE_INTEGRATION_SUITES:-false}"
 if [[ -z "$root_test_pattern" && "${GITHUB_EVENT_NAME:-}" == "push" && -n "${GITHUB_EVENT_PATH:-}" && -f "$GITHUB_EVENT_PATH" ]]; then
   root_test_pattern="$(python3 - "$GITHUB_EVENT_PATH" <<'PY'
 import json
@@ -125,16 +124,13 @@ if [[ "$scope" == "all" || "$scope" == "root" ]]; then
     fi
     for required in \
       github.com/QuantumNous/new-api/e2e \
-      github.com/QuantumNous/new-api/controller \
-      github.com/QuantumNous/new-api/relay \
-      github.com/QuantumNous/new-api/service \
-      github.com/QuantumNous/new-api/controller \
-      github.com/QuantumNous/new-api/middleware \
-      github.com/QuantumNous/new-api/oauth \
-      github.com/QuantumNous/new-api/pkg/wsmanager \
-      github.com/QuantumNous/new-api/relay \
-      github.com/QuantumNous/new-api/relay/channel/vertex \
-      github.com/QuantumNous/new-api/service \
+      github.com/QuantumNous/new-api/controller  \
+      github.com/QuantumNous/new-api/relay  \
+      github.com/QuantumNous/new-api/service  \
+      github.com/QuantumNous/new-api/middleware  \
+      github.com/QuantumNous/new-api/oauth  \
+      github.com/QuantumNous/new-api/pkg/wsmanager  \
+      github.com/QuantumNous/new-api/relay/channel/vertex 
       github.com/QuantumNous/new-api/setting/system_setting; do
       if ! printf '%s\n' "${packages[@]}" | grep -Fxq "$required"; then
         echo "FAIL: required Root test package was not discovered: $required" >&2
