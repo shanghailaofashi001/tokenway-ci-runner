@@ -7,8 +7,8 @@ if [[ ! -s web/dist/index.html ]]; then
   printf '<!doctype html><html></html>\n' > web/dist/index.html
 fi
 
-results="$log_dir/failure-classification.json"
-: > "$log_dir/results.ndjson"
+results="$log_dir/results.ndjson"
+: > "$results"
 
 run_suite() {
   local package="$1" pattern="$2" dialect="${3:-}"
