@@ -14,7 +14,10 @@ run_suite() {
   local package="$1" pattern="$2" dialect="${3:-}" tags="${4:-}"
   local slug="${package//\//-}" discovered logfile status
   local -a test_flags=()
-  if [[ -n "$dialect" ]]; then slug="$slug-$dialect"; fi
+
+  if [[ -n "$dialect" ]]; then
+    slug="$slug-$dialect"
+  fi
   if [[ -n "$tags" ]]; then
     slug="$slug-$tags"
     test_flags+=("-tags=$tags")
@@ -51,6 +54,7 @@ for line in pathlib.Path(logfile).read_text(encoding="utf-8", errors="replace").
         continue
     if event.get("Action") == "fail" and event.get("Test"):
         tests.add(event["Test"])
+
 selector = {
     "go_module_scope": "root",
     "root_test_packages": "github.com/QuantumNous/new-api/" + package,
@@ -64,6 +68,7 @@ if dialect:
     selector["task_db_dialect"] = dialect
 if tags:
     selector["build_tags"] = tags
+
 record = {
     "status": "failed" if status else "passed",
     "suite": "integration",
@@ -79,12 +84,13 @@ record = {
 with open(out, "a", encoding="utf-8") as stream:
     stream.write(json.dumps(record, ensure_ascii=False) + "\n")
 PY
+
   cat "$logfile"
   if (( status != 0 )); then
-    echo "FAIL: integration suite $package ($dialect) exit $status" >&2
+    echo "FAIL: integration suite $package ($dialect) [$tags] exit $status" >&2
     return "$status"
   fi
-  echo "PASS: integration suite $package ($dialect)"
+  echo "PASS: integration suite $package ($dialect) [$tags]"
 }
 
 failed=0
@@ -96,11 +102,20 @@ case "$dialect_selection" in
   sqlite|mysql|postgres) dialects=("$dialect_selection") ;;
   *) echo "Unsupported TOKENWAY_TASK_DB_DIALECT: $dialect_selection" >&2; exit 2 ;;
 esac
+
 run_task_settlement_matrix() {
   local dialect
   for dialect in "${dialects[@]}"; do
     run_suite controller '^TestImmediateTaskSettlementDatabase$' "$dialect" || failed=1
   done
+}
+
+run_wallet_database_matrix() {
+  run_suite model '^TestWalletLedgerAcrossSupportedDatabases$' '' tokenway_test || failed=1
+}
+
+run_epay_database_matrix() {
+  run_suite controller '^TestEpaySuccessfulTopUpCallbackIsSignedAndIdempotentAcrossDatabases$' '' tokenway_test || failed=1
 }
 
 case "$selected_package" in
@@ -113,145 +128,9 @@ case "$selected_package" in
     run_suite controller '^(TestExecuteTaskSubmission.*|TestResponsesWS.*|TestResponsesWebSocket.*)$' || failed=1
     run_task_settlement_matrix
     run_suite relay '^TestResponsesWS.*$' || failed=1
-    run_suite pkg/wsmanager '^(TestCloseChannel.*|TestUnregisterPreventsClose|TestRegisteredCloseIsIdempotent|TestPublishCloseChannelsNoopsWhenRedisDisabled|TestRedisChannelCloseEventsStayWithinDatabase)  service)
-    run_suite service "${selected_pattern:-^(TestProcessRequestBillingRecoverySettlesRefundsAndReviewsUnknownOutcomes|TestSettle.*|TestRefund.*|TestUpdateBatchTasks.*|TestUpdateSunoTasksStalePollsRefundExactlyOnce|TestSweepTimedOutTasks.*)$}" || failed=1
-    ;;
-  controller)
-    if [[ "$selected_pattern" == "^TestImmediateTaskSettlementDatabase$" ]]; then
-      run_task_settlement_matrix
-    else
-      run_suite controller "${selected_pattern:-^(TestExecuteTaskSubmission.*|TestResponsesWS.*|TestResponsesWebSocket.*)$}" || failed=1
-    fi
-    ;;
-  relay)
-    run_suite relay "${selected_pattern:-^TestResponsesWS.*$}" || failed=1
-    ;;
-  pkg/wsmanager)
-    run_suite pkg/wsmanager "${selected_pattern:-^(TestCloseChannel.*|TestUnregisterPreventsClose|TestRegisteredCloseIsIdempotent|TestPublishCloseChannelsNoopsWhenRedisDisabled|TestRedisChannelCloseEventsStayWithinDatabase)$}" || failed=1
-    ;;
-  wallet_db)
-    run_suite model "${selected_pattern:-^TestWalletLedgerAcrossSupportedDatabases$}" '' tokenway_test || failed=1
-    ;;
-  epay_db)
-    run_suite controller "${selected_pattern:-^TestEpaySuccessfulTopUpCallbackIsSignedAndIdempotentAcrossDatabases$}" '' tokenway_test || failed=1
-    ;;
-  database_matrix)
-    run_suite model '^TestWalletLedgerAcrossSupportedDatabases$' '' tokenway_test || failed=1
-    run_suite controller '^TestEpaySuccessfulTopUpCallbackIsSignedAndIdempotentAcrossDatabases$' '' tokenway_test || failed=1
-    ;;
-  *)
-    echo "Unsupported TOKENWAY_INTEGRATION_PACKAGE: $selected_package" >&2
-    exit 2
-    ;;
-esac
-
-python3 - "$results" "$log_dir/failure-classification.json" <<'PY'
-import json, pathlib, sys
-source, destination = map(pathlib.Path, sys.argv[1:])
-records = [json.loads(line) for line in source.read_text(encoding="utf-8").splitlines() if line.strip()]
-failures = [item for item in records if item["status"] == "failed"]
-report = {
-    "schema_version": 1,
-    "overall": "failed" if failures else "passed",
-    "failed_count": len(failures),
-    "results": records,
-    "targeted_rerun": [item["rerun_selector"] for item in failures],
-}
-destination.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-print(f"Integration failure classification: {len(failures)} failed suite(s) / {len(records)} total.")
-PY
-
-if (( failed != 0 )); then
-  echo "One or more integration suites failed; see $results and per-suite logs." >&2
-  exit 1
-fi
- || failed=1
-    run_suite model '^TestWalletLedgerAcrossSupportedDatabases  service)
-    run_suite service "${selected_pattern:-^(TestProcessRequestBillingRecoverySettlesRefundsAndReviewsUnknownOutcomes|TestSettle.*|TestRefund.*|TestUpdateBatchTasks.*|TestUpdateSunoTasksStalePollsRefundExactlyOnce|TestSweepTimedOutTasks.*)$}" || failed=1
-    ;;
-  controller)
-    if [[ "$selected_pattern" == "^TestImmediateTaskSettlementDatabase$" ]]; then
-      run_task_settlement_matrix
-    else
-      run_suite controller "${selected_pattern:-^(TestExecuteTaskSubmission.*|TestResponsesWS.*|TestResponsesWebSocket.*)$}" || failed=1
-    fi
-    ;;
-  relay)
-    run_suite relay "${selected_pattern:-^TestResponsesWS.*$}" || failed=1
-    ;;
-  pkg/wsmanager)
-    run_suite pkg/wsmanager "${selected_pattern:-^(TestCloseChannel.*|TestUnregisterPreventsClose|TestRegisteredCloseIsIdempotent|TestPublishCloseChannelsNoopsWhenRedisDisabled|TestRedisChannelCloseEventsStayWithinDatabase)$}" || failed=1
-    ;;
-  *)
-    echo "Unsupported TOKENWAY_INTEGRATION_PACKAGE: $selected_package" >&2
-    exit 2
-    ;;
-esac
-
-python3 - "$results" "$log_dir/failure-classification.json" <<'PY'
-import json, pathlib, sys
-source, destination = map(pathlib.Path, sys.argv[1:])
-records = [json.loads(line) for line in source.read_text(encoding="utf-8").splitlines() if line.strip()]
-failures = [item for item in records if item["status"] == "failed"]
-report = {
-    "schema_version": 1,
-    "overall": "failed" if failures else "passed",
-    "failed_count": len(failures),
-    "results": records,
-    "targeted_rerun": [item["rerun_selector"] for item in failures],
-}
-destination.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-print(f"Integration failure classification: {len(failures)} failed suite(s) / {len(records)} total.")
-PY
-
-if (( failed != 0 )); then
-  echo "One or more integration suites failed; see $results and per-suite logs." >&2
-  exit 1
-fi
- '' tokenway_test || failed=1
-    run_suite controller '^TestEpaySuccessfulTopUpCallbackIsSignedAndIdempotentAcrossDatabases  service)
-    run_suite service "${selected_pattern:-^(TestProcessRequestBillingRecoverySettlesRefundsAndReviewsUnknownOutcomes|TestSettle.*|TestRefund.*|TestUpdateBatchTasks.*|TestUpdateSunoTasksStalePollsRefundExactlyOnce|TestSweepTimedOutTasks.*)$}" || failed=1
-    ;;
-  controller)
-    if [[ "$selected_pattern" == "^TestImmediateTaskSettlementDatabase$" ]]; then
-      run_task_settlement_matrix
-    else
-      run_suite controller "${selected_pattern:-^(TestExecuteTaskSubmission.*|TestResponsesWS.*|TestResponsesWebSocket.*)$}" || failed=1
-    fi
-    ;;
-  relay)
-    run_suite relay "${selected_pattern:-^TestResponsesWS.*$}" || failed=1
-    ;;
-  pkg/wsmanager)
-    run_suite pkg/wsmanager "${selected_pattern:-^(TestCloseChannel.*|TestUnregisterPreventsClose|TestRegisteredCloseIsIdempotent|TestPublishCloseChannelsNoopsWhenRedisDisabled|TestRedisChannelCloseEventsStayWithinDatabase)$}" || failed=1
-    ;;
-  *)
-    echo "Unsupported TOKENWAY_INTEGRATION_PACKAGE: $selected_package" >&2
-    exit 2
-    ;;
-esac
-
-python3 - "$results" "$log_dir/failure-classification.json" <<'PY'
-import json, pathlib, sys
-source, destination = map(pathlib.Path, sys.argv[1:])
-records = [json.loads(line) for line in source.read_text(encoding="utf-8").splitlines() if line.strip()]
-failures = [item for item in records if item["status"] == "failed"]
-report = {
-    "schema_version": 1,
-    "overall": "failed" if failures else "passed",
-    "failed_count": len(failures),
-    "results": records,
-    "targeted_rerun": [item["rerun_selector"] for item in failures],
-}
-destination.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-print(f"Integration failure classification: {len(failures)} failed suite(s) / {len(records)} total.")
-PY
-
-if (( failed != 0 )); then
-  echo "One or more integration suites failed; see $results and per-suite logs." >&2
-  exit 1
-fi
- '' tokenway_test || failed=1
+    run_suite pkg/wsmanager '^(TestCloseChannel.*|TestUnregisterPreventsClose|TestRegisteredCloseIsIdempotent|TestPublishCloseChannelsNoopsWhenRedisDisabled|TestRedisChannelCloseEventsStayWithinDatabase)$' || failed=1
+    run_wallet_database_matrix
+    run_epay_database_matrix
     ;;
   service)
     run_suite service "${selected_pattern:-^(TestProcessRequestBillingRecoverySettlesRefundsAndReviewsUnknownOutcomes|TestSettle.*|TestRefund.*|TestUpdateBatchTasks.*|TestUpdateSunoTasksStalePollsRefundExactlyOnce|TestSweepTimedOutTasks.*)$}" || failed=1
@@ -268,6 +147,16 @@ fi
     ;;
   pkg/wsmanager)
     run_suite pkg/wsmanager "${selected_pattern:-^(TestCloseChannel.*|TestUnregisterPreventsClose|TestRegisteredCloseIsIdempotent|TestPublishCloseChannelsNoopsWhenRedisDisabled|TestRedisChannelCloseEventsStayWithinDatabase)$}" || failed=1
+    ;;
+  wallet_db)
+    run_wallet_database_matrix
+    ;;
+  epay_db)
+    run_epay_database_matrix
+    ;;
+  database_matrix)
+    run_wallet_database_matrix
+    run_epay_database_matrix
     ;;
   *)
     echo "Unsupported TOKENWAY_INTEGRATION_PACKAGE: $selected_package" >&2
