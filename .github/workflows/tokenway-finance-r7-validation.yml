@@ -798,7 +798,7 @@ jobs:
           echo "===== Signed Epay callback database matrix ====="
           go test -v -timeout 8m ./controller -run TestEpaySuccessfulTopUpCallbackIsSignedAndIdempotentAcrossDatabases -count=1
       - name: Run TokenWay business integration suites
-        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_KUAIPAO_ONLY != 'true' && env.TOKENWAY_FINANCE_TARGETED_ONLY != 'true' && (env.TOKENWAY_GO_MODULE_SCOPE == 'all' || env.TOKENWAY_GO_MODULE_SCOPE == 'root') && env.TOKENWAY_TARGETED_ONLY != 'true' }}
+        if: ${{ env.TOKENWAY_FRONTEND_ONLY != 'true' && env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_KUAIPAO_FRONTEND_ONLY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_KUAIPAO_ONLY != 'true' && env.TOKENWAY_FINANCE_TARGETED_ONLY != 'true' && (env.TOKENWAY_GO_MODULE_SCOPE == 'all' || env.TOKENWAY_GO_MODULE_SCOPE == 'root') && env.TOKENWAY_TARGETED_ONLY != 'true' }}
         uses: ./.github/actions/tokenway-integration
         with:
           source-directory: source
