@@ -1583,6 +1583,8 @@ jobs:
                   tree_digest.update(b"F" + bytes([0]) + relative.encode("utf-8") + bytes([0]) + bytes.fromhex(digest) + bytes([10]))
 
           source_tree_sha256 = tree_digest.hexdigest()
+          if source_tree_sha256 != source_snapshot["source_tree_sha256"]:
+              raise SystemExit("Refusing to package: source tree differs from the immutable snapshot validated by all four layers")
           (stage / "FILE-CHECKSUMS.sha256").write_text(
               "\n".join(file_records) + "\n", encoding="utf-8"
           )
