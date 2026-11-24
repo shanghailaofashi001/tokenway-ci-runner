@@ -849,7 +849,6 @@ jobs:
                   "root_test_pattern": pattern,
                   "targeted_only": True,
                   **({"task_db_dialect": variant.removeprefix("task-db-")} if variant.startswith("task-db-") else {})
-              **({"task_db_dialect": variant.removeprefix("task-db-")} if variant.startswith("task-db-") else {})
               }
           }
           report["results"].append(item)
