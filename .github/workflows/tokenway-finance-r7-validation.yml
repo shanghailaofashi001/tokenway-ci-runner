@@ -752,10 +752,9 @@ jobs:
           # Run #50 passed every targeted package except router. Keep this retry
           # focused; a manual/full run still exercises the original package set.
           if [[ "${TOKENWAY_RECOVERY_ONLY:-false}" == "true" ]]; then
-            # The only outstanding failure is this single recovery fixture's stale heartbeat timestamp.
             packages=(github.com/QuantumNous/new-api/service)
           elif [[ "${TOKENWAY_FINANCE_TARGETED_ONLY:-false}" == "true" ]]; then
-            # Only the two finance packages changed by the previous fix; do not rerun passing packages.
+            # Only the two modules affected by this root-cause fix; do not rerun passing packages.
             packages=(
               github.com/QuantumNous/new-api/common
               github.com/QuantumNous/new-api/service
@@ -777,16 +776,20 @@ jobs:
             logfile="$log_dir/${pkg##*/}.jsonl"
             test_args=(-json -timeout 15m -parallel=1 -count=1)
             if [[ "${TOKENWAY_RECOVERY_ONLY:-false}" == "true" ]]; then
-              # This service test uses its isolated in-memory SQLite TestMain; no external DB reset is needed.
-              test_args+=(-run '^TestProcessRequestBillingRecoverySettlesRefundsAndReviewsUnknownOutcomes
+              # The outstanding recovery test uses the service package's isolated in-memory SQLite TestMain.
+              test_args+=(-run '^TestProcessRequestBillingRecoverySettlesRefundsAndReviewsUnknownOutcomes$')
+            else
+              prepare_databases
+            fi
+            if timeout --signal=TERM --kill-after=30s 17m go test "${test_args[@]}" "$pkg" > "$logfile" 2>&1; then
               echo "PASS: $pkg" | tee -a "$log_dir/summary.txt"
             else
               status=$?
               echo "FAIL: $pkg (exit $status)" | tee -a "$log_dir/failures.txt" "$log_dir/summary.txt"
               echo "---- targeted failure diagnostics: $pkg ----"
               grep -E '"Action":"fail"|--- FAIL:|^FAIL|panic:|Error Trace:|Error:|no such table|database is locked|timed out|deadlock' "$logfile" | tail -n 100 || tail -n 100 "$logfile"
-          if [[ "$pkg" == "github.com/QuantumNous/new-api/router" ]]; then
-            python3 - "$logfile" <<'PY'
+              if [[ "$pkg" == "github.com/QuantumNous/new-api/router" ]]; then
+                python3 - "$logfile" <<'PY'
           import json, sys
           target = "TestAccessTokenRouteRulesCoverEveryDashboardRoute"
           for line in open(sys.argv[1], encoding="utf-8"):
@@ -797,7 +800,7 @@ jobs:
               if event.get("Test") == target and event.get("Action") == "output":
                   print("ROUTE-ASSERTION:", event.get("Output", "").rstrip())
           PY
-          fi
+              fi
               failed=1
             fi
           done
