@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-python3 ../.github/scripts/apply-root-test-regressions.py  # exact, fail-closed source anchors before Root tests
+python3 ../.github/scripts/apply-root-test-regressions.py
 
 log_dir="${RUNNER_TEMP:-/tmp}/tokenway-go-validation-logs"
 mkdir -p "$log_dir"
