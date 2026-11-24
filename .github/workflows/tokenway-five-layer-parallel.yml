@@ -87,7 +87,7 @@ jobs:
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
           repository: shanghailaofashi001/tokenway-v11-dev
-          ref: 6cf1038df263f7bcc64f351b1b0523f4608142ce
+          ref: d2494da77bc59b7edb4082bb2a594f24997b6ece
           token: ${{ secrets.TOKENWAY_SOURCE_READ_TOKEN }}
           path: private-validation
           fetch-depth: 1
@@ -1171,7 +1171,7 @@ jobs:
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
           repository: shanghailaofashi001/tokenway-v11-dev
-          ref: 6cf1038df263f7bcc64f351b1b0523f4608142ce
+          ref: d2494da77bc59b7edb4082bb2a594f24997b6ece
           token: ${{ secrets.TOKENWAY_SOURCE_READ_TOKEN }}
           path: private-validation
           fetch-depth: 1
@@ -1400,7 +1400,7 @@ jobs:
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
           repository: shanghailaofashi001/tokenway-v11-dev
-          ref: 6cf1038df263f7bcc64f351b1b0523f4608142ce
+          ref: d2494da77bc59b7edb4082bb2a594f24997b6ece
           token: ${{ secrets.TOKENWAY_SOURCE_READ_TOKEN }}
           path: private-validation
           fetch-depth: 1
