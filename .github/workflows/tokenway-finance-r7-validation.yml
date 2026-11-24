@@ -797,18 +797,57 @@ jobs:
           GOFLAGS: -mod=vendor -p=1
         run: |
           set -euo pipefail
-          mkdir -p web/dist
+          mkdir -p web/dist "$RUNNER_TEMP/tokenway-go-validation-logs"
           printf '<!doctype html><html></html>\\n' > web/dist/index.html
+          integration_log_dir="$RUNNER_TEMP/tokenway-go-validation-logs"
           run_suite() {
             local package="$1" pattern="$2"
-            local discovered
+            local discovered slug logfile status
             discovered="$(go test -list "$pattern" "./$package")"
             if ! grep -q '^Test' <<<"$discovered"; then
               echo "FAIL: no integration tests discovered for $package / $pattern" >&2
               exit 1
             fi
+            slug="${package//\\//-}"
+            logfile="$integration_log_dir/integration-$slug.log"
             echo "===== Integration suite: $package / $pattern ====="
-            go test -v -timeout 12m -parallel=1 -count=1 "./$package" -run "$pattern"
+            if go test -v -timeout 12m -parallel=1 -count=1 "./$package" -run "$pattern" >"$logfile" 2>&1; then
+              status=0
+              printf 'PASS: %s %s\\n' "$package" "$pattern" > "$integration_log_dir/integration-$slug.status"
+            else
+              status=$?
+              printf 'FAIL: %s %s (exit %s)\\n' "$package" "$pattern" "$status" > "$integration_log_dir/integration-$slug.status"
+            fi
+            python3 - "$integration_log_dir/integration-failure-classification.json" "$package" "$pattern" "$status" <<'PY'
+          import json, pathlib, sys
+          path = pathlib.Path(sys.argv[1])
+          package, pattern, status = sys.argv[2], sys.argv[3], int(sys.argv[4])
+          report = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {
+              "schema_version": 1, "overall": "passed", "failed_count": 0,
+              "results": [], "targeted_rerun": []
+          }
+          item = {
+              "status": "failed" if status else "passed",
+              "suite": "integration",
+              "module": "root",
+              "package": "github.com/QuantumNous/new-api/" + package,
+              "test_pattern": pattern,
+              "rerun_selector": {
+                  "go_module_scope": "root",
+                  "root_test_packages": "github.com/QuantumNous/new-api/" + package,
+                  "root_test_pattern": pattern,
+                  "targeted_only": True
+              }
+          }
+          report["results"].append(item)
+          failures = [result for result in report["results"] if result["status"] == "failed"]
+          report["failed_count"] = len(failures)
+          report["overall"] = "failed" if failures else "passed"
+          report["targeted_rerun"] = [result["rerun_selector"] for result in failures]
+          path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\\n", encoding="utf-8")
+          PY
+            cat "$logfile"
+            return "$status"
           }
           run_suite service '^(TestProcessRequestBillingRecoverySettlesRefundsAndReviewsUnknownOutcomes|TestSettle.*|TestRefund.*|TestUpdateBatchTasks.*|TestUpdateSunoTasksStalePollsRefundExactlyOnce|TestSweepTimedOutTasks.*|TestTaskReportsOnceAtTheFinalState)
           run_suite controller '^(TestImmediateTaskSettlementDatabase|TestExecuteTaskSubmission.*|TestResponsesWS.*|TestResponsesWebSocket.*)
