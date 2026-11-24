@@ -74,9 +74,26 @@ if [[ -n "$root_input" && "$scope" != "all" && "$scope" != "root" ]]; then
   echo "root_test_packages can only be used with the all or root module scope." >&2
   exit 2
 fi
-nested_module_packages="${TOKENWAY_NESTED_MODULE_PACKAGES:-}"
-nested_module_test_pattern="${TOKENWAY_NESTED_MODULE_TEST_PATTERN:-}"
-if [[ "$nested_module_test_pattern" == *if [[ "${TOKENWAY_TARGETED_ONLY:-false}" == "true" && ( "$scope" == "all" || "$scope" == "root" ) && -z "$root_input" ]]; then
+
+nested_module_packages="\${TOKENWAY_NESTED_MODULE_PACKAGES:-}"
+nested_module_test_pattern="\${TOKENWAY_NESTED_MODULE_TEST_PATTERN:-}"
+if [[ "$nested_module_test_pattern" == *$'\n'* || "$nested_module_test_pattern" == *$'\r'* ]]; then
+  echo "TOKENWAY_NESTED_MODULE_TEST_PATTERN must be a single-line Go test regular expression." >&2
+  exit 2
+fi
+if [[ -n "$nested_module_test_pattern" && -z "$nested_module_packages" ]]; then
+  echo "nested_module_test_pattern requires exact nested_module_packages." >&2
+  exit 2
+fi
+if [[ -n "$nested_module_packages" && ( "$scope" != "relaykit" && "$scope" != "tokenkit" ) ]]; then
+  echo "nested_module_packages requires exactly one nested module scope: relaykit or tokenkit." >&2
+  exit 2
+fi
+if [[ -n "$root_input" && -n "$nested_module_packages" ]]; then
+  echo "Root and nested-module package selectors cannot be combined." >&2
+  exit 2
+fi
+if [[ "\${TOKENWAY_TARGETED_ONLY:-false}" == "true" && ( "$scope" == "all" || "$scope" == "root" ) && -z "$root_input" ]]; then
   echo "A targeted Root run must provide one or more exact root_test_packages; use relaykit/tokenkit scope for a targeted module run." >&2
   exit 2
 fi
