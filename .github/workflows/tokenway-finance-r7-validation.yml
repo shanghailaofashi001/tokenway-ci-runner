@@ -318,18 +318,16 @@ jobs:
           from pathlib import Path
           path = Path("source/service/funding_source.go")
           source = path.read_text(encoding="utf-8")
-          old = """\tPlanId            int
-          \tPlanTitle         string
-          }"""
-          new = """\tPlanId            int
-          \tPlanTitle         string
-          \treserveSeq        int
-          \tlastReserveSeq    int
-          \tlastReserveAmount int
-          }"""
-          if source.count(old) != 1:
-              raise SystemExit(f"expected exactly one SubscriptionFunding field block, found {source.count(old)}")
-          path.write_text(source.replace(old, new, 1), encoding="utf-8")
+          import re
+          pattern = re.compile(r"(\\tPlanId\\s+int\\n\\tPlanTitle\\s+string\\n)(})")
+          updated, count = pattern.subn(
+              r"\\1\\treserveSeq        int\\n\\tlastReserveSeq    int\\n\\tlastReserveAmount int\\n\\2",
+              source,
+              count=1,
+          )
+          if count != 1:
+              raise SystemExit(f"expected exactly one SubscriptionFunding field block, found {count}")
+          path.write_text(updated, encoding="utf-8")
           PY
           grep -Fq 'reserveSeq        int' source/service/funding_source.go
           grep -Fq 'lastReserveSeq    int' source/service/funding_source.go
