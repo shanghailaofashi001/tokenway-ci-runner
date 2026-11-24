@@ -7,8 +7,11 @@ import pathlib
 import subprocess
 import sys
 
-root = pathlib.Path(sys.argv[1]).resolve()
-manifest_path = pathlib.Path(sys.argv[2]).resolve()
+if len(sys.argv) != 4 or sys.argv[1] not in {"freeze", "verify"}:
+    raise SystemExit("usage: tokenway-source-snapshot.py freeze|verify <source-dir> <manifest>")
+mode = sys.argv[1]
+root = pathlib.Path(sys.argv[2]).resolve()
+manifest_path = pathlib.Path(sys.argv[3]).resolve()
 
 def digest_tree():
     digest = hashlib.sha256()
@@ -26,7 +29,7 @@ def digest_tree():
     return digest.hexdigest()
 
 actual = digest_tree()
-if len(sys.argv) == 3 and manifest_path.exists():
+if mode == "verify":
     expected_data = json.loads(manifest_path.read_text(encoding="utf-8"))
     expected = expected_data["source_tree_sha256"]
     if actual != expected:
