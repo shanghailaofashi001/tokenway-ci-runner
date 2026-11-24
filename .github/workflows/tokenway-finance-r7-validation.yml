@@ -1886,8 +1886,7 @@ jobs:
           $dist = Join-Path (Get-Location) 'dist'
           $executables = @(Get-ChildItem -Path $dist -Filter '*.exe' -File)
           if ($executables.Count -lt 2) { throw "Expected NSIS installer and portable executable; found $($executables.Count)." }
-          $installer = $executables | Where-Object { $_.Name -match '(?i)Setup.*\.exe
- } | Select-Object -First 1
+          $installer = $executables | Where-Object { $_.Name.ToLowerInvariant().Contains('setup') } | Select-Object -First 1
           if (-not $installer) { throw "NSIS setup executable not found among: $($executables.Name -join ', ')" }
           $portable = $executables | Where-Object { $_.FullName -ne $installer.FullName } | Select-Object -First 1
           if (-not $portable) { throw 'Portable executable is missing.' }
