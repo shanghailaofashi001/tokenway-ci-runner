@@ -2,7 +2,9 @@
 set -Eeuo pipefail
 
 # Apply Root concurrency/log regressions after the finance fixture transformations in the workflow.
-python3 ../.github/scripts/apply-root-test-regressions.py
+if [[ "${TOKENWAY_SKIP_ROOT_TEST_PATCH:-false}" != "true" ]]; then
+  python3 ../.github/scripts/apply-root-test-regressions.py
+fi
 
 log_dir="${RUNNER_TEMP:-/tmp}/tokenway-go-validation-logs"
 mkdir -p "$log_dir"
@@ -72,6 +74,25 @@ if [[ -n "$root_input" && "$scope" != "all" && "$scope" != "root" ]]; then
   echo "root_test_packages can only be used with the all or root module scope." >&2
   exit 2
 fi
+
+nested_module_packages="${TOKENWAY_NESTED_MODULE_PACKAGES:-}"
+nested_module_test_pattern="${TOKENWAY_NESTED_MODULE_TEST_PATTERN:-}"
+if [[ "$nested_module_test_pattern" == *$'\n'* || "$nested_module_test_pattern" == *$'\r'* ]]; then
+  echo "TOKENWAY_NESTED_MODULE_TEST_PATTERN must be a single-line Go test regular expression." >&2
+  exit 2
+fi
+if [[ -n "$nested_module_test_pattern" && -z "$nested_module_packages" ]]; then
+  echo "nested_module_test_pattern requires exact nested_module_packages." >&2
+  exit 2
+fi
+if [[ -n "$nested_module_packages" && ( "$scope" != "relaykit" && "$scope" != "tokenkit" ) ]]; then
+  echo "nested_module_packages requires exactly one nested module scope: relaykit or tokenkit." >&2
+  exit 2
+fi
+if [[ -n "$root_input" && -n "$nested_module_packages" ]]; then
+  echo "Root and nested-module package selectors cannot be combined." >&2
+  exit 2
+fi
 if [[ "${TOKENWAY_TARGETED_ONLY:-false}" == "true" && ( "$scope" == "all" || "$scope" == "root" ) && -z "$root_input" ]]; then
   echo "A targeted Root run must provide one or more exact root_test_packages; use relaykit/tokenkit scope for a targeted module run." >&2
   exit 2
@@ -122,18 +143,21 @@ if [[ "$scope" == "all" || "$scope" == "root" ]]; then
       exit 1
     fi
     for required in \
+      github.com/QuantumNous/new-api/controller \
       github.com/QuantumNous/new-api/e2e \
       github.com/QuantumNous/new-api/middleware \
       github.com/QuantumNous/new-api/oauth \
       github.com/QuantumNous/new-api/pkg/wsmanager \
+      github.com/QuantumNous/new-api/relay \
       github.com/QuantumNous/new-api/relay/channel/vertex \
+      github.com/QuantumNous/new-api/service \
       github.com/QuantumNous/new-api/setting/system_setting; do
       if ! printf '%s\n' "${packages[@]}" | grep -Fxq "$required"; then
         echo "FAIL: required Root test package was not discovered: $required" >&2
         exit 1
       fi
     done
-    echo "Discovered ${#packages[@]} Root test packages, including required e2e and channel adapter coverage."
+    echo "Discovered ${#packages[@]} Root test packages, including controller, service, relay, e2e and channel adapter coverage."
   fi
 else
   echo "Root module tests skipped by requested scope: $scope"
@@ -149,8 +173,11 @@ run_root_package() (
   key="$(printf '%s' "$pkg" | sha256sum | cut -c1-12)"
   local mysql_db="twroot_${key}"
   local pg_db="twroot_${key}"
+  local sqlite_db="${RUNNER_TEMP:-/tmp}/tokenway-root-${key}.db"
+  export SQLITE_PATH="$sqlite_db"
 
   cleanup_package_databases() {
+    rm -f "$sqlite_db" "$sqlite_db-wal" "$sqlite_db-shm"
     mysql --protocol=TCP -h127.0.0.1 -uroot -ptokenway-test \
       -e "DROP DATABASE IF EXISTS $mysql_db;" >/dev/null 2>&1 || true
     PGPASSWORD=tokenway-test psql -h127.0.0.1 -Utokenway -d postgres \
@@ -230,16 +257,64 @@ run_module() (
   set -Eeuo pipefail
   local module="$1"
   local logfile="$log_dir/${module}.log"
-  echo "Running isolated $module Go test process."
-  if (cd "$module" && timeout --signal=TERM --kill-after=30s 22m go test -mod=vendor -p=1 -count=1 ./...) > "$logfile" 2>&1; then
+  local selected_input="${TOKENWAY_NESTED_MODULE_PACKAGES:-}"
+  local selected_pattern="${TOKENWAY_NESTED_MODULE_TEST_PATTERN:-}"
+  local discovered=""
+  local -a package_args=()
+  local -a test_args=(-json -mod=vendor -p=1 -count=1)
+  local -a discovered_packages=()
+
+  if [[ -n "$selected_input" ]]; then
+    mapfile -t package_args < <(printf '%s' "$selected_input" | tr ', ' '\n' | sed '/^[[:space:]]*$/d' | sort -u)
+    if (( ${#package_args[@]} == 0 )); then
+      echo "FAIL: nested module package selector contained no import paths." >&2
+      exit 2
+    fi
+    if ! discovered="$(cd "$module" && go list -f '{{.ImportPath}}' ./...)"; then
+      echo "FAIL: unable to discover $module packages for targeted validation." >&2
+      exit 1
+    fi
+    mapfile -t discovered_packages < <(printf '%s\n' "$discovered" | sed '/^$/d' | sort -u)
+    for requested in "${package_args[@]}"; do
+      if ! printf '%s\n' "${discovered_packages[@]}" | grep -Fxq "$requested"; then
+        echo "FAIL: requested $module package is not present in this pinned source: $requested" >&2
+        exit 2
+      fi
+    done
+  else
+    package_args=(./...)
+  fi
+
+  if [[ -n "$selected_pattern" ]]; then
+    test_args+=(-run "$selected_pattern")
+  fi
+
+  echo "Running isolated $module Go test process for: ${package_args[*]}"
+  if (cd "$module" && timeout --signal=TERM --kill-after=30s 22m go test "${test_args[@]}" "${package_args[@]}") > "$logfile" 2>&1; then
     printf 'PASS: %s full test suite\n' "$module" > "$log_dir/${module}.status"
-    echo "PASS: $module full test suite"
+    echo "PASS: $module selected Go test suite"
     return 0
   else
     local status=$?
     {
       echo "FAIL: $module full test suite (exit $status)"
-      tail -n 160 "$logfile" || true
+      python3 - "$logfile" <<'PY'
+import json
+import sys
+
+for line in open(sys.argv[1], encoding="utf-8", errors="replace"):
+    try:
+        event = json.loads(line)
+    except json.JSONDecodeError:
+        print(line.rstrip())
+        continue
+    if event.get("Action") == "output":
+        output = event.get("Output", "").rstrip()
+        if output:
+            print(f"[{event.get('Package', '')} {event.get('Test', '')}] {output}")
+    elif event.get("Action") == "fail":
+        print(f"FAIL: {event.get('Package', '')} {event.get('Test', '')}".rstrip())
+PY
     } > "$log_dir/${module}.failure.txt"
     printf 'FAIL: %s full test suite (exit %s)\n' "$module" "$status" > "$log_dir/${module}.status"
     cat "$log_dir/${module}.failure.txt" >&2

@@ -1,4 +1,4 @@
-name: TokenWay Finance R7 — full V11 validation on public runner
+name: TokenWay Finance R7 — targeted diagnostics (legacy serial runner)
 
 on:
   workflow_dispatch:
@@ -31,19 +31,31 @@ on:
         required: false
         type: boolean
         default: false
-  push:
-    branches:
-      - main
-    paths:
-      - ".github/workflows/tokenway-finance-r7-validation.yml"
-      - ".github/scripts/run-go-test-modules.sh"
-      - ".github/scripts/apply_encrypted_chat_history_sync.py"
-      - ".github/workflows/tokenway-chat-sync-route-guard.yml"
-      - ".github/scripts/apply_tokenway_file_library.py"
-      - ".github/scripts/apply_tokenway_file_library_web.py"
-      - ".github/workflows/tokenway-file-library-guard.yml"
-      - ".github/workflows/tokenway-file-library-frontend-guard.yml"
-
+      task_db_dialect:
+        description: "Database dialect for a targeted task-settlement integration rerun"
+        required: false
+        type: choice
+        options:
+          - all
+          - sqlite
+          - mysql
+          - postgres
+        default: all
+      integration_package:
+        description: "Integration package for an isolated targeted rerun"
+        required: false
+        type: choice
+        options:
+          - all
+          - service
+          - controller
+          - relay
+          - pkg/wsmanager
+        default: all
+      integration_test_pattern:
+        description: "Optional Go test -run expression for the selected integration package"
+        required: false
+        type: string
 permissions:
   contents: read
   actions: read
@@ -105,6 +117,9 @@ jobs:
       TOKENWAY_ROOT_TEST_PATTERN: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.root_test_pattern || '' }}
       TOKENWAY_TARGETED_ONLY: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.targeted_only == 'true') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[targeted-only]')) }}
       TOKENWAY_RUN_DATABASE_MATRIX: ${{ (github.event_name == 'workflow_dispatch' && (github.event.inputs.targeted_only != 'true' || github.event.inputs.run_database_matrix == 'true')) || (github.event_name == 'push' && (!contains(github.event.head_commit.message, '[targeted-only]') || contains(github.event.head_commit.message, '[database-matrix]'))) }}
+      TOKENWAY_TASK_DB_DIALECT: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.task_db_dialect || 'all' }}
+      TOKENWAY_INTEGRATION_PACKAGE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.integration_package || 'all' }}
+      TOKENWAY_INTEGRATION_TEST_PATTERN: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.integration_test_pattern || '' }}
       TEST_MYSQL_DSN: root:tokenway-test@tcp(127.0.0.1:3306)/tokenway_test?charset=utf8mb4&parseTime=True&loc=Local
       TEST_POSTGRES_DSN: postgres://tokenway:tokenway-test@127.0.0.1:5432/tokenway_test?sslmode=disable
       TEST_MYSQL_LOG_DSN: root:tokenway-test@tcp(127.0.0.1:3306)/tokenway_test?charset=utf8mb4&parseTime=True&loc=Local
@@ -120,11 +135,17 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Parse five-layer workflow YAML before acceptance
+        shell: bash
+        run: |
+          set -euo pipefail
+          ruby -e 'require "yaml"; YAML.load_file(".github/workflows/tokenway-five-layer-parallel.yml", aliases: true); puts "PASS: five-layer workflow YAML parsed."'
+
       - name: Checkout pinned private TokenWay source and validation materials
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
           repository: shanghailaofashi001/tokenway-v11-dev
-          ref: 4ef334eff0a14e52c6552abd2ff773727eaebc2f
+          ref: e8355a38f124aa6645dabcf32802aaf71bc2b527
           token: ${{ secrets.TOKENWAY_SOURCE_READ_TOKEN }}
           path: private
           fetch-depth: 1
@@ -167,6 +188,9 @@ jobs:
           python3 -m py_compile .tokenway-validation/apply-nowpayments-access-token-rules.py
           python3 -m py_compile .tokenway-validation/apply-shared-test-db-harness.py
           bash -n .github/scripts/run-go-test-modules.sh
+          bash -n .github/scripts/run-tokenway-integration-suites.sh
+          python3 -m py_compile .github/scripts/tokenway-source-snapshot.py
+          python3 -m py_compile .github/scripts/classify-tokenway-go-failures.py
           test -s .tokenway-validation/apply-transactional-db-timestamp.py
           echo "Private validation inputs restored; source remains runner-local."
 
@@ -311,31 +335,6 @@ jobs:
           print('PASS: 16 original TokenWay homepage WebP assets restored')
           PY
 
-
-      - name: Apply and validate TokenWay V11 Electron desktop branding
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 -m venv "$RUNNER_TEMP/tokenway-desktop-venv"
-          "$RUNNER_TEMP/tokenway-desktop-venv/bin/python" -m pip install --disable-pip-version-check Pillow
-          "$RUNNER_TEMP/tokenway-desktop-venv/bin/python" -m py_compile .tokenway-validation/apply-tokenway-electron-branding.py
-          "$RUNNER_TEMP/tokenway-desktop-venv/bin/python" .tokenway-validation/apply-tokenway-electron-branding.py source
-          node --check source/electron/main.js
-          node --check source/electron/preload.js
-          test -s source/electron/tokenway.ico
-          test -s source/electron/tray-icon-windows.png
-          git -C source diff --check
-          echo "PASS: TokenWay V11 Electron app identity, backend resource mapping and original T-mark icons validated."
-
-      - name: Align the packaged self-service Electron workflow with TokenWay V11
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 -m py_compile .tokenway-validation/apply-tokenway-electron-workflow.py
-          python3 .tokenway-validation/apply-tokenway-electron-workflow.py source
-          grep -Fq 'GOFLAGS=-mod=vendor' source/.github/workflows/electron-build.yml
-          grep -Fq 'tokenway-v11.exe' source/.github/workflows/electron-build.yml
-          echo "PASS: repository-supplied Windows build workflow now builds the same V11 executable and fixed version."
 
       - name: Decode and verify exact R7 finance patch
         shell: bash
@@ -757,7 +756,7 @@ jobs:
           go test -v -timeout 3m ./relay/channel/advancedcustom -count=1 -run '^(TestKuaipaoPresetRoutesJoinBaseURLWithoutDuplicateV1|TestKuaipaoModelListManagementRoutesJoinBaseURLAndUseBearerAuth)$'
 
       - name: Run tagged SQLite MySQL PostgreSQL wallet and Epay integration regressions
-        if: ${{ success() && env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_KUAIPAO_ONLY != 'true' && env.TOKENWAY_FINANCE_TARGETED_ONLY != 'true' && (env.TOKENWAY_GO_MODULE_SCOPE == 'all' || env.TOKENWAY_GO_MODULE_SCOPE == 'root') && (env.TOKENWAY_TARGETED_ONLY != 'true' || env.TOKENWAY_RUN_DATABASE_MATRIX == 'true') }}
+        if: ${{ success() && env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_KUAIPAO_ONLY != 'true' && env.TOKENWAY_FINANCE_TARGETED_ONLY != 'true' && (env.TOKENWAY_GO_MODULE_SCOPE == 'all' || env.TOKENWAY_GO_MODULE_SCOPE == 'root') && (env.TOKENWAY_TARGETED_ONLY != 'true' || env.TOKENWAY_RUN_DATABASE_MATRIX == 'true') && (env.TOKENWAY_TARGETED_ONLY != 'true' || env.TOKENWAY_INTEGRATION_PACKAGE == 'all') }}
         working-directory: source
         shell: bash
         run: |
@@ -777,8 +776,29 @@ jobs:
           go test -v -timeout 8m ./model -run TestWalletLedgerAcrossSupportedDatabases -count=1
           echo "===== Signed Epay callback database matrix ====="
           go test -v -timeout 8m ./controller -run TestEpaySuccessfulTopUpCallbackIsSignedAndIdempotentAcrossDatabases -count=1
+      - name: Run refund, task settlement and WebSocket integration suites
+        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && env.TOKENWAY_KUAIPAO_ONLY != 'true' && env.TOKENWAY_FINANCE_TARGETED_ONLY != 'true' && (env.TOKENWAY_GO_MODULE_SCOPE == 'all' || env.TOKENWAY_GO_MODULE_SCOPE == 'root') && (env.TOKENWAY_TARGETED_ONLY != 'true' || env.TOKENWAY_RUN_DATABASE_MATRIX == 'true' || env.TOKENWAY_INTEGRATION_PACKAGE != 'all') }}
+        working-directory: source
+        shell: bash
+        env:
+          GOPROXY: off
+          GOSUMDB: off
+          GOTOOLCHAIN: local
+          GOMAXPROCS: '1'
+          GOFLAGS: -mod=vendor -p=1
+        run: bash ../.github/scripts/run-tokenway-integration-suites.sh
+
+      - name: Upload integration suite logs and failure classification
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: tokenway-integration-diagnostics-${{ github.run_id }}
+          path: ${{ runner.temp }}/tokenway-integration-validation-logs/
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Vet and build root, relaykit, and tokenkit modules concurrently
-        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && (env.TOKENWAY_GO_STATIC_ONLY == 'true' || github.event_name != 'push' || !contains(github.event.head_commit.message, '[resume-full-go]')) && env.TOKENWAY_KUAIPAO_ONLY != 'true' && env.TOKENWAY_RECOVERY_ONLY != 'true' && env.TOKENWAY_KUAIPAO_FRONTEND_ONLY != 'true' }}
+        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_ROUTER_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && (env.TOKENWAY_GO_STATIC_ONLY == 'true' || github.event_name != 'push' || !contains(github.event.head_commit.message, '[resume-full-go]')) && env.TOKENWAY_KUAIPAO_ONLY != 'true' && env.TOKENWAY_RECOVERY_ONLY != 'true' && env.TOKENWAY_KUAIPAO_FRONTEND_ONLY != 'true' && !(env.TOKENWAY_TARGETED_ONLY == 'true' && env.TOKENWAY_INTEGRATION_PACKAGE != 'all') }}
         working-directory: source
         shell: bash
         run: |
@@ -823,10 +843,15 @@ jobs:
           echo "PASS: go vet and go build completed for root, relaykit, and tokenkit."
 
       - name: Run all discovered Root test packages and parallel isolated Go modules
-        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && (github.event_name != 'push' || !contains(github.event.head_commit.message, '[frontend-only]')) && env.TOKENWAY_KUAIPAO_ONLY != 'true' && env.TOKENWAY_KUAIPAO_FRONTEND_ONLY != 'true' }}
+        if: ${{ env.TOKENWAY_FRONTEND_VERIFY != 'true' && env.TOKENWAY_LINT_ONLY != 'true' && env.TOKENWAY_GO_STATIC_ONLY != 'true' && env.TOKENWAY_PACKAGE_ONLY != 'true' && (github.event_name != 'push' || !contains(github.event.head_commit.message, '[frontend-only]')) && env.TOKENWAY_KUAIPAO_ONLY != 'true' && env.TOKENWAY_KUAIPAO_FRONTEND_ONLY != 'true' && !(env.TOKENWAY_TARGETED_ONLY == 'true' && env.TOKENWAY_INTEGRATION_PACKAGE != 'all') }}
         working-directory: source
         shell: bash
         run: bash ../.github/scripts/run-go-test-modules.sh
+
+      - name: Classify Go failures by module, package and failed test
+        if: always()
+        shell: bash
+        run: python3 .github/scripts/classify-tokenway-go-failures.py "$RUNNER_TEMP/tokenway-go-validation-logs"
 
       - name: Upload failed Go package diagnostics for targeted follow-up
         if: ${{ failure() }}
@@ -1082,14 +1107,6 @@ jobs:
               "tokenkit/vendor/modules.txt",
               "web/package.json",
               "web/src/assets/tokenway-home/hero-scene.webp",
-              "electron/main.js",
-              "electron/preload.js",
-              "electron/package.json",
-              "electron/package-lock.json",
-              "electron/icon.png",
-              "electron/tokenway.ico",
-              "electron/tray-icon-windows.png",
-              ".github/workflows/electron-build.yml",
               "controller/nowpayments.go",
               "model/wallet_ledger.go",
               "model/request_billing_journal.go",
@@ -1105,6 +1122,12 @@ jobs:
               "model/test_database_helpers_test.go",
               "controller/access_token_audit_test.go",
               "controller/model_management_test.go",
+              "service/task_billing_test.go",
+              "service/task_polling_test.go",
+              "controller/relay_task_plugin_test.go",
+              "controller/responses_websocket_test.go",
+              "relay/responses_websocket_test.go",
+              "pkg/wsmanager/wsmanager_test.go",
           ]
           for relative in required_files:
               path = destination / relative
@@ -1166,9 +1189,11 @@ jobs:
               "validated_layers": [
                   "Go formatting, dependency verification, offline dependency graph, vet and build",
                   "All discovered Root Go test packages (including e2e and channel adapters), plus Relaykit and Tokenkit module test suites",
+                  "Machine-readable Go failure routing by module, package and exact failing test names, with targeted rerun selectors",
                   "Root test packages run in isolated processes with package-specific disposable SQL databases; Relaykit and Tokenkit run as independent parallel modules",
                   "A shared loopback-only SQL test harness creates per-test databases and applies production model migrations for schema-sensitive tests",
                   "Wallet ledger and signed Epay callback integration tests on SQLite, MySQL and PostgreSQL",
+                  "Request billing recovery, task refunds and terminal-state settlement, submission durability, Responses WebSocket lifecycle and Redis channel-close isolation regressions; task settlement also runs on SQLite, MySQL and PostgreSQL",
                   "Frontend production build, TypeScript typecheck, unit tests, Oxlint, format/copyright and TokenWay media contracts",
               ],
               "contents": {
@@ -1651,17 +1676,6 @@ jobs:
                   "homepage_hero_asset": "web/src/assets/tokenway-home/hero-scene.webp",
                   "original_brand_media_preserved": True,
               },
-              "desktop": {
-                  "product_name": "TokenWay V11",
-                  "version": "11.0.0",
-                  "application_id": "com.tokenway.ai.desktop",
-                  "electron_entry": "electron/main.js",
-                  "windows_backend_binary": "tokenway-v11.exe",
-                  "windows_backend_resource": "bin/tokenway-v11.exe",
-                  "windows_targets": ["nsis", "portable"],
-                  "original_tokenway_t_mark_used_for_icons": True,
-                  "windows_installer_is_code_signed": False,
-              },
               "frontend_dependencies": dependency_hashes,
               "build_environment": {
                   "go_version": subprocess.check_output(["go", "version"], text=True).strip(),
@@ -1793,209 +1807,4 @@ jobs:
 
 # Package-only continuation: reuse the newly completed full acceptance run #120 and pinned dependency/security evidence. [package-only]
 # Package-only continuation: produce the verified V11 source archive without rerunning passed checks. [package-only]
-
-  build-windows-desktop:
-    name: Build and smoke-test TokenWay V11 Windows desktop installer
-    needs: validate
-    if: ${{ needs.validate.result == 'success' && (github.event_name == 'push' || (github.event.inputs.targeted_only != 'true' && github.event.inputs.go_module_scope == 'all')) }}
-    runs-on: windows-latest
-    timeout-minutes: 90
-    permissions:
-      contents: read
-      actions: read
-    steps:
-      - name: Set up Node.js 22
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with:
-          node-version: "22"
-          cache: false
-
-      - name: Set up Go 1.26.10
-        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
-        with:
-          go-version: "1.26.10"
-          cache: false
-
-      - name: Download the exact source archive produced by this acceptance run
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $download = Join-Path $env:RUNNER_TEMP 'tokenway-source-artifact'
-          New-Item -ItemType Directory -Force -Path $download | Out-Null
-          gh run download $env:GITHUB_RUN_ID --repo $env:GITHUB_REPOSITORY --name tokenway-v11-validated-source --dir $download
-          $archive = Join-Path $download 'TokenWay-V11-validated-source.tar.gz'
-          if (-not (Test-Path $archive)) { throw "Same-run validated source archive is missing: $archive" }
-          $hash = (Get-FileHash -Algorithm SHA256 $archive).Hash.ToLowerInvariant()
-          "TOKENWAY_SOURCE_ARCHIVE_SHA256=$hash" | Out-File -FilePath (Join-Path $env:RUNNER_TEMP 'source-archive.sha256') -Encoding ascii
-          $root = Join-Path $env:RUNNER_TEMP 'tokenway-desktop-source'
-          New-Item -ItemType Directory -Force -Path $root | Out-Null
-          tar -xzf $archive -C $root
-          $project = Join-Path $root 'TokenWay-V11'
-          if (-not (Test-Path (Join-Path $project 'electron/package.json'))) { throw 'Extracted source does not contain the Electron project.' }
-          "TOKENWAY_SOURCE_ROOT=$project" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          "SOURCE_ARCHIVE_SHA256=$hash" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
-
-      - name: Install and checksum-verify Bun 1.4.4 for Windows
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $uri = 'https://github.com/oven-sh/bun/releases/download/bun-v1.4.4/bun-windows-x64.zip'
-          $zip = Join-Path $env:RUNNER_TEMP 'bun-windows-x64.zip'
-          Invoke-WebRequest -Uri $uri -OutFile $zip
-          $actual = (Get-FileHash -Algorithm SHA256 $zip).Hash.ToLowerInvariant()
-          $expected = 'cd2c0fccc78f3ede1f50ca827a15f063eda13d4d150a3d0674f4f6e323d864a5'
-          if ($actual -ne $expected) { throw "Bun archive checksum mismatch: $actual" }
-          $bunDir = Join-Path $env:RUNNER_TEMP 'bun-1.4.4'
-          Expand-Archive -Path $zip -DestinationPath $bunDir -Force
-          $bunExe = Get-ChildItem -Path $bunDir -Filter bun.exe -Recurse | Select-Object -First 1
-          if (-not $bunExe) { throw 'Bun executable was not found in the verified archive.' }
-          Copy-Item $bunExe.FullName (Join-Path $bunDir 'bun.exe') -Force
-          Add-Content -Path $env:GITHUB_PATH -Value $bunDir
-          $env:PATH = "$bunDir;$env:PATH"
-          $version = (& (Join-Path $bunDir 'bun.exe') --version).Trim()
-          if ($version -ne '1.4.4') { throw "Expected Bun 1.4.4, found $version" }
-          Write-Host "Verified Bun $version ($actual)"
-
-      - name: Build frontend from the validated TokenWay source
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          Set-Location (Join-Path $env:TOKENWAY_SOURCE_ROOT 'web')
-          $env:DISABLE_ESLINT_PLUGIN = 'true'
-          $env:VITE_REACT_APP_VERSION = '11.0.0'
-          bun install --frozen-lockfile
-          if ($LASTEXITCODE -ne 0) { throw "bun install failed with exit code $LASTEXITCODE" }
-          bun run build
-          if ($LASTEXITCODE -ne 0) { throw "frontend build failed with exit code $LASTEXITCODE" }
-          if (-not (Test-Path (Join-Path $env:TOKENWAY_SOURCE_ROOT 'web/dist/index.html'))) { throw 'Frontend build output is missing.' }
-
-      - name: Build the Windows TokenWay V11 backend binary
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          Set-Location $env:TOKENWAY_SOURCE_ROOT
-          $env:CGO_ENABLED = '0'
-          $env:GOFLAGS = '-mod=vendor'
-          go version
-          go build -pgo=vendor/github.com/Calcium-Ion/moejs/default.pgo -trimpath -ldflags='-s -w -X github.com/QuantumNous/new-api/common.Version=11.0.0' -o tokenway-v11.exe .
-          if ($LASTEXITCODE -ne 0) { throw "Go Windows build failed with exit code $LASTEXITCODE" }
-          if (-not (Test-Path (Join-Path $env:TOKENWAY_SOURCE_ROOT 'tokenway-v11.exe'))) { throw 'Windows backend binary was not produced.' }
-
-      - name: Package NSIS installer and portable Windows executable
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          Set-Location (Join-Path $env:TOKENWAY_SOURCE_ROOT 'electron')
-          npm ci
-          if ($LASTEXITCODE -ne 0) { throw "npm ci failed with exit code $LASTEXITCODE" }
-          node --check main.js
-          node --check preload.js
-          npm run build:win
-          if ($LASTEXITCODE -ne 0) { throw "electron-builder failed with exit code $LASTEXITCODE" }
-          $dist = Join-Path (Get-Location) 'dist'
-          $executables = @(Get-ChildItem -Path $dist -Filter '*.exe' -File)
-          if ($executables.Count -lt 2) { throw "Expected NSIS installer and portable executable; found $($executables.Count)." }
-          $installer = $executables | Where-Object { $_.Name.ToLowerInvariant().Contains('setup') } | Select-Object -First 1
-          if (-not $installer) { throw "NSIS setup executable not found among: $($executables.Name -join ', ')" }
-          $portable = $executables | Where-Object { $_.FullName -ne $installer.FullName } | Select-Object -First 1
-          if (-not $portable) { throw 'Portable executable is missing.' }
-          "TOKENWAY_INSTALLER=$($installer.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          "TOKENWAY_PORTABLE=$($portable.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          Get-FileHash -Algorithm SHA256 $installer.FullName
-          Get-FileHash -Algorithm SHA256 $portable.FullName
-
-      - name: Silently install and launch the packaged Windows desktop app
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $installerProcess = Start-Process -FilePath $env:TOKENWAY_INSTALLER -ArgumentList '/S' -Wait -PassThru
-          if ($installerProcess.ExitCode -ne 0) { throw "NSIS installer exited with code $($installerProcess.ExitCode)" }
-          $roots = @((Join-Path $env:LOCALAPPDATA 'Programs'), $env:ProgramFiles)
-          $installed = $null
-          foreach ($root in $roots) {
-            if (Test-Path $root) {
-              $installed = Get-ChildItem -Path $root -Filter 'TokenWay V11.exe' -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
-              if ($installed) { break }
-            }
-          }
-          if (-not $installed) { throw 'Installed TokenWay V11.exe was not found in the per-user or Program Files application directory.' }
-          $resource = Join-Path $installed.Directory.FullName 'resources/bin/tokenway-v11.exe'
-          if (-not (Test-Path $resource)) {
-            $resource = Join-Path $installed.Directory.Parent.FullName 'resources/bin/tokenway-v11.exe'
-          }
-          if (-not (Test-Path $resource)) { throw 'Installed backend resource bin/tokenway-v11.exe is missing.' }
-          $env:APPDATA = $env:APPDATA
-          $appProcess = Start-Process -FilePath $installed.FullName -PassThru
-          $connected = $false
-          for ($i = 0; $i -lt 90; $i++) {
-            $client = [System.Net.Sockets.TcpClient]::new()
-            try {
-              $client.Connect('127.0.0.1', 3000)
-              $connected = $client.Connected
-            } catch {
-              $connected = $false
-            } finally {
-              $client.Dispose()
-            }
-            if ($connected) { break }
-            Start-Sleep -Seconds 1
-          }
-          if (-not $connected) {
-            if ($appProcess -and -not $appProcess.HasExited) { taskkill /PID $appProcess.Id /T /F | Out-Null }
-            throw 'TokenWay desktop app did not start its embedded backend on 127.0.0.1:3000 within 90 seconds.'
-          }
-          $database = Join-Path $env:APPDATA 'TokenWay V11/data/tokenway-v11.db'
-          if (-not (Test-Path $database)) {
-            if ($appProcess -and -not $appProcess.HasExited) { taskkill /PID $appProcess.Id /T /F | Out-Null }
-            throw "TokenWay user database was not created at the expected isolated path: $database"
-          }
-          $dbInfo = Get-Item $database
-          if ($dbInfo.Length -le 0) { throw 'TokenWay database exists but is empty.' }
-          $report = @(
-            'PASS: NSIS installer completed silently with exit code 0',
-            "PASS: installed Electron executable: $($installed.FullName)",
-            "PASS: installed backend resource: $resource",
-            'PASS: packaged app launched the local backend on 127.0.0.1:3000',
-            "PASS: isolated database created: $database ($($dbInfo.Length) bytes)",
-            "App process PID: $($appProcess.Id)"
-          )
-          $report | Out-File -FilePath (Join-Path $env:RUNNER_TEMP 'WINDOWS-DESKTOP-SMOKE-TEST.txt') -Encoding utf8
-          $report | ForEach-Object { Write-Host $_ }
-          if ($appProcess -and -not $appProcess.HasExited) { taskkill /PID $appProcess.Id /T /F | Out-Null }
-
-      - name: Prepare checksums and desktop acceptance evidence
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $out = Join-Path $env:RUNNER_TEMP 'tokenway-v11-windows-desktop-release'
-          New-Item -ItemType Directory -Force -Path $out | Out-Null
-          Copy-Item $env:TOKENWAY_INSTALLER $out
-          Copy-Item $env:TOKENWAY_PORTABLE $out
-          Copy-Item (Join-Path $env:RUNNER_TEMP 'WINDOWS-DESKTOP-SMOKE-TEST.txt') $out
-          $hashes = Get-ChildItem $out -Filter '*.exe' | Get-FileHash -Algorithm SHA256
-          $hashes | ForEach-Object { "$($_.Hash.ToLowerInvariant())  $([IO.Path]::GetFileName($_.Path))" } | Set-Content (Join-Path $out 'SHA256SUMS.txt')
-          $sourceHash = Get-Content (Join-Path $env:RUNNER_TEMP 'source-archive.sha256') -Raw
-          @(
-            '# TokenWay V11 Windows desktop acceptance',
-            '',
-            "Workflow run: $env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID",
-            "Source archive SHA-256: $sourceHash",
-            "Installer: $(Split-Path -Leaf $env:TOKENWAY_INSTALLER)",
-            "Portable: $(Split-Path -Leaf $env:TOKENWAY_PORTABLE)",
-            '',
-            'The NSIS installer was installed silently and the installed Electron app launched its bundled Go backend on 127.0.0.1:3000. The isolated per-user SQLite file was verified.',
-            'The Windows executables are not code-signed; production distribution should sign them with the distributor certificate.'
-          ) | Set-Content (Join-Path $out 'WINDOWS-ACCEPTANCE.md')
-          "Desktop package hashes and acceptance evidence prepared." | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
-          "TOKENWAY_WINDOWS_RELEASE_DIR=$out" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-
-      - name: Upload Windows installer, portable executable and smoke-test evidence
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
-        with:
-          name: tokenway-v11-windows-desktop
-          path: ${{ runner.temp }}/tokenway-v11-windows-desktop-release/
-          if-no-files-found: error
-          retention-days: 30
 
