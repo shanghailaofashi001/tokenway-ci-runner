@@ -1003,7 +1003,7 @@ jobs:
           --health-timeout=5s
           --health-retries=18
       postgres:
-        image: postgres:16
+        image: postgres:17
         env:
           POSTGRES_USER: tokenway
           POSTGRES_PASSWORD: tokenway-test
@@ -1144,7 +1144,7 @@ jobs:
           --health-timeout=5s
           --health-retries=18
       postgres:
-        image: postgres:16
+        image: postgres:17
         env:
           POSTGRES_USER: tokenway
           POSTGRES_PASSWORD: tokenway-test
