@@ -1,6 +1,6 @@
 name: TOKENWAY V11 full five-layer acceptance on public runner
 
-run-name: TOKENWAY full acceptance • ${{ github.event.inputs.private_ref || 'main' }} • ${{ github.run_id }}
+run-name: TOKENWAY full acceptance • ${{ github.event.inputs.private_ref || 'fix/nowpayments-http-tests-20261127' }} • ${{ github.run_id }}
 
 on:
   workflow_dispatch:
@@ -8,7 +8,7 @@ on:
       private_ref:
         description: Exact private tokenway-v11-dev commit SHA or branch to validate
         required: true
-        default: 347830873f07e08e43375f196aeaf6b8f9d6b74e
+        default: 916d18580635817940a2f6e8839c9e7be44fa0
         type: string
   push:
     branches: [main]
@@ -128,7 +128,7 @@ jobs:
           set -euo pipefail
           BUN_DIR="$RUNNER_TEMP/tokenway-bun"
           mkdir -p "$BUN_DIR"
-          curl -fsSL "https://github.com/oven-sh/bun/releases/download/bun-v1.4.5/bun-linux-x64.zip" -o "$RUNNER_TEMP/bun-linux-x64.zip"
+          curl -fsSL "https://github.com/oven-sh/bun/releases/download/bun-v1.4.4/bun-linux-x64.zip" -o "$RUNNER_TEMP/bun-linux-x64.zip"
           python3 -c 'import sys,zipfile; zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])' "$RUNNER_TEMP/bun-linux-x64.zip" "$BUN_DIR"
           BUN_BIN="$(find "$BUN_DIR" -type f -name bun -print -quit)"
           test -n "$BUN_BIN"
@@ -138,6 +138,8 @@ jobs:
           bun --version
           cd validation-context/source/web
           bun install --frozen-lockfile
+          bun run typecheck
+          bun run test
           bun run build
           test -d dist
           test -n "$(find dist -type f -print -quit)"
@@ -160,6 +162,15 @@ jobs:
           (cd validation-context/source/relaykit && GOWORK=off go test -p 2 -count=1 ./...)
           (cd validation-context/source/tokenkit && GOWORK=off go test -p 2 -count=1 ./...)
           echo "Layer 2 passed: all three Go module test suites completed."
+
+      - name: NOWPayments focused acceptance and race detection
+        working-directory: validation-context/source
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -p 1 -vet=off -count=1 -run 'NowPayments' ./controller ./model
+          go test -race -p 1 -vet=off -count=1 -run 'NowPayments' ./controller ./model
+          echo "NOWPayments focused tests and race detection passed."
 
       - name: Layer 3A - Wallet ledger and migration matrix (SQLite/MySQL/PostgreSQL)
         working-directory: validation-context/source
