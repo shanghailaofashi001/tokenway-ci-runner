@@ -73,10 +73,13 @@ jobs:
           binary = binaries[0]
           binary.chmod(0o755)
           print(binary)
-          with open("$GITHUB_PATH", "a") as f:
-              f.write(str(binary.parent) + "\\n")
           PY
-          echo "$RUNNER_TEMP/bun" >> "$GITHUB_PATH"
+          BUN_BIN="$(find "$RUNNER_TEMP/bun" -type f -name bun -print -quit)"
+          test -n "$BUN_BIN"
+          echo "$(dirname "$BUN_BIN")" >> "$GITHUB_PATH"
+          export PATH="$(dirname "$BUN_BIN"):$PATH"
+          bun --version
+          test "$(bun --version)" = "1.4.4"
 
       - name: Verify toolchain and both real database services
         shell: bash
