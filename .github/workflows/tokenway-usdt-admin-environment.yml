@@ -1,0 +1,109 @@
+name: TokenWay USDT Admin isolated environment bootstrap
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/tokenway-usdt-admin-environment.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tokenway-usdt-admin-environment
+  cancel-in-progress: false
+
+jobs:
+  provision-and-verify:
+    name: Provision Go, Bun, MySQL 8.4 and PostgreSQL 17
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: tokenway_ci_only
+          MYSQL_DATABASE: tokenway_usdt_acceptance
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -ptokenway_ci_only"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=24
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: tokenway_ci_only
+          POSTGRES_DB: tokenway_usdt_acceptance
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d tokenway_usdt_acceptance"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=24
+    steps:
+      - name: Checkout CI runner repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install Go 1.26.10
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.10"
+          cache: false
+
+      - name: Install Bun 1.4.4
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL https://github.com/oven-sh/bun/releases/download/bun-v1.4.4/bun-linux-x64.zip -o "$RUNNER_TEMP/bun.zip"
+          python3 - "$RUNNER_TEMP/bun.zip" "$RUNNER_TEMP/bun" <<'PY'
+          import pathlib, sys, zipfile
+          archive, destination = map(pathlib.Path, sys.argv[1:])
+          destination.mkdir(parents=True, exist_ok=True)
+          with zipfile.ZipFile(archive) as z:
+              z.extractall(destination)
+          binaries = list(destination.rglob("bun"))
+          if not binaries:
+              raise SystemExit("Bun binary missing from official release archive")
+          binary = binaries[0]
+          binary.chmod(0o755)
+          print(binary)
+          with open("$GITHUB_PATH", "a") as f:
+              f.write(str(binary.parent) + "\\n")
+          PY
+          echo "$RUNNER_TEMP/bun" >> "$GITHUB_PATH"
+
+      - name: Verify toolchain and both real database services
+        shell: bash
+        env:
+          MYSQL_PWD: tokenway_ci_only
+          PGPASSWORD: tokenway_ci_only
+        run: |
+          set -euo pipefail
+          go version
+          test "$(go version | awk '{print $3}')" = "go1.26.10"
+          bun --version
+          test "$(bun --version)" = "1.4.4"
+          mysql_id="$(docker ps -q --filter 'ancestor=mysql:8.4' | head -n1)"
+          pg_id="$(docker ps -q --filter 'ancestor=postgres:17' | head -n1)"
+          test -n "$mysql_id"
+          test -n "$pg_id"
+          mysql_version="$(docker exec -e MYSQL_PWD="$MYSQL_PWD" "$mysql_id" mysql -uroot -Nse 'SELECT VERSION()')"
+          postgres_version="$(docker exec -e PGPASSWORD="$PGPASSWORD" "$pg_id" psql -U postgres -d tokenway_usdt_acceptance -Atc 'SHOW server_version')"
+          printf 'MySQL server: %s\\nPostgreSQL server: %s\\n' "$mysql_version" "$postgres_version"
+          case "$mysql_version" in 8.4.*) ;; *) echo "MySQL 8.4 version mismatch"; exit 1;; esac
+          case "$postgres_version" in 17.*) ;; *) echo "PostgreSQL 17 version mismatch"; exit 1;; esac
+          {
+            echo "## TokenWay isolated environment"
+            echo "- Go: $(go version)"
+            echo "- Bun: $(bun --version)"
+            echo "- MySQL: $mysql_version"
+            echo "- PostgreSQL: $postgres_version"
+            echo "- MySQL and PostgreSQL are independent ephemeral service containers."
+            echo "- No production credentials or databases were used."
+          } >> "$GITHUB_STEP_SUMMARY"
